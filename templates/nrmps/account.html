@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Account - NRMP Simulations{% endblock %}
+{% block content %}
+  <div class="py-4">
+    <h2>Account</h2>
+    <p class="text-muted">Manage your account details and preferences.</p>
+    {% if request.user.is_authenticated %}
+      <ul class="list-group mb-3">
+        <li class="list-group-item">Username: {{ request.user.get_username }}</li>
+        <li class="list-group-item">Email: {{ request.user.email|default:"—" }}</li>
+        <li class="list-group-item">Is Staff: {{ request.user.is_staff }}</li>
+      </ul>
+      <a class="btn btn-outline-secondary" href="/admin/password_change/">Change password</a>
+    {% else %}
+      <div class="alert alert-info">You are not logged in. Please <a href="{% url 'nrmps:login' %}">log in</a> or <a href="{% url 'nrmps:signup' %}">create an account</a> to manage your account.</div>
+    {% endif %}
+  </div>
+{% endblock %}
