@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     #### Plugin and addons
     "django_bootstrap5",
     "crispy_forms",
+    "django_htmx",
 ]
 
 MIDDLEWARE = [
@@ -53,6 +54,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    ### Add ons
+    "django_htmx.middleware.HtmxMiddleware",
 ]
 
 ROOT_URLCONF = "NRMP_Simulated.urls"

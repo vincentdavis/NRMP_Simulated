@@ -1,4 +1,5 @@
 {% load static %}
+ {% load django_htmx %}
 <!doctype html>
 <html lang="en">
   <head>
@@ -19,7 +20,7 @@
     </style>
     {% block extra_head %}{% endblock %}
   </head>
-  <body class="d-flex flex-column min-vh-100">
+  <body class="d-flex flex-column min-vh-100" hx-headers='{"x-csrftoken": "{{ csrf_token }}"}'>
     <header class="bg-light border-bottom mb-3">
       <nav class="navbar navbar-expand-lg navbar-dark bg-dark py-0">
         <div class="container">

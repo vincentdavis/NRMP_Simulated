@@ -72,6 +72,19 @@ wheels = [
 ]
 
 [[package]]
+name = "django-htmx"
+version = "1.23.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "asgiref" },
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/84/d4/1709593b01799c29c8d5a6f72973d787c8b881b0f8e2767b9e913fe2c688/django_htmx-1.23.2.tar.gz", hash = "sha256:65a8c8825fcae983b94aedce26af96a70717ab185d55cdb8a7a4bb68863ab079", size = 64415, upload-time = "2025-06-27T14:09:32.539Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/84/d5b29c102743abd61e1852b619263c8938b8516c71a138f4053114270743/django_htmx-1.23.2-py3-none-any.whl", hash = "sha256:c288fe92bdcfa7c2ed9665d6d23cc55c6693a7cc8d22cf0a01e1e38318874030", size = 61503, upload-time = "2025-06-27T14:09:31.272Z" },
+]
+
+[[package]]
 name = "django-stubs"
 version = "5.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -152,6 +165,7 @@ dependencies = [
     { name = "django" },
     { name = "django-bootstrap5" },
     { name = "django-crispy-forms" },
+    { name = "django-htmx" },
 ]
 
 [package.dev-dependencies]
@@ -169,6 +183,7 @@ requires-dist = [
     { name = "django", specifier = ">=5.2.5" },
     { name = "django-bootstrap5", specifier = ">=25.2" },
     { name = "django-crispy-forms", specifier = ">=2.4" },
+    { name = "django-htmx", specifier = ">=1.23.2" },
 ]
 
 [package.metadata.requires-dev]
