@@ -7,6 +7,7 @@
           <strong>Count:</strong> {{ simulation.students.count }}
         </div>
         <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'nrmps:simulation_students' pk=simulation.pk %}">View List</a>
           <a class="btn btn-sm btn-outline-success" href="{% url 'nrmps:simulation_download_students' pk=simulation.pk %}">Download CSV</a>
           <button class="btn btn-sm btn-outline-primary"
                   hx-post="{% url 'nrmps:simulation_create_students' pk=simulation.pk %}"
@@ -43,6 +44,7 @@
           <strong>Count:</strong> {{ simulation.schools.count }}
         </div>
         <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'nrmps:simulation_schools' pk=simulation.pk %}">View List</a>
           <a class="btn btn-sm btn-outline-success" href="{% url 'nrmps:simulation_download_schools' pk=simulation.pk %}">Download CSV</a>
           <button class="btn btn-sm btn-outline-primary"
                   hx-post="{% url 'nrmps:simulation_create_schools' pk=simulation.pk %}"

@@ -1,4 +1,6 @@
 from pathlib import Path
+import csv
+import json
 
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
@@ -7,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
+from django.core.paginator import Paginator
 
 from .forms import SignupForm, SimulationForm, StudentsUploadForm, SchoolsUploadForm, SimulationConfigForm
 from .models import Simulation
@@ -231,12 +234,13 @@ def simulation_download_students(request, pk: int):
     sim = get_object_or_404(Simulation, pk=pk)
     if sim.owner_id != request.user.id:
         raise Http404()
-    rows = sim.students.all().values_list("name", "score")
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_students.csv"
-    resp.write("name,score\n")
-    for name, score in rows:
-        resp.write(f"{name},{score}\n")
+    writer = csv.writer(resp)
+    writer.writerow(["name", "score", "meta_stddev", "score_meta"])
+    for s in sim.students.all().only("name", "score", "meta_stddev", "score_meta"):
+        score_meta_str = json.dumps(s.score_meta or {}, ensure_ascii=False)
+        writer.writerow([s.name, s.score, s.meta_stddev or 0.0, score_meta_str])
     return resp
 
 
@@ -246,10 +250,99 @@ def simulation_download_schools(request, pk: int):
     sim = get_object_or_404(Simulation, pk=pk)
     if sim.owner_id != request.user.id:
         raise Http404()
-    rows = sim.schools.all().values_list("name", "capacity", "score")
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_schools.csv"
-    resp.write("name,capacity,score\n")
-    for name, capacity, score in rows:
-        resp.write(f"{name},{capacity},{score}\n")
+    writer = csv.writer(resp)
+    writer.writerow(["name", "capacity", "score", "meta_stddev", "score_meta"])
+    for s in sim.schools.all().only("name", "capacity", "score", "meta_stddev", "score_meta"):
+        score_meta_str = json.dumps(s.score_meta or {}, ensure_ascii=False)
+        writer.writerow([s.name, s.capacity, s.score, s.meta_stddev or 0.0, score_meta_str])
     return resp
+
+
+
+@login_required
+@require_GET
+def simulation_students(request, pk: int):
+    """List students for a simulation with sorting and pagination (default 100)."""
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+
+    # Sorting
+    sort = request.GET.get("sort", "name").lower()
+    order = request.GET.get("order", "asc").lower()
+    allowed = {
+        "id": "id",
+        "name": "name",
+        "score": "score",
+        "meta_stddev": "meta_stddev",
+    }
+    sort_field = allowed.get(sort, "name")
+    ordering = sort_field if order != "desc" else f"-{sort_field}"
+
+    # Page size
+    try:
+        page_size = int(request.GET.get("page_size", 100))
+    except (TypeError, ValueError):
+        page_size = 100
+    if page_size <= 0:
+        page_size = 100
+
+    qs = sim.students.all().order_by(ordering)
+    paginator = Paginator(qs, page_size)
+    page = request.GET.get("page")
+    page_obj = paginator.get_page(page)
+
+    context = {
+        "simulation": sim,
+        "page_obj": page_obj,
+        "sort": sort,
+        "order": order,
+        "page_size": page_size,
+        "page_sizes": [25, 50, 100, 200, 500],
+    }
+    return render(request, "nrmps/students_list.html", context)
+
+
+@login_required
+@require_GET
+def simulation_schools(request, pk: int):
+    """List schools for a simulation with sorting and pagination (default 100)."""
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+
+    sort = request.GET.get("sort", "name").lower()
+    order = request.GET.get("order", "asc").lower()
+    allowed = {
+        "id": "id",
+        "name": "name",
+        "capacity": "capacity",
+        "score": "score",
+        "meta_stddev": "meta_stddev",
+    }
+    sort_field = allowed.get(sort, "name")
+    ordering = sort_field if order != "desc" else f"-{sort_field}"
+
+    try:
+        page_size = int(request.GET.get("page_size", 100))
+    except (TypeError, ValueError):
+        page_size = 100
+    if page_size <= 0:
+        page_size = 100
+
+    qs = sim.schools.all().order_by(ordering)
+    paginator = Paginator(qs, page_size)
+    page = request.GET.get("page")
+    page_obj = paginator.get_page(page)
+
+    context = {
+        "simulation": sim,
+        "page_obj": page_obj,
+        "sort": sort,
+        "order": order,
+        "page_size": page_size,
+        "page_sizes": [25, 50, 100, 200, 500],
+    }
+    return render(request, "nrmps/schools_list.html", context)

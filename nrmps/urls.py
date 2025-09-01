@@ -32,5 +32,8 @@ urlpatterns = (
         # Downloads
         path("simulations/<int:pk>/download-students/", views.simulation_download_students, name="simulation_download_students"),
         path("simulations/<int:pk>/download-schools/", views.simulation_download_schools, name="simulation_download_schools"),
+        # Lists
+        path("simulations/<int:pk>/students/", views.simulation_students, name="simulation_students"),
+        path("simulations/<int:pk>/schools/", views.simulation_schools, name="simulation_schools"),
     ]
 )

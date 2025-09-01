@@ -50,6 +50,8 @@ class Simulation(models.Model):
         - Clears existing students for this simulation before creation.
         - Generates `number_of_applicants` students named "Student {i}" with scores drawn from a
           Gaussian distribution using applicants_score_mean and applicant_score_stddev.
+        - Populates meta_stddev from applicant_meta_scores_stddev and score_meta keys from
+          config.school_meta_preference with values `score + N(0, meta_stddev)`.
         - Returns the number of students created.
         """
         import random
@@ -64,12 +66,32 @@ class Simulation(models.Model):
 
         mean = config.applicant_score_mean
         std = max(float(config.applicant_score_stddev), 0.0)
+        meta_std = max(float(getattr(config, "applicant_meta_scores_stddev", 0.0) or 0.0), 0.0)
+        meta_keys = list(getattr(config, "school_meta_preference", []) or [])
+
         to_create = []
         for i in range(1, int(config.number_of_applicants) + 1):
-            score = random.gauss(mean, std) if std > 0 else float(mean)
-            to_create.append(Student(simulation=self, name=f"Student {i}", score=float(score)))
+            base_score = random.gauss(mean, std) if std > 0 else float(mean)
+            score_meta = {}
+            for key in meta_keys:
+                try:
+                    k = str(key)
+                except Exception:
+                    k = str(key)
+                delta = random.gauss(0, meta_std) if meta_std > 0 else 0.0
+                score_meta[k] = float(base_score + delta)
+            to_create.append(
+                Student(
+                    simulation=self,
+                    name=f"Student {i}",
+                    score=float(base_score),
+                    meta_stddev=meta_std,
+                    score_meta=score_meta,
+                )
+            )
 
-        Student.objects.bulk_create(to_create, batch_size=1000)
+        if to_create:
+            Student.objects.bulk_create(to_create, batch_size=1000)
         return len(to_create)
 
     def create_schools(self) -> int:
@@ -80,6 +102,8 @@ class Simulation(models.Model):
         - Clears existing schools for this simulation before creation.
         - Generates `number_of_schools` schools named "School {i}" with capacities and scores drawn from
           Gaussian distributions using the respective means and stddevs. Capacity is coerced to an int >= 0.
+        - Populates meta_stddev from school_meta_scores_stddev and score_meta keys from
+          config.applicant_meta_preference with values `score + N(0, meta_stddev)`.
         - Returns the number of schools created.
         """
         import random
@@ -94,24 +118,37 @@ class Simulation(models.Model):
         score_std = max(float(config.school_score_stddev), 0.0)
         cap_mean = config.school_capacity_mean
         cap_std = max(float(config.school_capacity_stddev), 0.0)
+        meta_std = max(float(getattr(config, "school_meta_scores_stddev", 0.0) or 0.0), 0.0)
+        meta_keys = list(getattr(config, "applicant_meta_preference", []) or [])
 
         to_create = []
         for i in range(1, int(config.number_of_schools) + 1):
-            score = random.gauss(score_mean, score_std) if score_std > 0 else float(score_mean)
+            base_score = random.gauss(score_mean, score_std) if score_std > 0 else float(score_mean)
             capacity_raw = random.gauss(cap_mean, cap_std) if cap_std > 0 else float(cap_mean)
             capacity = int(round(capacity_raw))
             if capacity < 0:
                 capacity = 0
+            score_meta = {}
+            for key in meta_keys:
+                try:
+                    k = str(key)
+                except Exception:
+                    k = str(key)
+                delta = random.gauss(0, meta_std) if meta_std > 0 else 0.0
+                score_meta[k] = float(base_score + delta)
             to_create.append(
                 School(
                     simulation=self,
                     name=f"School {i}",
                     capacity=capacity,
-                    score=float(score),
+                    score=float(base_score),
+                    meta_stddev=meta_std,
+                    score_meta=score_meta,
                 )
             )
 
-        School.objects.bulk_create(to_create, batch_size=1000)
+        if to_create:
+            School.objects.bulk_create(to_create, batch_size=1000)
         return len(to_create)
 
     def delete_students(self) -> int:
@@ -125,12 +162,14 @@ class Simulation(models.Model):
     def upload_students(self) -> int:
         """Upload students from a CSV file located in BASE_DIR/data.
 
-        Expected CSV format (with header): name,score
+        Expected CSV format (with header): name,score[,meta_stddev][,score_meta]
+        - score_meta: JSON object string mapping meta names to values.
         File path convention: data/simulation_{self.id}_students.csv
         - Replaces existing students for this simulation.
         - Returns the number of students created. Returns 0 if the file does not exist.
         """
         import csv
+        import json
         from pathlib import Path
 
         from django.conf import settings
@@ -149,6 +188,8 @@ class Simulation(models.Model):
             field_map = {k.strip().lower(): k for k in reader.fieldnames or []}
             name_key = field_map.get("name")
             score_key = field_map.get("score")
+            meta_stddev_key = field_map.get("meta_stddev")
+            score_meta_key = field_map.get("score_meta")
             if not name_key or not score_key:
                 # If headers missing, attempt to read as positional columns
                 f.seek(0)
@@ -159,8 +200,23 @@ class Simulation(models.Model):
                     if not row:
                         continue
                     name = row[0].strip() if len(row) > 0 else f"Student {idx}"
-                    score = float(row[1]) if len(row) > 1 and row[1] != "" else 0.0
-                    to_create.append(Student(simulation=self, name=name, score=score))
+                    try:
+                        score = float(row[1]) if len(row) > 1 and row[1] != "" else 0.0
+                    except ValueError:
+                        score = 0.0
+                    try:
+                        meta_stddev = float(row[2]) if len(row) > 2 and row[2] != "" else 0.0
+                    except (ValueError, TypeError):
+                        meta_stddev = 0.0
+                    score_meta = {}
+                    if len(row) > 3 and row[3]:
+                        try:
+                            score_meta = json.loads(row[3])
+                        except Exception:
+                            score_meta = {}
+                    to_create.append(
+                        Student(simulation=self, name=name, score=score, meta_stddev=meta_stddev, score_meta=score_meta)
+                    )
             else:
                 for row in reader:
                     name = (row.get(name_key) or "").strip() or None
@@ -169,9 +225,23 @@ class Simulation(models.Model):
                         score = float(score_val) if score_val not in (None, "") else 0.0
                     except ValueError:
                         score = 0.0
+                    try:
+                        meta_stddev_val = row.get(meta_stddev_key) if meta_stddev_key else None
+                        meta_stddev = float(meta_stddev_val) if meta_stddev_val not in (None, "") else 0.0
+                    except (ValueError, TypeError):
+                        meta_stddev = 0.0
+                    score_meta_str = row.get(score_meta_key) if score_meta_key else None
+                    score_meta = {}
+                    if score_meta_str:
+                        try:
+                            score_meta = json.loads(score_meta_str)
+                        except Exception:
+                            score_meta = {}
                     if not name:
                         name = f"Student {len(to_create) + 1}"
-                    to_create.append(Student(simulation=self, name=name, score=score))
+                    to_create.append(
+                        Student(simulation=self, name=name, score=score, meta_stddev=meta_stddev, score_meta=score_meta)
+                    )
 
         if to_create:
             Student.objects.bulk_create(to_create, batch_size=1000)
@@ -180,12 +250,14 @@ class Simulation(models.Model):
     def upload_schools(self) -> int:
         """Upload schools from a CSV file located in BASE_DIR/data.
 
-        Expected CSV format (with header): name,capacity,score
+        Expected CSV format (with header): name,capacity,score[,meta_stddev][,score_meta]
+        - score_meta: JSON object string mapping meta names to values.
         File path convention: data/simulation_{self.id}_schools.csv
         - Replaces existing schools for this simulation.
         - Returns the number of schools created. Returns 0 if the file does not exist.
         """
         import csv
+        import json
         from pathlib import Path
 
         from django.conf import settings
@@ -204,6 +276,8 @@ class Simulation(models.Model):
             name_key = field_map.get("name")
             cap_key = field_map.get("capacity")
             score_key = field_map.get("score")
+            meta_stddev_key = field_map.get("meta_stddev")
+            score_meta_key = field_map.get("score_meta")
             if not name_key:
                 # Fallback: positional
                 f.seek(0)
@@ -221,9 +295,28 @@ class Simulation(models.Model):
                         score = float(row[2]) if len(row) > 2 and row[2] != "" else 0.0
                     except ValueError:
                         score = 0.0
+                    try:
+                        meta_stddev = float(row[3]) if len(row) > 3 and row[3] != "" else 0.0
+                    except (ValueError, TypeError):
+                        meta_stddev = 0.0
+                    score_meta = {}
+                    if len(row) > 4 and row[4]:
+                        try:
+                            score_meta = json.loads(row[4])
+                        except Exception:
+                            score_meta = {}
                     if capacity < 0:
                         capacity = 0
-                    to_create.append(School(simulation=self, name=name, capacity=capacity, score=score))
+                    to_create.append(
+                        School(
+                            simulation=self,
+                            name=name,
+                            capacity=capacity,
+                            score=score,
+                            meta_stddev=meta_stddev,
+                            score_meta=score_meta,
+                        )
+                    )
             else:
                 for row in reader:
                     name = (row.get(name_key) or "").strip() or None
@@ -237,11 +330,32 @@ class Simulation(models.Model):
                         score = float(score_val) if score_val not in (None, "") else 0.0
                     except ValueError:
                         score = 0.0
+                    try:
+                        meta_stddev_val = row.get(meta_stddev_key) if meta_stddev_key else None
+                        meta_stddev = float(meta_stddev_val) if meta_stddev_val not in (None, "") else 0.0
+                    except (ValueError, TypeError):
+                        meta_stddev = 0.0
+                    score_meta_str = row.get(score_meta_key) if score_meta_key else None
+                    score_meta = {}
+                    if score_meta_str:
+                        try:
+                            score_meta = json.loads(score_meta_str)
+                        except Exception:
+                            score_meta = {}
                     if capacity < 0:
                         capacity = 0
                     if not name:
                         name = f"School {len(to_create) + 1}"
-                    to_create.append(School(simulation=self, name=name, capacity=capacity, score=score))
+                    to_create.append(
+                        School(
+                            simulation=self,
+                            name=name,
+                            capacity=capacity,
+                            score=score,
+                            meta_stddev=meta_stddev,
+                            score_meta=score_meta,
+                        )
+                    )
 
         if to_create:
             School.objects.bulk_create(to_create, batch_size=1000)
