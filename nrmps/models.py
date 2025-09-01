@@ -274,12 +274,18 @@ class SimulationConfig(models.Model):
     applicant_score_stddev = models.FloatField(
         default=25, validators=[MinValueValidator(0)], help_text="Std. dev. of the applicants' base scores (>= 0)."
     )
-    applicant_interview_limit = models.FloatField(
+    applicant_interview_limit = models.IntegerField(
         default=5, validators=[MinValueValidator(0)], help_text="Max number of interviews each applicant can attend."
     )
     applicant_meta_preference = models.JSONField(
         default=list, help_text="List of applicant preference meta fields (e.g., program_size, prestige)."
-    )
+    )  # This is the list of meta-fields that are used to by applicants to rank school. "The applicants' preferences".
+    applicant_meta_preference_stddev = models.FloatField(
+        validators=[MinValueValidator(0)], default=10, help_text="Std. dev. of meta preference scores (>= 0)."
+    )  # This is the stddev of the meta-preferences "weights" each students gives to preferacnes.
+    applicant_meta_scores_stddev = models.FloatField(
+        default=10, validators=[MinValueValidator(0)], help_text="Std. dev. of meta scores per applicant (>= 0)."
+    )  # This is the stddev of the meta-scores for each applicant.
 
     # School configuration
     school_score_mean = models.FloatField(
@@ -295,11 +301,21 @@ class SimulationConfig(models.Model):
         default=10, validators=[MinValueValidator(0)], help_text="Std. dev. of capacity per school (>= 0)."
     )
     school_interview_limit = models.FloatField(
-        default=10, validators=[MinValueValidator(0)], help_text="Max number of interviews each school can conduct."
+        default=10,
+        validators=[MinValueValidator(0)],
+        help_text="Max number of interviews each school can conduct Inpercent of capacity.",
     )
     school_meta_preference = models.JSONField(
-        default=list, help_text="List of school preference meta fields (e.g., board_scores, research)."
-    )
+        default=list,
+        help_text="List of school preference meta fields (e.g., board_scores, research).",
+    )  # This is the list of meta-fields that are used to by schools to rank student. "The schools preferances".
+    school_meta_preference_stddev = models.FloatField(
+        default=10,
+        validators=[MinValueValidator(0)],
+    )  # This is the stddev of the meta-preferences "weights" each schools gives to preferacnes.
+    school_meta_scores_stddev = models.FloatField(
+        default=10, validators=[MinValueValidator(0)], help_text="Std. dev. of meta scores per school (>= 0)."
+    )  # This is the stddev of the meta-scores for each school.
 
     def __str__(self):
         return f"{self.simulation.name}-{self.id}"
@@ -319,9 +335,13 @@ class Student(models.Model):
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="students")
     name = models.CharField(max_length=255, help_text="Name of the student.")
-    score = models.FloatField()  # This sets the mean for the score meta
-    meta_stddev = models.FloatField(default=0.0)  # This will define how close each score is to the base "score"
-    score_meta = models.JSONField(default=dict)
+    score = models.FloatField(help_text="Score of the student.")  # This sets the mean for the score meta
+    meta_stddev = models.FloatField(
+        default=0.0, help_text="Standard deviation of the score."
+    )  # This will define how close each score is to the base "score"
+    score_meta = models.JSONField(
+        default=dict, help_text='Meta score names and value {"USMLE Setp 2":5, "Grades": 10} for the score.'
+    )
 
     def __str__(self):
         return self.name
@@ -334,11 +354,15 @@ class School(models.Model):
     """
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="schools")
-    name = models.CharField(max_length=255)
-    capacity = models.IntegerField()
-    score = models.FloatField()  # This sets the mean for the score meta
-    meta_stddev = models.FloatField(default=0.0)  # This will define how close each score is to the base "score"
-    score_meta = models.JSONField(default=dict)
+    name = models.CharField(max_length=255, help_text="Name of the school.")
+    capacity = models.IntegerField(help_text="Capacity of the school.")
+    score = models.FloatField(help_text="Score of the school.")  # This sets the mean for the score meta
+    meta_stddev = models.FloatField(
+        default=0.0, help_text="Standard deviation of the score."
+    )  # This will define how close each score is to the base "score"
+    score_meta = models.JSONField(
+        default=dict, help_text='Meta score names and value {"Research":5, "Reputation": 10} for the score.'
+    )
 
     def __str__(self):
         return self.name
