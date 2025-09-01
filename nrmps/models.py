@@ -1,3 +1,5 @@
+import random
+
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -60,7 +62,7 @@ class Simulation(models.Model):
         # Remove existing population for a fresh generation
         self.students.all().delete()
 
-        mean = config.applicants_score_mean
+        mean = config.applicant_score_mean
         std = max(float(config.applicant_score_stddev), 0.0)
         to_create = []
         for i in range(1, int(config.number_of_applicants) + 1):
@@ -88,8 +90,8 @@ class Simulation(models.Model):
 
         self.schools.all().delete()
 
-        score_mean = config.schools_score_mean
-        score_std = max(float(config.schools_score_stddev), 0.0)
+        score_mean = config.school_score_mean
+        score_std = max(float(config.school_score_stddev), 0.0)
         cap_mean = config.school_capacity_mean
         cap_std = max(float(config.school_capacity_stddev), 0.0)
 
@@ -253,23 +255,60 @@ class SimulationConfig(models.Model):
     """
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="configs")
-    number_of_applicants = models.IntegerField()
-    number_of_schools = models.IntegerField()
-
+    number_of_applicants = models.IntegerField(
+        default=200,
+        validators=[MinValueValidator(1), MaxValueValidator(10000)],
+        help_text="Total number of applicants to generate.",
+    )
+    number_of_schools = models.IntegerField(
+        default=10,
+        validators=[MinValueValidator(1), MaxValueValidator(1000)],
+        help_text="Total number of schools to generate.",
+    )
     # Applicant score configuration
-    applicants_score_mean = models.FloatField(default=0)
-    applicant_score_stddev = models.FloatField(default=25)
-    applicants_interview_limit = models.FloatField(default=5)
+    applicant_score_mean = models.FloatField(
+        default=0,
+        validators=[MinValueValidator(-1000), MaxValueValidator(1000)],
+        help_text="Mean of the applicants' base scores.",
+    )
+    applicant_score_stddev = models.FloatField(
+        default=25, validators=[MinValueValidator(0)], help_text="Std. dev. of the applicants' base scores (>= 0)."
+    )
+    applicant_interview_limit = models.FloatField(
+        default=5, validators=[MinValueValidator(0)], help_text="Max number of interviews each applicant can attend."
+    )
+    applicant_meta_preference = models.JSONField(
+        default=list, help_text="List of applicant preference meta fields (e.g., program_size, prestige)."
+    )
 
     # School configuration
-    schools_score_mean = models.FloatField(default=0)
-    schools_score_stddev = models.FloatField(default=25)
-    school_capacity_mean = models.FloatField(default=20)
-    school_capacity_stddev = models.FloatField(default=10)
-    school_interview_limit = models.FloatField(default=10)
+    school_score_mean = models.FloatField(
+        default=0,
+        validators=[MinValueValidator(-1000), MaxValueValidator(1000)],
+        help_text="Mean of the schools' base scores.",
+    )
+    school_score_stddev = models.FloatField(
+        default=25, validators=[MinValueValidator(0)], help_text="Std. dev. of the schools' base scores (>= 0)."
+    )
+    school_capacity_mean = models.FloatField(default=20, help_text="Mean capacity per school.")
+    school_capacity_stddev = models.FloatField(
+        default=10, validators=[MinValueValidator(0)], help_text="Std. dev. of capacity per school (>= 0)."
+    )
+    school_interview_limit = models.FloatField(
+        default=10, validators=[MinValueValidator(0)], help_text="Max number of interviews each school can conduct."
+    )
+    school_meta_preference = models.JSONField(
+        default=list, help_text="List of school preference meta fields (e.g., board_scores, research)."
+    )
 
     def __str__(self):
         return f"{self.simulation.name}-{self.id}"
+
+
+def generate_meta_scores(self, score: float, meta_scores: list[str], meta_stddev: float) -> dict[str:float]:
+    """Generates meta scores for each student and school."""
+    for meta in meta_scores:
+        self.score_meta[meta] = score + random.gauss(0, meta_stddev)
 
 
 class Student(models.Model):
@@ -279,8 +318,10 @@ class Student(models.Model):
     """
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="students")
-    name = models.CharField(max_length=255)
-    score = models.FloatField()
+    name = models.CharField(max_length=255, help_text="Name of the student.")
+    score = models.FloatField()  # This sets the mean for the score meta
+    meta_stddev = models.FloatField(default=0.0)  # This will define how close each score is to the base "score"
+    score_meta = models.JSONField(default=dict)
 
     def __str__(self):
         return self.name
@@ -295,7 +336,9 @@ class School(models.Model):
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="schools")
     name = models.CharField(max_length=255)
     capacity = models.IntegerField()
-    score = models.FloatField()
+    score = models.FloatField()  # This sets the mean for the score meta
+    meta_stddev = models.FloatField(default=0.0)  # This will define how close each score is to the base "score"
+    score_meta = models.JSONField(default=dict)
 
     def __str__(self):
         return self.name
@@ -311,11 +354,48 @@ class Interview(models.Model):
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="interviews")
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="interviews")
-
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="interviews")
+    # Logic flags
     status = models.CharField(max_length=50)
-    students_rank_of_school = models.IntegerField(default=None)
-    schools_rank_of_student = models.IntegerField(default=None)
+
+    # Student steps
+    student_applied = models.BooleanField(
+        default=False, help_text="Whether the student has been applied to the school."
+    )
+    student_signal = models.IntegerField(default=0, help_text="Signal value from the student to the school")
+    student_accepted = models.BooleanField(
+        default=False, help_text="Whether the student has been accepted to the school invitation to interview."
+    )
+
+    # Schools Steps
+    school_invited = models.BooleanField(
+        default=False,
+        help_text="Whether the school has been invited to the interview. Must have applied to school first",
+    )
+    # Properties of the interview step
+    ## Pre interview Observed score.
+    student_pre_observed_score_of_school = models.FloatField(
+        default=None, help_text='Pre interview "total" score of student'
+    )
+    school_pre_observed_score_of_student = models.FloatField(
+        default=None, help_text='Pre interview "total" score of school'
+    )
+
+    ## Pre interview rank.
+    students_pre_rank_of_school = models.IntegerField(default=None, help_text="Pre interview rank of student")
+    schools_pre_rank_of_student = models.IntegerField(default=None, help_text="Pre interview rank of school")
+
+    ## Post interview Observed score.
+    student_post_observed_score_of_school = models.FloatField(
+        default=None, help_text='Post interview "total score" of student'
+    )
+    school_post_observed_score_of_student = models.FloatField(
+        default=None, help_text='Post interview "total" score of school'
+    )
+
+    ## Post interview rank.
+    students_post_rank_of_school = models.IntegerField(default=None, help_text="Post interview rank of student")
+    schools_post_rank_of_student = models.IntegerField(default=None, help_text="Post interview rank of school")
 
     class Meta:
         unique_together = ["student", "school"]

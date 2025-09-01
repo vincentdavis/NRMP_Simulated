@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Manage Simulation - NRMP Simulations{% endblock %}
+{% block content %}
+<div class="mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Manage: {{ simulation.name }}</h3>
+    <div class="d-flex gap-2">
+      <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline-secondary">Back to List</a>
+      <form class="d-inline" method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}" x-data @submit.prevent="if (confirm('Delete this simulation?')) { $el.submit() }">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-danger">Delete Simulation</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <form method="post" class="card shadow-sm">
+        {% csrf_token %}
+        <input type="hidden" name="form_id" value="simulation">
+        <div class="card-header">Edit Simulation</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label" for="id_name">Name</label>
+            {{ form.name }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="id_description">Description</label>
+            {{ form.description }}
+          </div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label" for="id_iterations">Iterations</label>
+              {{ form.iterations }}
+            </div>
+            <div class="col-md-4 d-flex align-items-center">
+              <div class="form-check mt-4">
+                {{ form.public }}
+                <label class="form-check-label" for="id_public">Public</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer d-flex justify-content-end">
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+
+      <form method="post" class="card shadow-sm mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="form_id" value="config">
+        <div class="card-header">Simulation Configuration</div>
+        <div class="card-body">
+          {% if config_form.non_field_errors %}
+            <div class="alert alert-danger py-2 px-3 small" role="alert">
+              {{ config_form.non_field_errors }}
+            </div>
+          {% endif %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="id_number_of_applicants">Number of Applicants</label>
+              {{ config_form.number_of_applicants }}
+              {% if config_form.number_of_applicants.errors %}
+                <div class="text-danger small mt-1">{{ config_form.number_of_applicants.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="id_number_of_schools">Number of Schools</label>
+              {{ config_form.number_of_schools }}
+              {% if config_form.number_of_schools.errors %}
+                <div class="text-danger small mt-1">{{ config_form.number_of_schools.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <hr>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label" for="id_applicant_score_mean">Applicant Score Mean</label>
+              {{ config_form.applicant_score_mean }}
+              {% if config_form.applicant_score_mean.errors %}
+                <div class="text-danger small mt-1">{{ config_form.applicant_score_mean.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="id_applicant_score_stddev">Applicant Score StdDev</label>
+              {{ config_form.applicant_score_stddev }}
+              {% if config_form.applicant_score_stddev.errors %}
+                <div class="text-danger small mt-1">{{ config_form.applicant_score_stddev.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="id_applicant_interview_limit">Applicant Interview Limit</label>
+              {{ config_form.applicant_interview_limit }}
+              {% if config_form.applicant_interview_limit.errors %}
+                <div class="text-danger small mt-1">{{ config_form.applicant_interview_limit.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="mt-2" x-data="metaEditor($el, 'id_applicant_meta_preference', {{ config_form.instance.applicant_meta_preference|default:'[]'|safe }})">
+            <label class="form-label" for="id_applicant_meta_preference">Applicant Meta Preferences</label>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <template x-if="!items.length"><span class="text-muted small">No items. Add some below.</span></template>
+              <template x-for="(item, index) in items" :key="index">
+                <div class="input-group input-group-sm" style="width: auto;">
+                  <input type="text" class="form-control form-control-sm" x-model="items[index]" @input="dedupeAndNormalize()" aria-label="meta item">
+                  <button type="button" class="btn btn-outline-danger btn-sm" @click="remove(index)" aria-label="Remove">&times;</button>
+                </div>
+              </template>
+            </div>
+            <div class="mt-2 d-flex gap-2">
+              <input type="text" class="form-control form-control-sm" x-model="newItem" @keydown.enter.prevent="addItem()" placeholder="Type a preference (Enter to add)">
+              <button type="button" class="btn btn-outline-primary btn-sm" @click="addItem()">Add</button>
+            </div>
+            <input type="hidden" name="applicant_meta_preference" id="id_applicant_meta_preference" :value="jsonValue()">
+            <div class="form-text">Enter as tags; press Enter to add. Items saved as a list.</div>
+            {% if config_form.applicant_meta_preference.errors %}
+              <div class="text-danger small mt-1">{{ config_form.applicant_meta_preference.errors.0 }}</div>
+            {% endif %}
+          </div>
+          <hr>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label" for="id_school_score_mean">School Score Mean</label>
+              {{ config_form.school_score_mean }}
+              {% if config_form.school_score_mean.errors %}
+                <div class="text-danger small mt-1">{{ config_form.school_score_mean.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="id_school_score_stddev">School Score StdDev</label>
+              {{ config_form.school_score_stddev }}
+              {% if config_form.school_score_stddev.errors %}
+                <div class="text-danger small mt-1">{{ config_form.school_score_stddev.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="row g-3 mt-0">
+            <div class="col-md-4">
+              <label class="form-label" for="id_school_capacity_mean">Capacity Mean</label>
+              {{ config_form.school_capacity_mean }}
+              {% if config_form.school_capacity_mean.errors %}
+                <div class="text-danger small mt-1">{{ config_form.school_capacity_mean.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="id_school_capacity_stddev">Capacity StdDev</label>
+              {{ config_form.school_capacity_stddev }}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label" for="id_school_interview_limit">School Interview Limit</label>
+              {{ config_form.school_interview_limit }}
+              {% if config_form.school_interview_limit.errors %}
+                <div class="text-danger small mt-1">{{ config_form.school_interview_limit.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="mt-2" x-data="metaEditor($el, 'id_school_meta_preference', {{ config_form.instance.school_meta_preference|default:'[]'|safe }})">
+            <label class="form-label" for="id_school_meta_preference">School Meta Preferences</label>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <template x-if="!items.length"><span class="text-muted small">No items. Add some below.</span></template>
+              <template x-for="(item, index) in items" :key="index">
+                <div class="input-group input-group-sm" style="width: auto;">
+                  <input type="text" class="form-control form-control-sm" x-model="items[index]" @input="dedupeAndNormalize()" aria-label="meta item">
+                  <button type="button" class="btn btn-outline-danger btn-sm" @click="remove(index)" aria-label="Remove">&times;</button>
+                </div>
+              </template>
+            </div>
+            <div class="mt-2 d-flex gap-2">
+              <input type="text" class="form-control form-control-sm" x-model="newItem" @keydown.enter.prevent="addItem()" placeholder="Type a preference (Enter to add)">
+              <button type="button" class="btn btn-outline-primary btn-sm" @click="addItem()">Add</button>
+            </div>
+            <input type="hidden" name="school_meta_preference" id="id_school_meta_preference" :value="jsonValue()">
+            <div class="form-text">Enter as tags; press Enter to add. Items saved as a list.</div>
+            {% if config_form.school_meta_preference.errors %}
+              <div class="text-danger small mt-1">{{ config_form.school_meta_preference.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+        <div class="card-footer d-flex justify-content-end">
+          <button type="submit" class="btn btn-primary">Save Configuration</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="col-lg-6">
+      {% include "nrmps/partials/_population_counts.html" %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+  window.metaEditor = function(rootEl, hiddenId, initial) {
+    function normalize(val) {
+      return (val || "").toString().trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_\-]/g, "");
+    }
+    const initItems = Array.isArray(initial) ? initial : [];
+    return {
+      items: initItems.map(normalize).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i),
+      newItem: "",
+      noop() {},
+      dedupeAndNormalize() {
+        this.items = this.items.map(normalize).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+      },
+      addItem() {
+        const v = normalize(this.newItem);
+        if (!v) return;
+        if (!this.items.includes(v)) this.items.push(v);
+        this.newItem = "";
+      },
+      remove(index) {
+        this.items.splice(index, 1);
+      },
+      jsonValue() {
+        return JSON.stringify(this.items.map(normalize).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i));
+      }
+    }
+  }
+</script>
+{% endblock %}

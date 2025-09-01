@@ -28,6 +28,12 @@ ALLOWED_HOSTS = []
 
 AUTH_USER_MODEL = "nrmps.User"
 
+INTERNAL_IPS = [
+    # ...
+    "127.0.0.1",
+    # ...
+]
+
 
 # Application definition
 
@@ -44,6 +50,7 @@ INSTALLED_APPS = [
     "django_bootstrap5",
     "crispy_forms",
     "django_htmx",
+    "debug_toolbar",
 ]
 
 MIDDLEWARE = [
@@ -56,6 +63,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     ### Add ons
     "django_htmx.middleware.HtmxMiddleware",
+    "debug_toolbar.middleware.DebugToolbarMiddleware",
 ]
 
 ROOT_URLCONF = "NRMP_Simulated.urls"

@@ -16,6 +16,12 @@ It includes a interview stage before the matching stage.
 - Django 5.2+
 - PostgreSQL 14+ (sqlite for local development)
 - Boostrap5
+- htmx
+- Django-htmx
+
+### Static files and javascript
+- Bootstrap5 Installed via django app
+- alpine.js installed in `static/js/alpine_mini.js`
 
 ### Development tools
 - pytest
@@ -37,8 +43,14 @@ It includes a interview stage before the matching stage.
    # Run linter with auto-fix
    ruff check --fix .
    ```
+   
+2**Check Django**
+   ```bash
+   # Run django check python manage.py check
+   python manage.py check
+   ```
 
-2. **Style Guidelines**:
+3**Style Guidelines**:
    - Line length: 120 characters
    - Indentation: 4 spaces
    - String quotes: Double quotes

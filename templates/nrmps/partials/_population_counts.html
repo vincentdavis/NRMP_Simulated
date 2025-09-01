@@ -1,0 +1,73 @@
+<div id="population-counts">
+  <div class="card mb-3">
+    <div class="card-header">Students</div>
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <strong>Count:</strong> {{ simulation.students.count }}
+        </div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-success" href="{% url 'nrmps:simulation_download_students' pk=simulation.pk %}">Download CSV</a>
+          <button class="btn btn-sm btn-outline-primary"
+                  hx-post="{% url 'nrmps:simulation_create_students' pk=simulation.pk %}"
+                  hx-target="#population-counts"
+                  hx-swap="outerHTML"
+                  hx-confirm="(Re)create students from the latest configuration? This will replace existing students.">
+            (re)Create Students
+          </button>
+          <button class="btn btn-sm btn-outline-danger"
+                  hx-post="{% url 'nrmps:simulation_delete_students' pk=simulation.pk %}"
+                  hx-target="#population-counts"
+                  hx-swap="outerHTML"
+                  hx-confirm="Delete all students for this simulation?">
+            Delete All
+          </button>
+        </div>
+      </div>
+      <form hx-post="{% url 'nrmps:simulation_upload_students' pk=simulation.pk %}"
+            hx-target="#population-counts"
+            hx-swap="outerHTML"
+            hx-encoding="multipart/form-data"
+            class="d-flex align-items-center gap-2">
+        <input type="file" name="file" accept=".csv" class="form-control form-control-sm" required>
+        <button type="submit" class="btn btn-sm btn-primary">Upload CSV</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">Schools</div>
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+          <strong>Count:</strong> {{ simulation.schools.count }}
+        </div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-success" href="{% url 'nrmps:simulation_download_schools' pk=simulation.pk %}">Download CSV</a>
+          <button class="btn btn-sm btn-outline-primary"
+                  hx-post="{% url 'nrmps:simulation_create_schools' pk=simulation.pk %}"
+                  hx-target="#population-counts"
+                  hx-swap="outerHTML"
+                  hx-confirm="(Re)create schools from the latest configuration? This will replace existing schools.">
+            (re)Create Schools
+          </button>
+          <button class="btn btn-sm btn-outline-danger"
+                  hx-post="{% url 'nrmps:simulation_delete_schools' pk=simulation.pk %}"
+                  hx-target="#population-counts"
+                  hx-swap="outerHTML"
+                  hx-confirm="Delete all schools for this simulation?">
+            Delete All
+          </button>
+        </div>
+      </div>
+      <form hx-post="{% url 'nrmps:simulation_upload_schools' pk=simulation.pk %}"
+            hx-target="#population-counts"
+            hx-swap="outerHTML"
+            hx-encoding="multipart/form-data"
+            class="d-flex align-items-center gap-2">
+        <input type="file" name="file" accept=".csv" class="form-control form-control-sm" required>
+        <button type="submit" class="btn btn-sm btn-primary">Upload CSV</button>
+      </form>
+    </div>
+  </div>
+</div>

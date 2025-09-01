@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Simulations - NRMP Simulations{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+  <h3>Your Simulations</h3>
+  <a class="btn btn-primary" href="{% url 'nrmps:simulation_create' %}">New Simulation</a>
+</div>
+
+{% if simulations %}
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Iterations</th>
+          <th>Public</th>
+          <th>Students</th>
+          <th>Schools</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sim in simulations %}
+        <tr>
+          <td><a href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">{{ sim.name }}</a></td>
+          <td>{{ sim.iterations }}</td>
+          <td>{% if sim.public %}Yes{% else %}No{% endif %}</td>
+          <td>{{ sim.students.count }}</td>
+          <td>{{ sim.schools.count }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">Manage</a>
+            <form class="d-inline" method="post" action="{% url 'nrmps:simulation_delete' pk=sim.pk %}" x-data @submit.prevent="if (confirm('Delete this simulation?')) { $el.submit() }">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="alert alert-info">No simulations yet. Create your first one.</div>
+{% endif %}
+{% endblock %}
