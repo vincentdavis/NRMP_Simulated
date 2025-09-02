@@ -50,8 +50,10 @@ class Simulation(models.Model):
         - Clears existing students for this simulation before creation.
         - Generates `number_of_applicants` students named "Student {i}" with scores drawn from a
           Gaussian distribution using applicants_score_mean and applicant_score_stddev.
-        - Populates meta_stddev from applicant_meta_scores_stddev and score_meta keys from
-          config.school_meta_preference with values `score + N(0, meta_stddev)`.
+        - Uses applicant_meta_scores_stddev from config when generating score_meta values based on
+          config.school_meta_preference: each meta gets base score plus N(0, applicant_meta_scores_stddev).
+        - Also generates meta_preference weights per student using config.applicant_meta_preference and
+          config.applicant_meta_preference_stddev, storing the stddev into meta_stddev_preference.
         - Returns the number of students created.
         """
         import random
@@ -69,6 +71,10 @@ class Simulation(models.Model):
         meta_std = max(float(getattr(config, "applicant_meta_scores_stddev", 0.0) or 0.0), 0.0)
         meta_keys = list(getattr(config, "school_meta_preference", []) or [])
 
+        # Applicant preference generation settings
+        pref_keys = list(getattr(config, "applicant_meta_preference", []) or [])
+        pref_std = max(float(getattr(config, "applicant_meta_preference_stddev", 0.0) or 0.0), 0.0)
+
         to_create = []
         for i in range(1, int(config.number_of_applicants) + 1):
             base_score = random.gauss(mean, std) if std > 0 else float(mean)
@@ -80,13 +86,27 @@ class Simulation(models.Model):
                     k = str(key)
                 delta = random.gauss(0, meta_std) if meta_std > 0 else 0.0
                 score_meta[k] = float(base_score + delta)
+
+            # Generate student meta preferences: non-negative weights around 0 with stddev pref_std
+            meta_preference = {}
+            for key in pref_keys:
+                try:
+                    k2 = str(key)
+                except Exception:
+                    k2 = str(key)
+                w = random.gauss(0.0, pref_std) if pref_std > 0 else 0.0
+                if w < 0:
+                    w = 0.0
+                meta_preference[k2] = float(w)
+
             to_create.append(
                 Student(
                     simulation=self,
                     name=f"Student {i}",
                     score=float(base_score),
-                    meta_stddev=meta_std,
                     score_meta=score_meta,
+                    meta_stddev_preference=pref_std,
+                    meta_preference=meta_preference,
                 )
             )
 
@@ -102,8 +122,10 @@ class Simulation(models.Model):
         - Clears existing schools for this simulation before creation.
         - Generates `number_of_schools` schools named "School {i}" with capacities and scores drawn from
           Gaussian distributions using the respective means and stddevs. Capacity is coerced to an int >= 0.
-        - Populates meta_stddev from school_meta_scores_stddev and score_meta keys from
-          config.applicant_meta_preference with values `score + N(0, meta_stddev)`.
+        - Uses school_meta_scores_stddev from config when generating score_meta values based on
+          config.applicant_meta_preference: each meta gets base score plus N(0, school_meta_scores_stddev).
+        - Also generates meta_preference weights per school using config.school_meta_preference and
+          config.school_meta_preference_stddev, storing the stddev into meta_stddev_preference.
         - Returns the number of schools created.
         """
         import random
@@ -121,6 +143,10 @@ class Simulation(models.Model):
         meta_std = max(float(getattr(config, "school_meta_scores_stddev", 0.0) or 0.0), 0.0)
         meta_keys = list(getattr(config, "applicant_meta_preference", []) or [])
 
+        # School preference generation settings
+        pref_keys = list(getattr(config, "school_meta_preference", []) or [])
+        pref_std = max(float(getattr(config, "school_meta_preference_stddev", 0.0) or 0.0), 0.0)
+
         to_create = []
         for i in range(1, int(config.number_of_schools) + 1):
             base_score = random.gauss(score_mean, score_std) if score_std > 0 else float(score_mean)
@@ -136,14 +162,28 @@ class Simulation(models.Model):
                     k = str(key)
                 delta = random.gauss(0, meta_std) if meta_std > 0 else 0.0
                 score_meta[k] = float(base_score + delta)
+
+            # Generate school meta preferences: non-negative weights around 0 with stddev pref_std
+            meta_preference = {}
+            for key in pref_keys:
+                try:
+                    k2 = str(key)
+                except Exception:
+                    k2 = str(key)
+                w = random.gauss(0.0, pref_std) if pref_std > 0 else 0.0
+                if w < 0:
+                    w = 0.0
+                meta_preference[k2] = float(w)
+
             to_create.append(
                 School(
                     simulation=self,
                     name=f"School {i}",
                     capacity=capacity,
                     score=float(base_score),
-                    meta_stddev=meta_std,
                     score_meta=score_meta,
+                    meta_stddev_preference=pref_std,
+                    meta_preference=meta_preference,
                 )
             )
 
@@ -162,7 +202,7 @@ class Simulation(models.Model):
     def upload_students(self) -> int:
         """Upload students from a CSV file located in BASE_DIR/data.
 
-        Expected CSV format (with header): name,score[,meta_stddev][,score_meta]
+        Expected CSV format (with header): name,score[,score_meta]
         - score_meta: JSON object string mapping meta names to values.
         File path convention: data/simulation_{self.id}_students.csv
         - Replaces existing students for this simulation.
@@ -188,7 +228,6 @@ class Simulation(models.Model):
             field_map = {k.strip().lower(): k for k in reader.fieldnames or []}
             name_key = field_map.get("name")
             score_key = field_map.get("score")
-            meta_stddev_key = field_map.get("meta_stddev")
             score_meta_key = field_map.get("score_meta")
             if not name_key or not score_key:
                 # If headers missing, attempt to read as positional columns
@@ -204,19 +243,14 @@ class Simulation(models.Model):
                         score = float(row[1]) if len(row) > 1 and row[1] != "" else 0.0
                     except ValueError:
                         score = 0.0
-                    try:
-                        meta_stddev = float(row[2]) if len(row) > 2 and row[2] != "" else 0.0
-                    except (ValueError, TypeError):
-                        meta_stddev = 0.0
                     score_meta = {}
-                    if len(row) > 3 and row[3]:
+                    # If a third column exists, treat it as score_meta JSON and ignore any legacy meta_stddev column
+                    if len(row) > 2 and row[2]:
                         try:
-                            score_meta = json.loads(row[3])
+                            score_meta = json.loads(row[2])
                         except Exception:
                             score_meta = {}
-                    to_create.append(
-                        Student(simulation=self, name=name, score=score, meta_stddev=meta_stddev, score_meta=score_meta)
-                    )
+                    to_create.append(Student(simulation=self, name=name, score=score, score_meta=score_meta))
             else:
                 for row in reader:
                     name = (row.get(name_key) or "").strip() or None
@@ -225,11 +259,6 @@ class Simulation(models.Model):
                         score = float(score_val) if score_val not in (None, "") else 0.0
                     except ValueError:
                         score = 0.0
-                    try:
-                        meta_stddev_val = row.get(meta_stddev_key) if meta_stddev_key else None
-                        meta_stddev = float(meta_stddev_val) if meta_stddev_val not in (None, "") else 0.0
-                    except (ValueError, TypeError):
-                        meta_stddev = 0.0
                     score_meta_str = row.get(score_meta_key) if score_meta_key else None
                     score_meta = {}
                     if score_meta_str:
@@ -239,9 +268,7 @@ class Simulation(models.Model):
                             score_meta = {}
                     if not name:
                         name = f"Student {len(to_create) + 1}"
-                    to_create.append(
-                        Student(simulation=self, name=name, score=score, meta_stddev=meta_stddev, score_meta=score_meta)
-                    )
+                    to_create.append(Student(simulation=self, name=name, score=score, score_meta=score_meta))
 
         if to_create:
             Student.objects.bulk_create(to_create, batch_size=1000)
@@ -250,7 +277,7 @@ class Simulation(models.Model):
     def upload_schools(self) -> int:
         """Upload schools from a CSV file located in BASE_DIR/data.
 
-        Expected CSV format (with header): name,capacity,score[,meta_stddev][,score_meta]
+        Expected CSV format (with header): name,capacity,score[,score_meta]
         - score_meta: JSON object string mapping meta names to values.
         File path convention: data/simulation_{self.id}_schools.csv
         - Replaces existing schools for this simulation.
@@ -276,7 +303,6 @@ class Simulation(models.Model):
             name_key = field_map.get("name")
             cap_key = field_map.get("capacity")
             score_key = field_map.get("score")
-            meta_stddev_key = field_map.get("meta_stddev")
             score_meta_key = field_map.get("score_meta")
             if not name_key:
                 # Fallback: positional
@@ -313,7 +339,6 @@ class Simulation(models.Model):
                             name=name,
                             capacity=capacity,
                             score=score,
-                            meta_stddev=meta_stddev,
                             score_meta=score_meta,
                         )
                     )
@@ -330,11 +355,8 @@ class Simulation(models.Model):
                         score = float(score_val) if score_val not in (None, "") else 0.0
                     except ValueError:
                         score = 0.0
-                    try:
-                        meta_stddev_val = row.get(meta_stddev_key) if meta_stddev_key else None
-                        meta_stddev = float(meta_stddev_val) if meta_stddev_val not in (None, "") else 0.0
-                    except (ValueError, TypeError):
-                        meta_stddev = 0.0
+                    # Ignore legacy meta_stddev column if present; we no longer store it
+                    pass
                     score_meta_str = row.get(score_meta_key) if score_meta_key else None
                     score_meta = {}
                     if score_meta_str:
@@ -352,7 +374,6 @@ class Simulation(models.Model):
                             name=name,
                             capacity=capacity,
                             score=score,
-                            meta_stddev=meta_stddev,
                             score_meta=score_meta,
                         )
                     )
@@ -396,10 +417,20 @@ class SimulationConfig(models.Model):
     )  # This is the list of meta-fields that are used to by applicants to rank school. "The applicants' preferences".
     applicant_meta_preference_stddev = models.FloatField(
         validators=[MinValueValidator(0)], default=10, help_text="Std. dev. of meta preference scores (>= 0)."
-    )  # This is the stddev of the meta-preferences "weights" each students gives to preferacnes.
+    )  # This is the stddev of the meta-preferences "weights" each student gives to preferacnes.
     applicant_meta_scores_stddev = models.FloatField(
         default=10, validators=[MinValueValidator(0)], help_text="Std. dev. of meta scores per applicant (>= 0)."
     )  # This is the stddev of the meta-scores for each applicant.
+    applicant_pre_interview_rating_error = models.FloatField(
+        default=0.1,
+        validators=[MinValueValidator(0)],
+        help_text="Pre-interview rating error stddev",
+    )  # The mean error is 0, this calculates the stdsdev used to computer the students error
+    applicant_post_interview_rating_error = models.FloatField(
+        default=0.02,
+        validators=[MinValueValidator(0)],
+        help_text="Pre-interview rating error stddev",
+    )  # The mean error is 0, this calculates the stdsdev used to computer the students error
 
     # School configuration
     school_score_mean = models.FloatField(
@@ -426,17 +457,27 @@ class SimulationConfig(models.Model):
     school_meta_preference_stddev = models.FloatField(
         default=10,
         validators=[MinValueValidator(0)],
-    )  # This is the stddev of the meta-preferences "weights" each schools gives to preferacnes.
+    )  # This is the stddev of the meta-preferences "weights" each schools gives to preferences.
     school_meta_scores_stddev = models.FloatField(
         default=10, validators=[MinValueValidator(0)], help_text="Std. dev. of meta scores per school (>= 0)."
     )  # This is the stddev of the meta-scores for each school.
+    school_pre_interview_rating_error = models.FloatField(
+        default=0.1,
+        validators=[MinValueValidator(0)],
+        help_text="The stddev scoreing error used to calculate the observed score for each student",
+    )
+    school_post_interview_rating_error = models.FloatField(
+        default=0.02,
+        validators=[MinValueValidator(0)],
+        help_text="The stddev scoreing error used to calculate the observed score for each student",
+    )
 
     def __str__(self):
         return f"{self.simulation.name}-{self.id}"
 
 
 def generate_meta_scores(self, score: float, meta_scores: list[str], meta_stddev: float) -> dict[str:float]:
-    """Generates meta scores for each student and school."""
+    """Generates meta-scores for each student and school."""
     for meta in meta_scores:
         self.score_meta[meta] = score + random.gauss(0, meta_stddev)
 
@@ -455,6 +496,12 @@ class Student(models.Model):
     )  # This will define how close each score is to the base "score"
     score_meta = models.JSONField(
         default=dict, help_text='Meta score names and value {"USMLE Setp 2":5, "Grades": 10} for the score.'
+    )
+    meta_stddev_preference = models.FloatField(
+        default=0.0, help_text="Standard deviation of the preference."
+    )  # This is the stddev of the meta-preferences "weights" this student applies to preferences.
+    meta_preference = models.JSONField(
+        default=dict, help_text='Meta score names and value {"School size":5, "Reputation": 10} for the preference.'
     )
 
     def __str__(self):
@@ -476,6 +523,12 @@ class School(models.Model):
     )  # This will define how close each score is to the base "score"
     score_meta = models.JSONField(
         default=dict, help_text='Meta score names and value {"Research":5, "Reputation": 10} for the score.'
+    )
+    meta_stddev_preference = models.FloatField(
+        default=0.0, help_text="Standard deviation of the preference."
+    )  # This is the stddev of the meta-preferences "weights" this school applies to preferences.
+    meta_preference = models.JSONField(
+        default=dict, help_text='Meta score names and value {"USMLE Setp 2":5, "Grades": 10} for the preference.'
     )
 
     def __str__(self):
@@ -504,6 +557,9 @@ class Interview(models.Model):
     student_accepted = models.BooleanField(
         default=False, help_text="Whether the student has been accepted to the school invitation to interview."
     )
+    student_true_score_of_school = models.FloatField(
+        default=None, help_text="True score of school with respect to student"
+    )
 
     # Schools Steps
     school_invited = models.BooleanField(
@@ -517,6 +573,9 @@ class Interview(models.Model):
     )
     school_pre_observed_score_of_student = models.FloatField(
         default=None, help_text='Pre interview "total" score of school'
+    )
+    school_true_score_of_student = models.FloatField(
+        default=None, help_text="True score of student with respect to school"
     )
 
     ## Pre interview rank.

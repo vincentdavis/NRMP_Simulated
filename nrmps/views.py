@@ -237,10 +237,10 @@ def simulation_download_students(request, pk: int):
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_students.csv"
     writer = csv.writer(resp)
-    writer.writerow(["name", "score", "meta_stddev", "score_meta"])
-    for s in sim.students.all().only("name", "score", "meta_stddev", "score_meta"):
+    writer.writerow(["name", "score", "score_meta"])
+    for s in sim.students.all().only("name", "score", "score_meta"):
         score_meta_str = json.dumps(s.score_meta or {}, ensure_ascii=False)
-        writer.writerow([s.name, s.score, s.meta_stddev or 0.0, score_meta_str])
+        writer.writerow([s.name, s.score, score_meta_str])
     return resp
 
 
@@ -253,10 +253,10 @@ def simulation_download_schools(request, pk: int):
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_schools.csv"
     writer = csv.writer(resp)
-    writer.writerow(["name", "capacity", "score", "meta_stddev", "score_meta"])
-    for s in sim.schools.all().only("name", "capacity", "score", "meta_stddev", "score_meta"):
+    writer.writerow(["name", "capacity", "score", "score_meta"])
+    for s in sim.schools.all().only("name", "capacity", "score", "score_meta"):
         score_meta_str = json.dumps(s.score_meta or {}, ensure_ascii=False)
-        writer.writerow([s.name, s.capacity, s.score, s.meta_stddev or 0.0, score_meta_str])
+        writer.writerow([s.name, s.capacity, s.score, score_meta_str])
     return resp
 
 
@@ -276,7 +276,6 @@ def simulation_students(request, pk: int):
         "id": "id",
         "name": "name",
         "score": "score",
-        "meta_stddev": "meta_stddev",
     }
     sort_field = allowed.get(sort, "name")
     ordering = sort_field if order != "desc" else f"-{sort_field}"
@@ -320,7 +319,6 @@ def simulation_schools(request, pk: int):
         "name": "name",
         "capacity": "capacity",
         "score": "score",
-        "meta_stddev": "meta_stddev",
     }
     sort_field = allowed.get(sort, "name")
     ordering = sort_field if order != "desc" else f"-{sort_field}"

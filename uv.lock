@@ -98,6 +98,17 @@ wheels = [
 ]
 
 [[package]]
+name = "django-reset-migrations"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/11/97257821445ec2d8553f1bc3ba696c00f570d717b7cda77fd70d0e4188f8/django_reset_migrations-0.4.0-py3-none-any.whl", hash = "sha256:902921c626a7d2c3348330b8afd8336ab46e4137165027817d5c2aeac884274d", size = 7972, upload-time = "2020-01-09T13:01:53.87Z" },
+]
+
+[[package]]
 name = "django-stubs"
 version = "5.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -184,6 +195,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "django-debug-toolbar" },
+    { name = "django-reset-migrations" },
     { name = "django-stubs" },
     { name = "mypy" },
     { name = "pytest" },
@@ -203,6 +215,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "django-debug-toolbar", specifier = ">=6.0.0" },
+    { name = "django-reset-migrations", specifier = ">=0.4.0" },
     { name = "django-stubs", specifier = ">=5.2.2" },
     { name = "mypy", specifier = ">=1.17.1" },
     { name = "pytest", specifier = ">=8.4.1" },

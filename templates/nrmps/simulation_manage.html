@@ -95,6 +95,20 @@
                 <div class="text-danger small mt-1">{{ config_form.applicant_interview_limit.errors.0 }}</div>
               {% endif %}
             </div>
+            <div class="col-md-6">
+              <label class="form-label" for="id_applicant_pre_interview_rating_error">Applicant Pre-interview Rating Error</label>
+              {{ config_form.applicant_pre_interview_rating_error }}
+              {% if config_form.applicant_pre_interview_rating_error.errors %}
+                <div class="text-danger small mt-1">{{ config_form.applicant_pre_interview_rating_error.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="id_applicant_post_interview_rating_error">Applicant Post-interview Rating Error</label>
+              {{ config_form.applicant_post_interview_rating_error }}
+              {% if config_form.applicant_post_interview_rating_error.errors %}
+                <div class="text-danger small mt-1">{{ config_form.applicant_post_interview_rating_error.errors.0 }}</div>
+              {% endif %}
+            </div>
           </div>
           <div class="mt-2" x-data="metaEditor($el, 'id_applicant_meta_preference', {{ config_form.instance.applicant_meta_preference|default:'[]'|safe }})">
             <label class="form-label" for="id_applicant_meta_preference">Applicant Meta Preferences</label>
@@ -151,6 +165,20 @@
               {{ config_form.school_interview_limit }}
               {% if config_form.school_interview_limit.errors %}
                 <div class="text-danger small mt-1">{{ config_form.school_interview_limit.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="id_school_pre_interview_rating_error">School Pre-interview Rating Error</label>
+              {{ config_form.school_pre_interview_rating_error }}
+              {% if config_form.school_pre_interview_rating_error.errors %}
+                <div class="text-danger small mt-1">{{ config_form.school_pre_interview_rating_error.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label class="form-label" for="id_school_post_interview_rating_error">School Post-interview Rating Error</label>
+              {{ config_form.school_post_interview_rating_error }}
+              {% if config_form.school_post_interview_rating_error.errors %}
+                <div class="text-danger small mt-1">{{ config_form.school_post_interview_rating_error.errors.0 }}</div>
               {% endif %}
             </div>
           </div>

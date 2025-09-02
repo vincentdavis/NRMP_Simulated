@@ -46,22 +46,20 @@ class StudentsUploadForm(forms.Form):
     """Upload CSV for students: expects headers name,score and optional meta fields.
 
     Optional columns:
-    - meta_stddev: float
     - score_meta: JSON object mapping meta names to values
     """
 
-    file = forms.FileField(label="Students CSV", help_text="CSV: name, score, [meta_stddev], [score_meta]")
+    file = forms.FileField(label="Students CSV", help_text="CSV: name, score, [score_meta]")
 
 
 class SchoolsUploadForm(forms.Form):
     """Upload CSV for schools: expects headers name,capacity,score and optional meta fields.
 
     Optional columns:
-    - meta_stddev: float
     - score_meta: JSON object mapping meta names to values
     """
 
-    file = forms.FileField(label="Schools CSV", help_text="CSV: name, capacity, score, [meta_stddev], [score_meta]")
+    file = forms.FileField(label="Schools CSV", help_text="CSV: name, capacity, score, [score_meta]")
 
 
 class SimulationConfigForm(forms.ModelForm):
@@ -116,6 +114,8 @@ class SimulationConfigForm(forms.ModelForm):
             "applicant_meta_preference",
             "applicant_meta_preference_stddev",
             "applicant_meta_scores_stddev",
+            "applicant_pre_interview_rating_error",
+            "applicant_post_interview_rating_error",
             "school_score_mean",
             "school_score_stddev",
             "school_capacity_mean",
@@ -124,6 +124,8 @@ class SimulationConfigForm(forms.ModelForm):
             "school_meta_preference",
             "school_meta_preference_stddev",
             "school_meta_scores_stddev",
+            "school_pre_interview_rating_error",
+            "school_post_interview_rating_error",
         )
         widgets = {
             "number_of_applicants": forms.NumberInput(attrs={"min": 0}),
@@ -134,6 +136,8 @@ class SimulationConfigForm(forms.ModelForm):
             "applicant_meta_preference": forms.Textarea(attrs={"rows": 2, "placeholder": "program_size, prestige"}),
             "applicant_meta_preference_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
             "applicant_meta_scores_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
+            "applicant_pre_interview_rating_error": forms.NumberInput(attrs={"step": "any", "min": 0}),
+            "applicant_post_interview_rating_error": forms.NumberInput(attrs={"step": "any", "min": 0}),
             "school_score_mean": forms.NumberInput(attrs={"step": "any"}),
             "school_score_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
             "school_capacity_mean": forms.NumberInput(attrs={"step": "any", "min": 0}),
@@ -142,4 +146,6 @@ class SimulationConfigForm(forms.ModelForm):
             "school_meta_preference": forms.Textarea(attrs={"rows": 2, "placeholder": "board_scores, research"}),
             "school_meta_preference_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
             "school_meta_scores_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
+            "school_pre_interview_rating_error": forms.NumberInput(attrs={"step": "any", "min": 0}),
+            "school_post_interview_rating_error": forms.NumberInput(attrs={"step": "any", "min": 0}),
         }

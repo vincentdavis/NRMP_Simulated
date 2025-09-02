@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "crispy_forms",
     "django_htmx",
     "debug_toolbar",
+    "reset_migrations",  #### Remove in production
 ]
 
 MIDDLEWARE = [
