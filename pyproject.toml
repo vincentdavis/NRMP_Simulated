@@ -9,6 +9,7 @@ dependencies = [
     "django-bootstrap5>=25.2",
     "django-crispy-forms>=2.4",
     "django-htmx>=1.23.2",
+    "logfire[django]>=4.3.6",
 ]
 
 [dependency-groups]

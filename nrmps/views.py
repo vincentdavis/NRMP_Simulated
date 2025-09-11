@@ -11,8 +11,11 @@ from django.views.decorators.http import require_http_methods
 from django.conf import settings
 from django.core.paginator import Paginator
 
+import logging
 from .forms import SignupForm, SimulationForm, StudentsUploadForm, SchoolsUploadForm, SimulationConfigForm
-from .models import Simulation
+from .models import Simulation, Interview
+
+logger = logging.getLogger(__name__)
 
 
 @require_GET
@@ -99,25 +102,74 @@ def simulation_manage(request, pk: int):
 
     if request.method == "POST":
         form_id = request.POST.get("form_id")
+        # Fallback: infer form by field names if form_id missing or unexpected
+        if not form_id:
+            if any(k in request.POST for k in ("number_of_applicants", "number_of_schools", "applicant_score_mean")):
+                form_id = "config"
+            else:
+                form_id = "simulation"
+        logger.info("simulation_manage POST", extra={
+            "user_id": getattr(request.user, "id", None),
+            "simulation_id": sim.id,
+            "form_id": form_id,
+        })
         if form_id == "config":
             # Handle SimulationConfig form
             if config_instance is not None:
+                logger.debug("Binding SimulationConfigForm with existing instance", extra={"config_id": config_instance.id})
                 config_form = SimulationConfigForm(request.POST, instance=config_instance)
             else:
+                logger.debug("Binding SimulationConfigForm for create")
                 config_form = SimulationConfigForm(request.POST)
             # Keep simulation form for rendering
             form = SimulationForm(instance=sim)
-            if config_form.is_valid():
+            valid = config_form.is_valid()
+            # Log validity and errors in the message so they are visible even without structured formatting
+            logger.info(
+                "SimulationConfigForm validated valid=%s errors=%s post_keys=%s",
+                valid,
+                None if valid else config_form.errors.as_json(),
+                list(request.POST.keys()),
+                extra={
+                    "valid": valid,
+                    "errors": config_form.errors.get_json_data() if not valid else None,
+                    "post_sizes": {k: len(v) if hasattr(v, "__len__") else None for k, v in request.POST.items()},
+                },
+            )
+            if valid:
                 cfg = config_form.save(commit=False)
                 cfg.simulation = sim
+                is_update = bool(getattr(cfg, "id", None))
                 cfg.save()
+                logger.info(
+                    "SimulationConfig saved config_id=%s simulation_id=%s updated=%s",
+                    cfg.id,
+                    sim.id,
+                    is_update,
+                    extra={
+                        "config_id": cfg.id,
+                        "simulation_id": sim.id,
+                        "updated": is_update,
+                    },
+                )
                 return redirect("nrmps:simulation_manage", pk=sim.pk)
         else:
             # Default: handle Simulation basic form
             form = SimulationForm(request.POST, instance=sim)
             config_form = SimulationConfigForm(instance=config_instance)
-            if form.is_valid():
+            valid = form.is_valid()
+            logger.info(
+                "SimulationForm validated valid=%s errors=%s",
+                valid,
+                None if valid else form.errors.as_json(),
+                extra={
+                    "valid": valid,
+                    "errors": form.errors.get_json_data() if not valid else None,
+                },
+            )
+            if valid:
                 form.save()
+                logger.info("Simulation saved simulation_id=%s", sim.id, extra={"simulation_id": sim.id})
                 return redirect("nrmps:simulation_manage", pk=sim.pk)
     else:
         form = SimulationForm(instance=sim)
@@ -344,3 +396,87 @@ def simulation_schools(request, pk: int):
         "page_sizes": [25, 50, 100, 200, 500],
     }
     return render(request, "nrmps/schools_list.html", context)
+
+
+# --- Interview section ---
+@login_required
+@require_http_methods(["POST"])
+def simulation_initialize_interviews(request, pk: int):
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+    from .simulation_engine import initialize_interview
+
+    initialize_interview(sim)
+    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+
+
+@login_required
+@require_http_methods(["POST"])
+def simulation_students_rate_pre_interview(request, pk: int):
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+    from .simulation_engine import students_rate_schools_pre_interview
+
+    students_rate_schools_pre_interview(sim)
+    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+
+
+@login_required
+@require_GET
+def simulation_interviews(request, pk: int):
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+
+    try:
+        page_size = int(request.GET.get("page_size", 100))
+    except (TypeError, ValueError):
+        page_size = 100
+    if page_size <= 0:
+        page_size = 100
+
+    qs = Interview.objects.filter(simulation=sim).select_related("student", "school").order_by("id")
+    paginator = Paginator(qs, page_size)
+    page = request.GET.get("page")
+    page_obj = paginator.get_page(page)
+
+    context = {
+        "simulation": sim,
+        "page_obj": page_obj,
+        "page_size": page_size,
+        "page_sizes": [25, 50, 100, 200, 500],
+    }
+    return render(request, "nrmps/interviews_list.html", context)
+
+
+@login_required
+@require_GET
+def simulation_download_interviews(request, pk: int):
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+    resp = HttpResponse(content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_interviews.csv"
+    writer = csv.writer(resp)
+    writer.writerow([
+        "student",
+        "school",
+        "status",
+        "student_pre_observed_score_of_school",
+        "school_pre_observed_score_of_student",
+        "student_post_observed_score_of_school",
+        "school_post_observed_score_of_student",
+    ])
+    for inter in Interview.objects.filter(simulation=sim).select_related("student", "school"):
+        writer.writerow([
+            inter.student.name,
+            inter.school.name,
+            inter.status,
+            inter.student_pre_observed_score_of_school,
+            inter.school_pre_observed_score_of_student,
+            inter.student_post_observed_score_of_school,
+            inter.school_post_observed_score_of_student,
+        ])
+    return resp

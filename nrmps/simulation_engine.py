@@ -10,10 +10,20 @@ def _score(meta_scores: dict[str:float], meta_preferances: dict[str:float], rati
 
 
 def initialize_interview(simulation: Simulation):
-    """Initialize the interview objects for each student and school of a simulation."""
-    for student in simulation.students.all():
-        for school in simulation.schools.all():
-            Interview.objects.create(student=student, school=school)
+    """Initialize the interview objects for each student and school of a simulation.
+
+    Recreates the full cross-product of Student x School for this simulation.
+    """
+    # Remove existing interviews for a clean re-init
+    Interview.objects.filter(simulation=simulation).delete()
+    to_create = []
+    students = list(simulation.students.all())
+    schools = list(simulation.schools.all())
+    for student in students:
+        for school in schools:
+            to_create.append(Interview(simulation=simulation, student=student, school=school, status="initialized"))
+    if to_create:
+        Interview.objects.bulk_create(to_create, batch_size=1000)
 
 
 def students_rate_schools_pre_interview(simulation: Simulation):
@@ -21,20 +31,26 @@ def students_rate_schools_pre_interview(simulation: Simulation):
 
     Steps:
     1. Computes the students rating of each school.
-    2. Choose which schools to apply to.
 
     Details:
     - Compute each student's pre-interview observed score of each school.
-    _score(School.score_meta, Student.meta_preference, Student.pre_interview_rating_error)
+      score = sum_over_meta(school.score_meta[m] * student.meta_preference[m]) * rating_error
     """
-    for inter in simulation.interview.all():
-        inter.update(
-            student_pre_observed_score_of_school=_score(
-                inter.school.score_meta,
-                inter.student.meta_preference,
-                inter.student.pre_interview_rating_error,
-            )
-        )
+    # Use the latest config to get applicant pre-interview rating error
+    cfg = simulation.configs.order_by("-id").first()
+    rating_error = float(getattr(cfg, "applicant_pre_interview_rating_error", 1.0) or 1.0)
+
+    from .models import Interview as InterviewModel  # avoid confusion with local name
+
+    qs = InterviewModel.objects.select_related("student", "school").filter(simulation=simulation)
+    for inter in qs:
+        try:
+            val = _score(inter.school.score_meta or {}, inter.student.meta_preference or {}, rating_error)
+        except Exception:
+            raise Exception(f"Error computing pre-interview score for {inter}") from None
+            # val = None
+        inter.student_pre_observed_score_of_school = val
+        inter.save(update_fields=["student_pre_observed_score_of_school"])
 
 
 def schools_rate_students(self):

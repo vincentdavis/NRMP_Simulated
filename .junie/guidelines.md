@@ -18,6 +18,7 @@ It includes a interview stage before the matching stage.
 - Boostrap5
 - htmx
 - Django-htmx
+- LogFire for logging
 
 ### Static files and javascript
 - Bootstrap5 Installed via django app

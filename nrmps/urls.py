@@ -32,8 +32,13 @@ urlpatterns = (
         # Downloads
         path("simulations/<int:pk>/download-students/", views.simulation_download_students, name="simulation_download_students"),
         path("simulations/<int:pk>/download-schools/", views.simulation_download_schools, name="simulation_download_schools"),
+        path("simulations/<int:pk>/download-interviews/", views.simulation_download_interviews, name="simulation_download_interviews"),
         # Lists
         path("simulations/<int:pk>/students/", views.simulation_students, name="simulation_students"),
         path("simulations/<int:pk>/schools/", views.simulation_schools, name="simulation_schools"),
+        path("simulations/<int:pk>/interviews/", views.simulation_interviews, name="simulation_interviews"),
+        # Interview actions
+        path("simulations/<int:pk>/initialize-interviews/", views.simulation_initialize_interviews, name="simulation_initialize_interviews"),
+        path("simulations/<int:pk>/students-rate-pre-interview/", views.simulation_students_rate_pre_interview, name="simulation_students_rate_pre_interview"),
     ]
 )
