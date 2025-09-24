@@ -25,7 +25,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-ed7u8t0igxuvlv_7-+tkc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "localhost,127.0.0.1").split(",")
 
 AUTH_USER_MODEL = "nrmps.User"
 
@@ -98,7 +98,6 @@ TEMPLATES = [
 ]
 
 
-
 WSGI_APPLICATION = "NRMP_Simulated.wsgi.application"
 
 
@@ -110,9 +109,8 @@ WSGI_APPLICATION = "NRMP_Simulated.wsgi.application"
 if os.environ.get("DATABASE_URL"):
     # Production database (Railway PostgreSQL)
     import dj_database_url
-    DATABASES = {
-        "default": dj_database_url.parse(os.environ.get("DATABASE_URL"))
-    }
+
+    DATABASES = {"default": dj_database_url.parse(os.environ.get("DATABASE_URL"))}
 else:
     # Development database (SQLite)
     DATABASES = {
