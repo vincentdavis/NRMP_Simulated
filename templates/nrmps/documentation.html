@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Documentation - NRMP Simulations{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <div class="hero bg-base-200 rounded-box mb-8">
+        <div class="hero-content text-center">
+            <div class="max-w-md">
+                <h1 class="text-5xl font-bold mb-4">📚 API Documentation</h1>
+                <p class="text-lg">Auto-generated documentation from model and function docstrings.</p>
+                <p class="text-sm text-base-content/70 mt-2">Updated in real-time from the source code.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid gap-6">
+        <!-- Models Section -->
+        {% if models %}
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title text-2xl mb-6">🏗️ Models</h2>
+
+                {% for model in models %}
+                <div class="mb-8 border-l-4 border-primary pl-6">
+                    <div class="mb-4">
+                        <h3 class="text-xl font-bold text-primary">{{ model.name }}</h3>
+                        {% if model.docstring %}
+                            <div class="prose max-w-none mt-2">
+                                <p class="text-base-content/80">{{ model.docstring|linebreaksbr }}</p>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Model Fields -->
+                    {% if model.fields %}
+                    <div class="mb-4">
+                        <h4 class="text-lg font-semibold mb-2">Fields:</h4>
+                        <div class="overflow-x-auto">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Type</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for field in model.fields %}
+                                    <tr class="hover">
+                                        <td class="font-mono text-sm">{{ field.name }}</td>
+                                        <td class="badge badge-outline">{{ field.type }}</td>
+                                        <td class="text-sm">{{ field.help_text|default:"-" }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Model Methods -->
+                    {% if model.methods %}
+                    <div class="mb-4">
+                        <h4 class="text-lg font-semibold mb-2">Methods:</h4>
+                        {% for method in model.methods %}
+                            <div class="collapse collapse-arrow bg-base-200 mb-2">
+                                <input type="checkbox">
+                                <div class="collapse-title text-sm font-mono">
+                                    <code class="text-accent">{{ method.name }}{{ method.signature }}</code>
+                                </div>
+                                {% if method.docstring %}
+                                <div class="collapse-content">
+                                    <div class="prose max-w-none">
+                                        <pre class="text-sm bg-base-300 p-3 rounded whitespace-pre-wrap">{{ method.docstring }}</pre>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Functions Section -->
+        {% if functions %}
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title text-2xl mb-6">⚙️ Utility Functions</h2>
+
+                {% for function in functions %}
+                <div class="mb-6 border-l-4 border-secondary pl-6">
+                    <div class="mb-2">
+                        <h3 class="text-lg font-bold text-secondary font-mono">
+                            {{ function.name }}{{ function.signature }}
+                        </h3>
+                    </div>
+                    {% if function.docstring %}
+                    <div class="prose max-w-none">
+                        <pre class="text-sm bg-base-200 p-3 rounded whitespace-pre-wrap">{{ function.docstring }}</pre>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- No content message -->
+        {% if not models and not functions %}
+        <div class="alert alert-info">
+            <div>
+                <h3 class="font-bold">No documentation found</h3>
+                <div class="text-sm">Make sure your models and functions have docstrings to appear in the documentation.</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Footer info -->
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <div class="text-center">
+                    <p class="text-sm text-base-content/60">
+                        This documentation is generated in real-time from Python docstrings.
+                        To update the documentation, modify the docstrings in your source code.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Custom styles for code formatting */
+code {
+    background-color: oklch(var(--b2));
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+.prose pre {
+    background-color: oklch(var(--b2));
+    color: oklch(var(--bc));
+}
+</style>
+{% endblock %}

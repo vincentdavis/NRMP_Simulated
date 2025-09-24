@@ -1,19 +1,20 @@
-from pathlib import Path
 import csv
+import inspect
 import json
+import logging
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_GET
-from django.views.decorators.http import require_http_methods
-from django.conf import settings
-from django.core.paginator import Paginator
+from django.views.decorators.http import require_GET, require_http_methods
 
-import logging
-from .forms import SignupForm, SimulationForm, StudentsUploadForm, SchoolsUploadForm, SimulationConfigForm
-from .models import Simulation, Interview
+from . import models
+from .forms import SchoolsUploadForm, SignupForm, SimulationConfigForm, SimulationForm, StudentsUploadForm
+from .models import Interview, Simulation
 
 logger = logging.getLogger(__name__)
 
@@ -424,11 +425,76 @@ def simulation_students_rate_pre_interview(request, pk: int):
 
 
 @login_required
-@require_GET
-def simulation_interviews(request, pk: int):
+@require_http_methods(["POST"])
+def simulation_schools_rate_pre_interview(request, pk: int):
     sim = get_object_or_404(Simulation, pk=pk)
     if sim.owner_id != request.user.id:
         raise Http404()
+    from .simulation_engine import schools_rate_students_pre_interview
+
+    schools_rate_students_pre_interview(sim)
+    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+
+
+@login_required
+@require_http_methods(["POST"])
+def simulation_compute_students_rankings(request, pk: int):
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+    from .simulation_engine import compute_students_pre_rankings
+
+    compute_students_pre_rankings(sim)
+    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+
+
+@login_required
+@require_http_methods(["POST"])
+def simulation_compute_schools_rankings(request, pk: int):
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+    from .simulation_engine import compute_schools_pre_rankings
+
+    compute_schools_pre_rankings(sim)
+    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+
+
+@login_required
+@require_http_methods(["POST"])
+def simulation_compute_pre_interview_all(request, pk: int):
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+    from .simulation_engine import compute_pre_interview_scores_and_rankings
+
+    compute_pre_interview_scores_and_rankings(sim)
+    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+
+
+@login_required
+@require_GET
+def simulation_interviews(request, pk: int):
+    """List interviews for a simulation with sorting and pagination (default 100)."""
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+
+    # Sorting
+    sort = request.GET.get("sort", "id").lower()
+    order = request.GET.get("order", "asc").lower()
+    allowed = {
+        "id": "id",
+        "student": "student__name",
+        "school": "school__name",
+        "status": "status",
+        "student_pre_score": "student_pre_observed_score_of_school",
+        "school_pre_score": "school_pre_observed_score_of_student",
+        "student_pre_rank": "students_pre_rank_of_school",
+        "school_pre_rank": "schools_pre_rank_of_student",
+    }
+    sort_field = allowed.get(sort, "id")
+    ordering = sort_field if order != "desc" else f"-{sort_field}"
 
     try:
         page_size = int(request.GET.get("page_size", 100))
@@ -437,7 +503,7 @@ def simulation_interviews(request, pk: int):
     if page_size <= 0:
         page_size = 100
 
-    qs = Interview.objects.filter(simulation=sim).select_related("student", "school").order_by("id")
+    qs = Interview.objects.filter(simulation=sim).select_related("student", "school").order_by(ordering)
     paginator = Paginator(qs, page_size)
     page = request.GET.get("page")
     page_obj = paginator.get_page(page)
@@ -445,6 +511,8 @@ def simulation_interviews(request, pk: int):
     context = {
         "simulation": sim,
         "page_obj": page_obj,
+        "sort": sort,
+        "order": order,
         "page_size": page_size,
         "page_sizes": [25, 50, 100, 200, 500],
     }
@@ -466,6 +534,8 @@ def simulation_download_interviews(request, pk: int):
         "status",
         "student_pre_observed_score_of_school",
         "school_pre_observed_score_of_student",
+        "students_pre_rank_of_school",
+        "schools_pre_rank_of_student",
         "student_post_observed_score_of_school",
         "school_post_observed_score_of_student",
     ])
@@ -476,7 +546,160 @@ def simulation_download_interviews(request, pk: int):
             inter.status,
             inter.student_pre_observed_score_of_school,
             inter.school_pre_observed_score_of_student,
+            inter.students_pre_rank_of_school,
+            inter.schools_pre_rank_of_student,
             inter.student_post_observed_score_of_school,
             inter.school_post_observed_score_of_student,
         ])
     return resp
+
+
+@require_GET
+def documentation(request):
+    """Auto-generated documentation from model and function docstrings."""
+
+    # Configuration for what to include/exclude
+    DOC_CONFIG = {
+        # Models to exclude completely
+        'excluded_models': [
+            'AbstractUser',  # Hide Django's AbstractUser
+            # 'SimulationConfig',  # Example: uncomment to hide
+        ],
+
+        # Models to include (if empty, includes all except excluded)
+        'included_models': [
+            # 'Simulation', 'Student', 'School',  # Example: only show these
+        ],
+
+        # Methods to exclude from all models
+        'excluded_methods': [
+            'save', 'delete', 'clean', 'full_clean', 'validate_unique',
+            'get_absolute_url', 'get_deferred_fields', 'refresh_from_db',
+            'adelete', 'arefresh_from_db', 'asave', 'clean_fields',
+            'date_error_message', 'get_constraints', 'prepare_database_save',
+            'save_base', 'serializable_value', 'unique_error_message', 'validate_constraints'
+        ],
+
+        # Functions to exclude
+        'excluded_functions': [
+            'generate_meta_scores',  # Example: hide this function
+        ],
+
+        # Check for special attributes to control documentation
+        'respect_doc_attributes': True,  # Use __doc_include__ and __doc_exclude__
+    }
+
+    def is_documented(obj, name):
+        """Check if an object should be documented based on special attributes."""
+        if not DOC_CONFIG['respect_doc_attributes']:
+            return True
+
+        # Check for explicit inclusion/exclusion attributes
+        if hasattr(obj, '__doc_exclude__') and obj.__doc_exclude__:
+            return False
+        if hasattr(obj, '__doc_include__') and obj.__doc_include__:
+            return True
+        if hasattr(obj, '__doc_private__') and obj.__doc_private__:
+            return False
+
+        return True
+
+    def extract_docstring_info(obj):
+        """Extract and clean docstring from an object."""
+        doc = inspect.getdoc(obj)
+        if not doc:
+            return None
+        return doc.strip()
+
+    def get_method_info(cls):
+        """Get all methods and their docstrings from a class."""
+        methods = []
+        for name, method in inspect.getmembers(cls, inspect.isfunction):
+            # Skip private methods
+            if name.startswith('_'):
+                continue
+
+            # Skip excluded methods
+            if name in DOC_CONFIG['excluded_methods']:
+                continue
+
+            # Check for documentation attributes
+            if not is_documented(method, name):
+                continue
+
+            methods.append({
+                'name': name,
+                'docstring': extract_docstring_info(method),
+                'signature': str(inspect.signature(method)) if hasattr(inspect, 'signature') else '',
+            })
+        return methods
+
+    # Extract model information
+    model_classes = []
+    for name, obj in inspect.getmembers(models, inspect.isclass):
+        if not (hasattr(obj, '_meta') and hasattr(obj._meta, 'app_label')):
+            continue  # Not a Django model
+
+        # Check inclusion/exclusion lists
+        if DOC_CONFIG['excluded_models'] and name in DOC_CONFIG['excluded_models']:
+            continue
+        if DOC_CONFIG['included_models'] and name not in DOC_CONFIG['included_models']:
+            continue
+
+        # Check for documentation attributes
+        if not is_documented(obj, name):
+            continue
+
+        model_info = {
+            'name': name,
+            'docstring': extract_docstring_info(obj),
+            'methods': get_method_info(obj),
+            'fields': []
+        }
+
+        # Get model fields
+        try:
+            for field in obj._meta.get_fields():
+                # Skip reverse relations and some internal fields
+                if hasattr(field, 'related_model') and field.many_to_one:
+                    continue
+                if field.name.endswith('_ptr'):  # Skip OneToOne parent links
+                    continue
+
+                field_info = {
+                    'name': field.name,
+                    'type': field.__class__.__name__,
+                    'help_text': getattr(field, 'help_text', ''),
+                }
+                model_info['fields'].append(field_info)
+        except Exception:
+            pass  # Skip if field extraction fails
+
+        model_classes.append(model_info)
+
+    # Extract standalone functions
+    functions = []
+    for name, obj in inspect.getmembers(models, inspect.isfunction):
+        # Skip private functions
+        if name.startswith('_'):
+            continue
+
+        # Skip excluded functions
+        if name in DOC_CONFIG['excluded_functions']:
+            continue
+
+        # Check for documentation attributes
+        if not is_documented(obj, name):
+            continue
+
+        functions.append({
+            'name': name,
+            'docstring': extract_docstring_info(obj),
+            'signature': str(inspect.signature(obj)) if hasattr(inspect, 'signature') else '',
+        })
+
+    context = {
+        'models': model_classes,
+        'functions': functions,
+    }
+    return render(request, "nrmps/documentation.html", context)

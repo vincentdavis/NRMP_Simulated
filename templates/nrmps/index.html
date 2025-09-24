@@ -1,31 +1,38 @@
 {% extends "base.html" %}
 {% block title %}Home - NRMP Simulations{% endblock %}
 {% block content %}
-  <div class="py-4">
-    <div class="row align-items-center">
-      <div class="col-lg-7">
-        <h2 class="mb-3">NRMP Simulations</h2>
-        <p class="lead text-muted">Configure applicants, programs, interviews, and run match simulations.</p>
-        <div class="d-flex flex-wrap gap-2 mt-3">
-          <a class="btn btn-primary" href="/account/">Go to Account</a>
-          <a class="btn btn-outline-secondary" href="/contact/">Contact</a>
-          <a class="btn btn-outline-secondary" href="/privacy/">Privacy</a>
-          <a class="btn btn-outline-secondary" href="/terms/">Terms</a>
+<div class="hero min-h-96">
+  <div class="hero-content text-center">
+    <div class="max-w-6xl">
+      <div class="grid lg:grid-cols-2 gap-8 items-center">
+        <div class="text-left">
+          <h1 class="text-5xl font-bold mb-6">NRMP Simulations</h1>
+          <p class="text-lg text-base-content/70 mb-6">
+            Configure applicants, programs, interviews, and run match simulations.
+          </p>
+          <div class="flex flex-wrap gap-3">
+            <a class="btn btn-primary" href="/account/">Go to Account</a>
+            <a class="btn btn-outline" href="/contact/">Contact</a>
+            <a class="btn btn-outline" href="/privacy/">Privacy</a>
+            <a class="btn btn-outline" href="/terms/">Terms</a>
+          </div>
         </div>
-      </div>
-      <div class="col-lg-5 mt-4 mt-lg-0">
-        <div class="card shadow-sm">
-          <div class="card-header">Quick Start</div>
-          <div class="card-body">
-            <ol class="mb-0">
-              <li>Log in via the Admin to manage data.</li>
-              <li>Import or configure applicants and programs.</li>
-              <li>Run interviews and simulate the match.</li>
-              <li>Export results for analysis.</li>
-            </ol>
+
+        <div>
+          <div class="card bg-base-200 shadow-xl">
+            <div class="card-body">
+              <h2 class="card-title">Quick Start</h2>
+              <ol class="list-decimal list-inside space-y-2 text-left">
+                <li>Log in via the Admin to manage data.</li>
+                <li>Import or configure applicants and programs.</li>
+                <li>Run interviews and simulate the match.</li>
+                <li>Export results for analysis.</li>
+              </ol>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+</div>
 {% endblock %}

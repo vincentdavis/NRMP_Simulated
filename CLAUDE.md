@@ -32,6 +32,18 @@ python manage.py createsuperuser
 python manage.py shell
 ```
 
+### Frontend Development (Tailwind CSS)
+```bash
+# Start Tailwind CSS development watcher (run in separate terminal)
+python manage.py tailwind start
+
+# Build Tailwind CSS for production
+python manage.py tailwind build
+
+# Install Tailwind CSS dependencies (if needed)
+python manage.py tailwind install
+```
+
 ### Code Quality and Testing
 ```bash
 # Run linter (Ruff)
@@ -45,6 +57,18 @@ mypy .
 
 # Run tests
 pytest
+```
+
+### Docker Development
+```bash
+# Build Docker image
+docker build -t nrmp-simulated .
+
+# Run container
+docker run -p 8000:8000 nrmp-simulated
+
+# Run with environment variables
+docker run -p 8000:8000 -e DEBUG=False -e DATABASE_URL=postgresql://... nrmp-simulated
 ```
 
 ## Architecture Overview
@@ -85,12 +109,14 @@ This is a Django-based web application that simulates the National Resident Matc
 - Bulk operations for performance
 
 **Multi-stage Simulation Process**:
-1. Population creation (students + schools)
-2. Interview initialization (creates all possible pairings)
-3. Pre-interview rating (students rate schools)
-4. School rating and invitation process (WIP)
-5. Post-interview rating updates (WIP)
-6. Final ranking and matching (WIP)
+1. Population creation (students + schools) ✓
+2. Interview initialization (creates all possible pairings) ✓
+3. Pre-interview rating (students rate schools, schools rate students) ✓
+4. Pre-interview ranking computation ✓
+5. School invitation process (TODO)
+6. Interview phase and post-interview rating updates (TODO)
+7. Final ranking generation (TODO)
+8. NRMP matching algorithm execution (TODO)
 
 **Meta-preferences System**:
 - Flexible JSON-based system for modeling complex preferences
@@ -107,10 +133,9 @@ This is a Django-based web application that simulates the National Resident Matc
 - LogFire for structured logging
 
 **Frontend**:
-- Bootstrap 5 (via django-bootstrap5)
+- Tailwind CSS with DaisyUI components (via django-tailwind)
 - HTMX for dynamic content updates
 - Alpine.js for client-side interactivity
-- Django Crispy Forms with Bootstrap 5 templates
 
 **Development Tools**:
 - Ruff for linting and formatting (configured in pyproject.toml)
@@ -129,7 +154,12 @@ nrmps/                     # Main Django app
 ├── urls.py               # URL routing
 └── templatetags/         # Custom template tags
 
-templates/nrmps/          # HTML templates
+theme/                    # Tailwind CSS theme app
+├── templates/            # Base templates (base.html)
+├── static_src/          # Tailwind source files
+└── ...
+
+templates/nrmps/          # Application-specific HTML templates
 ├── partials/             # HTMX partial templates
 └── ...
 
@@ -156,17 +186,32 @@ data/                    # CSV upload storage location
 - CSRF protection enabled
 - Debug mode should be False in production
 
-### Interview System Implementation Status
+### Current Implementation Status
 
-**Completed**:
-- Interview object initialization (full cross-product)
-- Student pre-interview rating of schools
+**Completed (simulation_engine.py)**:
+- Interview object initialization (full cross-product) - `initialize_interview()`
+- Student pre-interview rating of schools - `students_rate_schools_pre_interview()`
+- School pre-interview rating of students - `schools_rate_students_pre_interview()`
+- Pre-interview ranking computation - `compute_students_pre_rankings()`, `compute_schools_pre_rankings()`
+- Complete pre-interview workflow - `compute_pre_interview_scores_and_rankings()`
 - HTMX-based UI for interview management
 
-**In Progress/TODO**:
-- School rating and invitation logic
-- Post-interview rating updates
-- Final ranking generation
-- NRMP matching algorithm implementation
+**UI Templates Available**:
+- Population management (students_list.html, schools_list.html)
+- Interview workflow (interviews_list.html)
+- Simulation management (simulation_form.html, simulation_manage.html, simulations_list.html)
+- User account system (account.html, signup.html)
+- Documentation page (documentation.html)
 
-The simulation engine (`simulation_engine.py`) contains placeholder functions for the incomplete stages of the interview and matching process.
+**TODO/Placeholders**:
+- Post-interview rating updates - `interview()` function (line 167)
+- Final ranking generation - `students_rank()`, `schools_rank()` functions (lines 175, 183)
+- NRMP matching algorithm - `match()` function (line 188)
+- School invitation and interview scheduling logic
+- Match result visualization and analysis
+
+**New Project Files**:
+- `TODO.md` - Comprehensive task list with priorities
+- `IDEAS.md` - Research ideas and feature enhancements
+- `Dockerfile` - Container deployment setup
+- `Procfile.tailwind` - Tailwind CSS process management

@@ -1,0 +1,92 @@
+{% load static tailwind_tags %}
+{% load django_htmx %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NRMP Simulations{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{% static 'NRMP_Simulations_favcon.png' %}">
+    <link rel="shortcut icon" type="image/png" href="{% static 'NRMP_Simulations_favcon.png' %}">
+    {% tailwind_css %}
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body class="flex flex-col min-h-screen bg-base-100" hx-headers='{"x-csrftoken": "{{ csrf_token }}"}'>
+    <!-- Navigation -->
+    <header class="navbar bg-base-300 shadow-lg">
+        <div class="navbar-start">
+            <div class="dropdown">
+                <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 6h16M4 12h8m-8 6h16"></path>
+                    </svg>
+                </div>
+                <ul tabindex="0"
+                    class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
+                    <li><a href="/account/">Account</a></li>
+                    <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
+                    <li><a href="{% url 'nrmps:documentation' %}">Documentation</a></li>
+                    <li><a href="/contact/">Contact</a></li>
+                </ul>
+            </div>
+            <a class="btn btn-ghost text-xl" href="/">
+                <img src="{% static 'NRMP_Simulations_logo.png' %}" alt="NRMP Simulations logo" class="w-8 h-8 mr-2">
+                NRMP Simulations
+            </a>
+        </div>
+
+        <div class="navbar-center hidden lg:flex">
+            <ul class="menu menu-horizontal px-1">
+                <li><a href="/account/">Account</a></li>
+                <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
+                <li><a href="{% url 'nrmps:documentation' %}">Documentation</a></li>
+                <li><a href="/contact/">Contact</a></li>
+            </ul>
+        </div>
+
+        <div class="navbar-end">
+            {% if request.user.is_authenticated %}
+                <div class="flex items-center gap-2">
+                    <span class="text-sm hidden sm:inline">Hello, {{ request.user.get_username }}</span>
+                    <form method="post" action="{% url 'nrmps:logout' %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline">Logout</button>
+                    </form>
+                </div>
+            {% else %}
+                <div class="flex gap-2">
+                    <a class="btn btn-sm btn-primary" href="{% url 'nrmps:login' %}">Login</a>
+                    <a class="btn btn-sm btn-outline" href="{% url 'nrmps:signup' %}">Sign up</a>
+                </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="flex-1 container mx-auto px-4 py-8">
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer footer-center bg-base-200 text-base-content p-4 mt-auto">
+        <div class="flex flex-col sm:flex-row justify-between items-center w-full max-w-6xl">
+            <div class="text-sm">
+                &copy; {% now "Y" %} NRMP Simulations
+            </div>
+            <div class="flex gap-4 text-sm">
+                <a class="link link-hover" href="/privacy/">Privacy</a>
+                <a class="link link-hover" href="/terms/">Terms</a>
+                <a class="link link-hover" href="/contact/">Contact</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="{% static 'js/htmx.mini.js' %}"></script>
+    <script src="{% static 'js/alpine_mini.js' %}" defer></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

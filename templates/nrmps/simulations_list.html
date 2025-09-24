@@ -1,45 +1,69 @@
 {% extends "base.html" %}
 {% block title %}Simulations - NRMP Simulations{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mt-4 mb-3">
-  <h3>Your Simulations</h3>
+<div class="flex justify-between items-center mb-6">
+  <h1 class="text-3xl font-bold">Your Simulations</h1>
   <a class="btn btn-primary" href="{% url 'nrmps:simulation_create' %}">New Simulation</a>
 </div>
 
 {% if simulations %}
-  <div class="table-responsive">
-    <table class="table table-striped align-middle">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Iterations</th>
-          <th>Public</th>
-          <th>Students</th>
-          <th>Schools</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for sim in simulations %}
-        <tr>
-          <td><a href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">{{ sim.name }}</a></td>
-          <td>{{ sim.iterations }}</td>
-          <td>{% if sim.public %}Yes{% else %}No{% endif %}</td>
-          <td>{{ sim.students.count }}</td>
-          <td>{{ sim.schools.count }}</td>
-          <td class="text-end">
-            <a class="btn btn-sm btn-outline-secondary" href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">Manage</a>
-            <form class="d-inline" method="post" action="{% url 'nrmps:simulation_delete' pk=sim.pk %}" x-data @submit.prevent="if (confirm('Delete this simulation?')) { $el.submit() }">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="card bg-base-100 shadow-xl">
+    <div class="overflow-x-auto">
+      <table class="table table-zebra">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Iterations</th>
+            <th>Public</th>
+            <th>Students</th>
+            <th>Schools</th>
+            <th class="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sim in simulations %}
+          <tr class="hover">
+            <td>
+              <a href="{% url 'nrmps:simulation_manage' pk=sim.pk %}" class="link link-hover font-medium">
+                {{ sim.name }}
+              </a>
+            </td>
+            <td>{{ sim.iterations }}</td>
+            <td>
+              {% if sim.public %}
+                <div class="badge badge-success badge-sm">Yes</div>
+              {% else %}
+                <div class="badge badge-ghost badge-sm">No</div>
+              {% endif %}
+            </td>
+            <td>{{ sim.students.count }}</td>
+            <td>{{ sim.schools.count }}</td>
+            <td class="text-right">
+              <div class="flex gap-2 justify-end">
+                <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">
+                  Manage
+                </a>
+                <form class="inline" method="post" action="{% url 'nrmps:simulation_delete' pk=sim.pk %}"
+                      x-data @submit.prevent="if (confirm('Delete this simulation?')) { $el.submit() }">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline btn-error">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 {% else %}
-  <div class="alert alert-info">No simulations yet. Create your first one.</div>
+  <div class="alert alert-info">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+         class="stroke-current shrink-0 w-6 h-6">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+    </svg>
+    <span>No simulations yet. Create your first one.</span>
+  </div>
 {% endif %}
 {% endblock %}

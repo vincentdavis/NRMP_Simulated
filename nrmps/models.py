@@ -1,8 +1,10 @@
 import random
 
+import numpy as np
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from scipy.stats import beta
 
 
 def default_school_meta_preference():
@@ -11,6 +13,53 @@ def default_school_meta_preference():
 
 def default_applicant_meta_preference():
     return ["program_size", "reputation", "location"]
+
+
+def get_beta_parameters(mean: float, desired_stddev: float) -> tuple[float, float]:
+    """Convert mean and desired standard deviation to beta distribution parameters.
+
+    For a beta distribution, if stddev is too large for the given mean,
+    it will be automatically reduced to the maximum possible value.
+
+    Returns:
+        tuple: (alpha, beta) parameters for beta distribution
+    """
+    # Ensure mean is within valid range for beta distribution
+    mean = max(0.001, min(0.999, mean))
+
+    # Calculate maximum possible stddev for this mean
+    max_stddev = np.sqrt(mean * (1 - mean))
+
+    # If desired stddev is too large, reduce it
+    if desired_stddev > max_stddev:
+        desired_stddev = max_stddev * 0.9  # Use 90% of max to be safe
+
+    # Calculate beta parameters from mean and variance
+    variance = desired_stddev ** 2
+
+    # For beta distribution: mean = a/(a+b), var = ab/((a+b)^2 * (a+b+1))
+    # Solving: a = mean * ((mean*(1-mean)/variance) - 1)
+    #         b = (1-mean) * ((mean*(1-mean)/variance) - 1)
+    temp = (mean * (1 - mean) / variance) - 1
+
+    if temp <= 0:  # Invalid parameters, fall back to low variance distribution
+        alpha = mean * 10
+        beta = (1 - mean) * 10
+    else:
+        alpha = mean * temp
+        beta = (1 - mean) * temp
+
+    # Ensure parameters are positive
+    alpha = max(0.1, alpha)
+    beta = max(0.1, beta)
+
+    return alpha, beta
+
+
+def generate_beta_score(mean: float, stddev: float) -> float:
+    """Generate a score from beta distribution with given mean and stddev."""
+    alpha, beta_param = get_beta_parameters(mean, stddev)
+    return float(beta.rvs(alpha, beta_param))
 
 
 class User(AbstractUser):
@@ -39,15 +88,11 @@ class Simulation(models.Model):
      method: upload_schools() -> uploads schools from a CSV file
     """
 
-    owner = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="simulations"
-    )
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="simulations")
     name = models.CharField(max_length=255)
     public = models.BooleanField(default=True)
     description = models.TextField(default="")
-    iterations = models.IntegerField(
-        default=1, validators=[MinValueValidator(1), MaxValueValidator(100)]
-    )
+    iterations = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(100)])
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=50, default="pending")
 
@@ -61,9 +106,9 @@ class Simulation(models.Model):
         - Uses the most recent SimulationConfig linked to this Simulation (by id desc).
         - Clears existing students for this simulation before creation.
         - Generates `number_of_applicants` students named "Student {i}" with scores drawn from a
-          Gaussian distribution using applicants_score_mean and applicant_score_stddev.
+          beta distribution using applicants_score_mean and applicant_score_stddev, ensuring scores stay between 0-1.
         - Uses applicant_meta_scores_stddev from config when generating score_meta values based on
-          config.school_meta_preference: each meta gets base score plus N(0, applicant_meta_scores_stddev).
+          config.school_meta_preference: each meta gets beta-distributed scores with base_score as mean.
         - Also generates meta_preference weights per student using config.applicant_meta_preference and
           config.applicant_meta_preference_stddev, storing the stddev into meta_stddev_preference.
         - Returns the number of students created.
@@ -80,30 +125,28 @@ class Simulation(models.Model):
 
         mean = config.applicant_score_mean
         std = max(float(config.applicant_score_stddev), 0.0)
-        meta_std = max(
-            float(getattr(config, "applicant_meta_scores_stddev", 0.0) or 0.0), 0.0
-        )
+        meta_std = max(float(getattr(config, "applicant_meta_scores_stddev", 0.0) or 0.0), 0.0)
         meta_keys = list(getattr(config, "school_meta_preference", []) or [])
 
         # Applicant preference generation settings
         pref_keys = list(getattr(config, "applicant_meta_preference", []) or [])
-        pref_std = max(
-            float(getattr(config, "applicant_meta_preference_stddev", 0.0) or 0.0), 0.0
-        )
+        pref_std = max(float(getattr(config, "applicant_meta_preference_stddev", 0.0) or 0.0), 0.0)
 
         to_create = []
         for i in range(1, int(config.number_of_applicants) + 1):
-            base_score = random.gauss(mean, std) if std > 0 else float(mean)
+            # Use beta distribution to ensure scores stay between 0-1
+            base_score = generate_beta_score(mean, std) if std > 0 else float(mean)
             score_meta = {}
             for key in meta_keys:
                 try:
                     k = str(key)
                 except Exception:
                     k = str(key)
-                delta = random.gauss(0, meta_std) if meta_std > 0 else 0.0
-                score_meta[k] = float(base_score + delta)
+                # Generate meta scores using beta distribution with base_score as mean
+                meta_score = generate_beta_score(base_score, meta_std) if meta_std > 0 else base_score
+                score_meta[k] = float(meta_score)
 
-            # Generate student meta preferences: weights between 0.01 and 2.0, normalized to sum = 1
+            # Generate student meta-preferences: weights between 0.01 and 2.0, normalized to sum = 1
             meta_preference = {}
             for key in pref_keys:
                 try:
@@ -114,7 +157,7 @@ class Simulation(models.Model):
                 # Clamp to range [0.01, 2.0]
                 w = max(0.01, min(2.0, w))
                 meta_preference[k2] = float(w)
-            
+
             # Normalize weights to sum to 1
             if meta_preference:
                 weight_sum = sum(meta_preference.values())
@@ -143,10 +186,11 @@ class Simulation(models.Model):
         Behavior:
         - Uses the most recent SimulationConfig linked to this Simulation (by id desc).
         - Clears existing schools for this simulation before creation.
-        - Generates `number_of_schools` schools named "School {i}" with capacities and scores drawn from
-          Gaussian distributions using the respective means and stddevs. Capacity is coerced to an int >= 0.
+        - Generates `number_of_schools` schools named "School {i}" with scores drawn from a
+          beta distribution using school_score_mean and school_score_stddev, ensuring scores stay between 0-1.
+          Capacities use Gaussian distribution. Capacity is coerced to an int >= 0.
         - Uses school_meta_scores_stddev from config when generating score_meta values based on
-          config.applicant_meta_preference: each meta gets base score plus N(0, school_meta_scores_stddev).
+          config.applicant_meta_preference: each meta gets beta-distributed scores with base_score as mean.
         - Also generates meta_preference weights per school using config.school_meta_preference and
           config.school_meta_preference_stddev, storing the stddev into meta_stddev_preference.
         - Returns the number of schools created.
@@ -163,27 +207,18 @@ class Simulation(models.Model):
         score_std = max(float(config.school_score_stddev), 0.0)
         cap_mean = config.school_capacity_mean
         cap_std = max(float(config.school_capacity_stddev), 0.0)
-        meta_std = max(
-            float(getattr(config, "school_meta_scores_stddev", 0.0) or 0.0), 0.0
-        )
+        meta_std = max(float(getattr(config, "school_meta_scores_stddev", 0.0) or 0.0), 0.0)
         meta_keys = list(getattr(config, "applicant_meta_preference", []) or [])
 
         # School preference generation settings
         pref_keys = list(getattr(config, "school_meta_preference", []) or [])
-        pref_std = max(
-            float(getattr(config, "school_meta_preference_stddev", 0.0) or 0.0), 0.0
-        )
+        pref_std = max(float(getattr(config, "school_meta_preference_stddev", 0.0) or 0.0), 0.0)
 
         to_create = []
         for i in range(1, int(config.number_of_schools) + 1):
-            base_score = (
-                random.gauss(score_mean, score_std)
-                if score_std > 0
-                else float(score_mean)
-            )
-            capacity_raw = (
-                random.gauss(cap_mean, cap_std) if cap_std > 0 else float(cap_mean)
-            )
+            # Use beta distribution to ensure scores stay between 0-1
+            base_score = generate_beta_score(score_mean, score_std) if score_std > 0 else float(score_mean)
+            capacity_raw = random.gauss(cap_mean, cap_std) if cap_std > 0 else float(cap_mean)
             capacity = int(round(capacity_raw))
             if capacity < 0:
                 capacity = 0
@@ -193,8 +228,9 @@ class Simulation(models.Model):
                     k = str(key)
                 except Exception:
                     k = str(key)
-                delta = random.gauss(0, meta_std) if meta_std > 0 else 0.0
-                score_meta[k] = float(base_score + delta)
+                # Generate meta scores using beta distribution with base_score as mean
+                meta_score = generate_beta_score(base_score, meta_std) if meta_std > 0 else base_score
+                score_meta[k] = float(meta_score)
 
             # Generate school meta preferences: weights between 0.01 and 2.0, normalized to sum = 1
             meta_preference = {}
@@ -207,7 +243,7 @@ class Simulation(models.Model):
                 # Clamp to range [0.01, 2.0]
                 w = max(0.01, min(2.0, w))
                 meta_preference[k2] = float(w)
-            
+
             # Normalize weights to sum to 1
             if meta_preference:
                 weight_sum = sum(meta_preference.values())
@@ -368,9 +404,7 @@ class Simulation(models.Model):
                         continue
                     name = row[0].strip() if len(row) > 0 else f"School {idx}"
                     try:
-                        capacity = (
-                            int(float(row[1])) if len(row) > 1 and row[1] != "" else 0
-                        )
+                        capacity = int(float(row[1])) if len(row) > 1 and row[1] != "" else 0
                     except ValueError:
                         capacity = 0
                     try:
@@ -378,9 +412,7 @@ class Simulation(models.Model):
                     except ValueError:
                         score = 0.0
                     try:
-                        meta_stddev = (
-                            float(row[3]) if len(row) > 3 and row[3] != "" else 0.0
-                        )
+                        meta_stddev = float(row[3]) if len(row) > 3 and row[3] != "" else 0.0
                     except (ValueError, TypeError):
                         meta_stddev = 0.0
                     score_meta = {}
@@ -406,9 +438,7 @@ class Simulation(models.Model):
                     cap_val = row.get(cap_key) if cap_key else None
                     score_val = row.get(score_key) if score_key else None
                     try:
-                        capacity = (
-                            int(float(cap_val)) if cap_val not in (None, "") else 0
-                        )
+                        capacity = int(float(cap_val)) if cap_val not in (None, "") else 0
                     except ValueError:
                         capacity = 0
                     try:
@@ -449,9 +479,7 @@ class SimulationConfig(models.Model):
     This contains the configuration of the simulation
     """
 
-    simulation = models.ForeignKey(
-        Simulation, on_delete=models.CASCADE, related_name="configs"
-    )
+    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="configs")
     number_of_applicants = models.IntegerField(
         default=200,
         validators=[MinValueValidator(1), MaxValueValidator(10000)],
@@ -464,13 +492,13 @@ class SimulationConfig(models.Model):
     )
     # Applicant score configuration
     applicant_score_mean = models.FloatField(
-        default=0,
-        validators=[MinValueValidator(-1000), MaxValueValidator(1000)],
+        default=0.7,
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
         help_text="Mean of the applicants' base scores.",
     )
     applicant_score_stddev = models.FloatField(
-        default=25,
-        validators=[MinValueValidator(0)],
+        default=2,
+        validators=[MinValueValidator(0), MaxValueValidator(99)],
         help_text="Std. dev. of the applicants' base scores (>= 0).",
     )
     applicant_interview_limit = models.IntegerField(
@@ -483,71 +511,69 @@ class SimulationConfig(models.Model):
         help_text="List of applicant preference meta fields (e.g., program_size, prestige).",
     )  # This is the list of meta-fields that are used to by applicants to rank school. "The applicants' preferences".
     applicant_meta_preference_stddev = models.FloatField(
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(0), MaxValueValidator(99)],
         default=3,
         help_text="Std. dev. of meta preference scores (>= 0).",
     )  # This is the stddev of the meta-preferences "weights" each student gives to preferacnes.
     applicant_meta_scores_stddev = models.FloatField(
         default=10,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(0), MaxValueValidator(99)],
         help_text="Std. dev. of meta scores per applicant (>= 0).",
     )  # This is the stddev of the meta-scores for each applicant.
     applicant_pre_interview_rating_error = models.FloatField(
         default=0.1,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
         help_text="Pre-interview rating error stddev",
     )  # The mean error is 0, this calculates the stdsdev used to computer the students error
     applicant_post_interview_rating_error = models.FloatField(
         default=0.02,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
         help_text="Pre-interview rating error stddev",
     )  # The mean error is 0, this calculates the stdsdev used to computer the students error
 
     # School configuration
     school_score_mean = models.FloatField(
         default=0,
-        validators=[MinValueValidator(-1000), MaxValueValidator(1000)],
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
         help_text="Mean of the schools' base scores.",
     )
     school_score_stddev = models.FloatField(
-        default=25,
-        validators=[MinValueValidator(0)],
+        default=2,
+        validators=[MinValueValidator(0), MaxValueValidator(99)],
         help_text="Std. dev. of the schools' base scores (>= 0).",
     )
-    school_capacity_mean = models.FloatField(
-        default=20, help_text="Mean capacity per school."
-    )
+    school_capacity_mean = models.FloatField(default=20, help_text="Mean capacity per school.")
     school_capacity_stddev = models.FloatField(
         default=10,
         validators=[MinValueValidator(0)],
         help_text="Std. dev. of capacity per school (>= 0).",
     )
     school_interview_limit = models.FloatField(
-        default=10,
-        validators=[MinValueValidator(0)],
-        help_text="Max number of interviews each school can conduct Inpercent of capacity.",
+        default=0.1,
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
+        help_text="Max number of interviews each school can conduct In percent of capacity.",
     )
     school_meta_preference = models.JSONField(
         default=default_school_meta_preference,
         help_text="List of school preference meta fields (e.g., board_scores, research).",
     )  # This is the list of meta-fields that are used by schools to rank a student. "The schools preferances".
     school_meta_preference_stddev = models.FloatField(
-        default=3,
-        validators=[MinValueValidator(0)],
+        default=2,
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
     )  # This is the stddev of the meta-preferences "weights" each schools gives to preferences.
     school_meta_scores_stddev = models.FloatField(
-        default=10,
-        validators=[MinValueValidator(0)],
+        default=2,
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
         help_text="Std. dev. of meta scores per school (>= 0).",
     )  # This is the stddev of the meta-scores for each school.
     school_pre_interview_rating_error = models.FloatField(
         default=0.1,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
         help_text="The stddev scoreing error used to calculate the observed score for each student",
     )
     school_post_interview_rating_error = models.FloatField(
         default=0.02,
-        validators=[MinValueValidator(0)],
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
         help_text="The stddev scoreing error used to calculate the observed score for each student",
     )
 
@@ -555,12 +581,13 @@ class SimulationConfig(models.Model):
         return f"{self.simulation.name}-{self.id}"
 
 
-def generate_meta_scores(
-    self, score: float, meta_scores: list[str], meta_stddev: float
-) -> dict[str:float]:
+def generate_meta_scores(self, score: float, meta_scores: list[str], meta_stddev: float) -> dict[str:float]:
     """Generates meta-scores for each student and school."""
     for meta in meta_scores:
         self.score_meta[meta] = score + random.gauss(0, meta_stddev)
+
+# Example: This function will be hidden from documentation
+generate_meta_scores.__doc_exclude__ = True
 
 
 class Student(models.Model):
@@ -569,12 +596,10 @@ class Student(models.Model):
     This contains each student in a simulation. The student "population".
     """
 
-    simulation = models.ForeignKey(
-        Simulation, on_delete=models.CASCADE, related_name="students"
-    )
+    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="students")
     name = models.CharField(max_length=255, help_text="Name of the student.")
     score = models.FloatField(
-        help_text="Score of the student."
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)], help_text="Score of the student."
     )  # This sets the mean for the score meta
     meta_stddev = models.FloatField(
         default=0.0, help_text="Standard deviation of the score."
@@ -601,23 +626,25 @@ class School(models.Model):
     This contains each school in a simulation. The school "population".
     """
 
-    simulation = models.ForeignKey(
-        Simulation, on_delete=models.CASCADE, related_name="schools"
-    )
+    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="schools")
     name = models.CharField(max_length=255, help_text="Name of the school.")
     capacity = models.IntegerField(help_text="Capacity of the school.")
     score = models.FloatField(
-        help_text="Score of the school."
+        validators=[MinValueValidator(0), MaxValueValidator(0.99)], help_text="Score of the school."
     )  # This sets the mean for the score meta
     meta_stddev = models.FloatField(
-        default=0.0, help_text="Standard deviation of the score."
+        validators=[MinValueValidator(0), MaxValueValidator(99)],
+        default=1.0,
+        help_text="Standard deviation of the score.",
     )  # This will define how close each score is to the base "score"
     score_meta = models.JSONField(
         default=dict,
         help_text='Meta score names and value {"Research":5, "Reputation": 10} for the score.',
     )
     meta_stddev_preference = models.FloatField(
-        default=0.0, help_text="Standard deviation of the preference."
+        validators=[MinValueValidator(0), MaxValueValidator(99)],
+        default=1.0,
+        help_text="Standard deviation of the preference.",
     )  # This is the stddev of the meta-preferences "weights" this school applies to preferences.
     meta_preference = models.JSONField(
         default=dict,
@@ -636,15 +663,9 @@ class Interview(models.Model):
     This includes the student's interview rank of the school and the school's interview rank of the student
     """
 
-    simulation = models.ForeignKey(
-        Simulation, on_delete=models.CASCADE, related_name="interviews"
-    )
-    student = models.ForeignKey(
-        Student, on_delete=models.CASCADE, related_name="interviews"
-    )
-    school = models.ForeignKey(
-        School, on_delete=models.CASCADE, related_name="interviews"
-    )
+    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="interviews")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="interviews")
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="interviews")
     # Logic flags
     status = models.CharField(max_length=50, default="initialized")
 
@@ -652,9 +673,7 @@ class Interview(models.Model):
     student_applied = models.BooleanField(
         default=False, help_text="Whether the student has been applied to the school."
     )
-    student_signal = models.IntegerField(
-        default=0, help_text="Signal value from the student to the school"
-    )
+    student_signal = models.IntegerField(default=0, help_text="Signal value from the student to the school")
     student_accepted = models.BooleanField(
         default=False,
         help_text="Whether the student has been accepted to the school invitation to interview.",
@@ -681,12 +700,8 @@ class Interview(models.Model):
     )
 
     ## Pre interview rank.
-    students_pre_rank_of_school = models.IntegerField(
-        null=True, blank=True, help_text="Pre interview rank of student"
-    )
-    schools_pre_rank_of_student = models.IntegerField(
-        null=True, blank=True, help_text="Pre interview rank of school"
-    )
+    students_pre_rank_of_school = models.IntegerField(null=True, blank=True, help_text="Pre interview rank of student")
+    schools_pre_rank_of_student = models.IntegerField(null=True, blank=True, help_text="Pre interview rank of school")
 
     ## Post interview Observed score.
     student_post_observed_score_of_school = models.FloatField(
@@ -700,9 +715,7 @@ class Interview(models.Model):
     students_post_rank_of_school = models.IntegerField(
         null=True, blank=True, help_text="Post interview rank of student"
     )
-    schools_post_rank_of_student = models.IntegerField(
-        null=True, blank=True, help_text="Post interview rank of school"
-    )
+    schools_post_rank_of_student = models.IntegerField(null=True, blank=True, help_text="Post interview rank of school")
 
     class Meta:
         unique_together = ["student", "school"]
@@ -719,12 +732,8 @@ class Match(models.Model):
     This includes the student's match rank of the school and the school's match rank of the student
     """
 
-    simulation = models.ForeignKey(
-        Simulation, on_delete=models.CASCADE, related_name="matches"
-    )
-    student = models.ForeignKey(
-        Student, on_delete=models.CASCADE, related_name="matches"
-    )
+    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="matches")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="matches")
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="matches")
     students_rank_of_school = models.IntegerField(null=True, blank=True)
     schools_rank_of_student = models.IntegerField(null=True, blank=True)

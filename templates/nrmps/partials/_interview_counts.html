@@ -1,27 +1,29 @@
 <div id="interview-counts">
-  <div class="card">
-    <div class="card-header">Interviews</div>
+  <div class="card bg-base-100 shadow-xl">
+    <div class="card-header">
+      <h2 class="card-title">Interviews</h2>
+    </div>
     <div class="card-body">
-      <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="flex justify-between items-center mb-2">
         <div>
           <strong>Count:</strong> {{ simulation.interviews.count }}
         </div>
-        <div class="d-flex gap-2">
-          <a class="btn btn-sm btn-outline-secondary" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View List</a>
-          <a class="btn btn-sm btn-outline-success" href="{% url 'nrmps:simulation_download_interviews' pk=simulation.pk %}">Download CSV</a>
-          <button class="btn btn-sm btn-outline-primary"
+        <div class="flex gap-2 flex-wrap">
+          <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View List</a>
+          <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_interviews' pk=simulation.pk %}">Download CSV</a>
+          <button class="btn btn-sm btn-primary btn-outline"
                   hx-post="{% url 'nrmps:simulation_initialize_interviews' pk=simulation.pk %}"
                   hx-target="#interview-counts"
                   hx-swap="outerHTML"
                   hx-confirm="(Re)initialize interview data for this simulation? This will replace existing interviews.">
             (re)Initialize Interviews
           </button>
-          <button class="btn btn-sm btn-outline-primary"
-                  hx-post="{% url 'nrmps:simulation_students_rate_pre_interview' pk=simulation.pk %}"
+          <button class="btn btn-sm btn-primary btn-outline"
+                  hx-post="{% url 'nrmps:simulation_compute_pre_interview_all' pk=simulation.pk %}"
                   hx-target="#interview-counts"
                   hx-swap="outerHTML"
-                  hx-confirm="Compute students' pre-interview ratings for all interviews?">
-            Students rate schools (pre-interview)
+                  hx-confirm="Compute complete pre-interview process? This will: 1) Students rate schools, 2) Schools rate students, 3) Compute all rankings.">
+            Compute Pre-Interview Scores and Rankings
           </button>
         </div>
       </div>

@@ -1,20 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Schools - {{ simulation.name }}{% endblock %}
 {% block content %}
-<div class="mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Schools - {{ simulation.name }}</h3>
-    <a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}" class="btn btn-outline-secondary">Back to Simulation</a>
+<div class="mt-8">
+  <div class="flex justify-between items-center mb-6">
+    <h3 class="text-2xl font-bold">Schools - {{ simulation.name }}</h3>
+    <a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}" class="btn btn-outline">Back to Simulation</a>
   </div>
 
-  <form method="get" class="row g-2 align-items-end mb-2">
+  <form method="get" class="flex items-end gap-4 mb-4">
     <input type="hidden" name="sort" value="{{ sort }}">
     <input type="hidden" name="order" value="{{ order }}">
-    <div class="col-auto">
-      <label class="form-label mb-0" for="page_size">Rows per page</label>
-    </div>
-    <div class="col-auto">
-      <select id="page_size" name="page_size" class="form-select form-select-sm" onchange="this.form.submit()">
+    <div class="form-control">
+      <label class="label" for="page_size"><span class="label-text">Rows per page</span></label>
+      <select id="page_size" name="page_size" class="select select-bordered select-sm" onchange="this.form.submit()">
         {% for size in page_sizes %}
           <option value="{{ size }}" {% if page_size == size %}selected{% endif %}>{{ size }}</option>
         {% endfor %}
@@ -22,77 +20,89 @@
     </div>
   </form>
 
-  <div class="table-responsive">
-    <table class="table table-striped table-hover align-middle">
+  <div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
       <thead>
         <tr>
-          <th class="text-end">
-            {% if order == 'asc' %}
-              {% with next='desc' %}<a class="text-decoration-none" href="?sort=id&order={{ next }}&page_size={{ page_size }}">ID</a>{% endwith %}
-            {% else %}
-              {% with next='asc' %}<a class="text-decoration-none" href="?sort=id&order={{ next }}&page_size={{ page_size }}">ID</a>{% endwith %}
-            {% endif %}
+          <th class="text-right">
+            <a class="link link-primary font-bold" href="?sort=id&order={% if sort == 'id' and order == 'asc' %}desc{% else %}asc{% endif %}&page_size={{ page_size }}">
+              ID
+              {% if sort == 'id' %}
+                {% if order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                <span class="text-base-content/50">⇅</span>
+              {% endif %}
+            </a>
           </th>
           <th>
-            {% if order == 'asc' %}
-              {% with next='desc' %}<a href="?sort=name&order={{ next }}&page_size={{ page_size }}">Name</a>{% endwith %}
-            {% else %}
-              {% with next='asc' %}<a href="?sort=name&order={{ next }}&page_size={{ page_size }}">Name</a>{% endwith %}
-            {% endif %}
+            <a class="link link-primary font-bold" href="?sort=name&order={% if sort == 'name' and order == 'asc' %}desc{% else %}asc{% endif %}&page_size={{ page_size }}">
+              Name
+              {% if sort == 'name' %}
+                {% if order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                <span class="text-base-content/50">⇅</span>
+              {% endif %}
+            </a>
           </th>
-          <th class="text-end">
-            {% if order == 'asc' %}
-              {% with next='desc' %}<a class="text-decoration-none" href="?sort=capacity&order={{ next }}&page_size={{ page_size }}">Capacity</a>{% endwith %}
-            {% else %}
-              {% with next='asc' %}<a class="text-decoration-none" href="?sort=capacity&order={{ next }}&page_size={{ page_size }}">Capacity</a>{% endwith %}
-            {% endif %}
+          <th class="text-right">
+            <a class="link link-primary font-bold" href="?sort=capacity&order={% if sort == 'capacity' and order == 'asc' %}desc{% else %}asc{% endif %}&page_size={{ page_size }}">
+              Capacity
+              {% if sort == 'capacity' %}
+                {% if order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                <span class="text-base-content/50">⇅</span>
+              {% endif %}
+            </a>
           </th>
-          <th class="text-end">
-            {% if order == 'asc' %}
-              {% with next='desc' %}<a class="text-decoration-none" href="?sort=score&order={{ next }}&page_size={{ page_size }}">Score</a>{% endwith %}
-            {% else %}
-              {% with next='asc' %}<a class="text-decoration-none" href="?sort=score&order={{ next }}&page_size={{ page_size }}">Score</a>{% endwith %}
-            {% endif %}
+          <th class="text-right">
+            <a class="link link-primary font-bold" href="?sort=score&order={% if sort == 'score' and order == 'asc' %}desc{% else %}asc{% endif %}&page_size={{ page_size }}">
+              Score
+              {% if sort == 'score' %}
+                {% if order == 'asc' %}▲{% else %}▼{% endif %}
+              {% else %}
+                <span class="text-base-content/50">⇅</span>
+              {% endif %}
+            </a>
           </th>
-          <th class="text-end">Simulation ID</th>
+          <th class="text-right">Simulation ID</th>
           <th>Score Meta</th>
-          <th class="text-end">Pref Stddev</th>
+          <th class="text-right">Pref Stddev</th>
           <th>Meta Preference</th>
         </tr>
       </thead>
       <tbody>
         {% for s in page_obj.object_list %}
           <tr>
-            <td class="text-end">{{ s.id }}</td>
+            <td class="text-right">{{ s.id }}</td>
             <td>{{ s.name }}</td>
-            <td class="text-end">{{ s.capacity }}</td>
-            <td class="text-end">{{ s.score }}</td>
-            <td class="text-end">{{ s.simulation_id }}</td>
-            <td><code class="small">{{ s.score_meta|default:"{}" }}</code></td>
-            <td class="text-end">{{ s.meta_stddev_preference }}</td>
-            <td><code class="small">{{ s.meta_preference|default:"{}" }}</code></td>
+            <td class="text-right">{{ s.capacity }}</td>
+            <td class="text-right">{{ s.score }}</td>
+            <td class="text-right">{{ s.simulation_id }}</td>
+            <td><code class="text-xs">{{ s.score_meta|default:"{}" }}</code></td>
+            <td class="text-right">{{ s.meta_stddev_preference }}</td>
+            <td><code class="text-xs">{{ s.meta_preference|default:"{}" }}</code></td>
           </tr>
         {% empty %}
-          <tr><td colspan="8" class="text-center text-muted">No schools found.</td></tr>
+          <tr><td colspan="8" class="text-center text-base-content/60">No schools found.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 
-  <nav aria-label="Schools pagination">
-    <ul class="pagination">
+  <nav aria-label="Schools pagination" class="flex justify-center mt-6">
+    <div class="join">
       {% if page_obj.has_previous %}
-        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&sort={{ sort }}&order={{ order }}&page_size={{ page_size }}">Previous</a></li>
+        <a class="join-item btn btn-outline" href="?page={{ page_obj.previous_page_number }}&sort={{ sort }}&order={{ order }}&page_size={{ page_size }}">Previous</a>
       {% else %}
-        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        <button class="join-item btn btn-outline btn-disabled">Previous</button>
       {% endif %}
-      <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+      <button class="join-item btn btn-outline btn-disabled">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</button>
       {% if page_obj.has_next %}
-        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&sort={{ sort }}&order={{ order }}&page_size={{ page_size }}">Next</a></li>
+        <a class="join-item btn btn-outline" href="?page={{ page_obj.next_page_number }}&sort={{ sort }}&order={{ order }}&page_size={{ page_size }}">Next</a>
       {% else %}
-        <li class="page-item disabled"><span class="page-link">Next</span></li>
+        <button class="join-item btn btn-outline btn-disabled">Next</button>
       {% endif %}
-    </ul>
+    </div>
   </nav>
 </div>
 {% endblock %}

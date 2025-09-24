@@ -41,7 +41,10 @@ class SimulationForm(forms.ModelForm):
         model = Simulation
         fields = ("name", "public", "description", "iterations")
         widgets = {
-            "description": forms.Textarea(attrs={"rows": 3}),
+            "name": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
+            "description": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 3}),
+            "iterations": forms.NumberInput(attrs={"class": "input input-bordered w-full", "min": 1}),
+            "public": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 
 
@@ -52,7 +55,11 @@ class StudentsUploadForm(forms.Form):
     - score_meta: JSON object mapping meta names to values
     """
 
-    file = forms.FileField(label="Students CSV", help_text="CSV: name, score, [score_meta]")
+    file = forms.FileField(
+        label="Students CSV",
+        help_text="CSV: name, score, [score_meta]",
+        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"})
+    )
 
 
 class SchoolsUploadForm(forms.Form):
@@ -62,7 +69,11 @@ class SchoolsUploadForm(forms.Form):
     - score_meta: JSON object mapping meta names to values
     """
 
-    file = forms.FileField(label="Schools CSV", help_text="CSV: name, capacity, score, [score_meta]")
+    file = forms.FileField(
+        label="Schools CSV",
+        help_text="CSV: name, capacity, score, [score_meta]",
+        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"})
+    )
 
 
 class SimulationConfigForm(forms.ModelForm):
@@ -149,24 +160,24 @@ class SimulationConfigForm(forms.ModelForm):
             "school_post_interview_rating_error",
         )
         widgets = {
-            "number_of_applicants": forms.NumberInput(attrs={"min": 0}),
-            "number_of_schools": forms.NumberInput(attrs={"min": 0}),
-            "applicant_score_mean": forms.NumberInput(attrs={"step": "any"}),
-            "applicant_score_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "applicant_interview_limit": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "applicant_meta_preference": forms.Textarea(attrs={"rows": 2, "placeholder": "program_size, prestige"}),
-            "applicant_meta_preference_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "applicant_meta_scores_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "applicant_pre_interview_rating_error": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "applicant_post_interview_rating_error": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "school_score_mean": forms.NumberInput(attrs={"step": "any"}),
-            "school_score_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "school_capacity_mean": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "school_capacity_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "school_interview_limit": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "school_meta_preference": forms.Textarea(attrs={"rows": 2, "placeholder": "board_scores, research"}),
-            "school_meta_preference_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "school_meta_scores_stddev": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "school_pre_interview_rating_error": forms.NumberInput(attrs={"step": "any", "min": 0}),
-            "school_post_interview_rating_error": forms.NumberInput(attrs={"step": "any", "min": 0}),
+            "number_of_applicants": forms.NumberInput(attrs={"class": "input input-bordered w-full", "min": 0}),
+            "number_of_schools": forms.NumberInput(attrs={"class": "input input-bordered w-full", "min": 0}),
+            "applicant_score_mean": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any"}),
+            "applicant_score_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "applicant_interview_limit": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "applicant_meta_preference": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 2, "placeholder": "program_size, prestige"}),
+            "applicant_meta_preference_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "applicant_meta_scores_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "applicant_pre_interview_rating_error": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "applicant_post_interview_rating_error": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "school_score_mean": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any"}),
+            "school_score_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "school_capacity_mean": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "school_capacity_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "school_interview_limit": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "school_meta_preference": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 2, "placeholder": "board_scores, research"}),
+            "school_meta_preference_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "school_meta_scores_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "school_pre_interview_rating_error": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "school_post_interview_rating_error": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
         }

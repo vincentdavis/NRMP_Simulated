@@ -16,6 +16,7 @@ urlpatterns = (
         path("contact/", views.contact, name="contact"),
         path("privacy/", views.privacy, name="privacy"),
         path("terms/", views.terms, name="terms"),
+        path("documentation/", views.documentation, name="documentation"),
         # Simulations CRUD & actions
         path("simulations/", views.simulation_list, name="simulation_list"),
         path("simulations/new/", views.simulation_create, name="simulation_create"),
@@ -40,5 +41,9 @@ urlpatterns = (
         # Interview actions
         path("simulations/<int:pk>/initialize-interviews/", views.simulation_initialize_interviews, name="simulation_initialize_interviews"),
         path("simulations/<int:pk>/students-rate-pre-interview/", views.simulation_students_rate_pre_interview, name="simulation_students_rate_pre_interview"),
+        path("simulations/<int:pk>/schools-rate-pre-interview/", views.simulation_schools_rate_pre_interview, name="simulation_schools_rate_pre_interview"),
+        path("simulations/<int:pk>/compute-students-rankings/", views.simulation_compute_students_rankings, name="simulation_compute_students_rankings"),
+        path("simulations/<int:pk>/compute-schools-rankings/", views.simulation_compute_schools_rankings, name="simulation_compute_schools_rankings"),
+        path("simulations/<int:pk>/compute-pre-interview-all/", views.simulation_compute_pre_interview_all, name="simulation_compute_pre_interview_all"),
     ]
 )

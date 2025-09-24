@@ -5,14 +5,17 @@
     <h2>Account</h2>
     <p class="text-muted">Manage your account details and preferences.</p>
     {% if request.user.is_authenticated %}
-      <ul class="list-group mb-3">
-        <li class="list-group-item">Username: {{ request.user.get_username }}</li>
-        <li class="list-group-item">Email: {{ request.user.email|default:"—" }}</li>
-        <li class="list-group-item">Is Staff: {{ request.user.is_staff }}</li>
+      <ul class="menu bg-base-200 w-full rounded-box mb-4">
+        <li class="menu-item"><span>Username: {{ request.user.get_username }}</span></li>
+        <li class="menu-item"><span>Email: {{ request.user.email|default:"—" }}</span></li>
+        <li class="menu-item"><span>Is Staff: {{ request.user.is_staff }}</span></li>
       </ul>
-      <a class="btn btn-outline-secondary" href="/admin/password_change/">Change password</a>
+      <a class="btn btn-outline" href="/admin/password_change/">Change password</a>
     {% else %}
-      <div class="alert alert-info">You are not logged in. Please <a href="{% url 'nrmps:login' %}">log in</a> or <a href="{% url 'nrmps:signup' %}">create an account</a> to manage your account.</div>
+      <div class="alert alert-info">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>You are not logged in. Please <a href="{% url 'nrmps:login' %}">log in</a> or <a href="{% url 'nrmps:signup' %}">create an account</a> to manage your account.</span>
+      </div>
     {% endif %}
   </div>
 {% endblock %}

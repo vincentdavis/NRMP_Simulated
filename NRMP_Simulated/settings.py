@@ -9,6 +9,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -19,12 +20,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-ed7u8t0igxuvlv_7-+tkcha#k+dctz7ecd*h+4eaa9%r^tzz7("
+SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-ed7u8t0igxuvlv_7-+tkcha#k+dctz7ecd*h+4eaa9%r^tzz7(")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 AUTH_USER_MODEL = "nrmps.User"
 
@@ -37,6 +38,8 @@ INTERNAL_IPS = [
 
 # Application definition
 
+TAILWIND_APP_NAME = "theme"
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -47,15 +50,22 @@ INSTALLED_APPS = [
     #### Sub Apps
     "nrmps.apps.NrmpsConfig",
     #### Plugin and addons
-    "django_bootstrap5",
-    "crispy_forms",
+    "tailwind",
+    "theme",
     "django_htmx",
-    "debug_toolbar",
-    "reset_migrations",  #### Remove in production
 ]
+
+# Development-only apps
+if DEBUG:
+    INSTALLED_APPS += [
+        "debug_toolbar",
+        "reset_migrations",
+        "django_browser_reload",
+    ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # Static files for production
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -64,15 +74,18 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     ### Add ons
     "django_htmx.middleware.HtmxMiddleware",
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
 ]
+
+# Add debug toolbar only in DEBUG mode
+if DEBUG:
+    MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
 
 ROOT_URLCONF = "NRMP_Simulated.urls"
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [BASE_DIR / "theme" / "templates", BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -84,8 +97,6 @@ TEMPLATES = [
     },
 ]
 
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
-CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 
 WSGI_APPLICATION = "NRMP_Simulated.wsgi.application"
@@ -94,12 +105,22 @@ WSGI_APPLICATION = "NRMP_Simulated.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+# Database
+# Use PostgreSQL in production (Railway), SQLite in development
+if os.environ.get("DATABASE_URL"):
+    # Production database (Railway PostgreSQL)
+    import dj_database_url
+    DATABASES = {
+        "default": dj_database_url.parse(os.environ.get("DATABASE_URL"))
     }
-}
+else:
+    # Development database (SQLite)
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
@@ -152,3 +173,42 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_REDIRECT_URL = "nrmps:index"
 LOGOUT_REDIRECT_URL = "nrmps:index"
 LOGIN_URL = "nrmps:login"
+
+# LogFire configuration - only in production
+if not DEBUG:
+    import logfire
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+    "loggers": {
+        # Ensure our app logs show up in development
+        "nrmps": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
+# Add LogFire handlers only in production
+if not DEBUG:
+    LOGGING["handlers"]["logfire"] = {
+        "class": "logfire.LogfireLoggingHandler",
+        "level": "INFO",
+    }
+    LOGGING["root"]["handlers"] = ["logfire", "console"]
+    LOGGING["loggers"]["nrmps"]["handlers"] = ["logfire", "console"]
+
+    logfire.configure()
+    logfire.instrument_django()
