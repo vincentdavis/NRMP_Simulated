@@ -25,7 +25,21 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-ed7u8t0igxuvlv_7-+tkc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "localhost,127.0.0.1").split(",")
+# Parse ALLOWED_HOSTS from environment
+allowed_hosts_env = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1")
+railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+if railway_domain:
+    allowed_hosts_env = f"{railway_domain},{allowed_hosts_env}"
+ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+
+# CSRF trusted origins for Railway
+CSRF_TRUSTED_ORIGINS = []
+if railway_domain:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{railway_domain}")
+# Add any additional trusted origins from environment
+csrf_origins_env = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+if csrf_origins_env:
+    CSRF_TRUSTED_ORIGINS.extend([origin.strip() for origin in csrf_origins_env.split(",") if origin.strip()])
 
 AUTH_USER_MODEL = "nrmps.User"
 
@@ -98,6 +112,7 @@ TEMPLATES = [
 ]
 
 
+
 WSGI_APPLICATION = "NRMP_Simulated.wsgi.application"
 
 
@@ -109,8 +124,9 @@ WSGI_APPLICATION = "NRMP_Simulated.wsgi.application"
 if os.environ.get("DATABASE_URL"):
     # Production database (Railway PostgreSQL)
     import dj_database_url
-
-    DATABASES = {"default": dj_database_url.parse(os.environ.get("DATABASE_URL"))}
+    DATABASES = {
+        "default": dj_database_url.parse(os.environ.get("DATABASE_URL"))
+    }
 else:
     # Development database (SQLite)
     DATABASES = {
