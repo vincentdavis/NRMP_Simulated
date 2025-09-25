@@ -26,7 +26,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-ed7u8t0igxuvlv_7-+tkc
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
 # Parse ALLOWED_HOSTS from environment
-allowed_hosts_env = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1")
+allowed_hosts_env = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1,nrmp-simulated.heteroskedastic.org")
 railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
 if railway_domain:
     allowed_hosts_env = f"{railway_domain},{allowed_hosts_env}"
