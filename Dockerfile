@@ -10,7 +10,7 @@ WORKDIR /app
 COPY . .
 
 # Install project dependencies.
-RUN uv sync --frozen
+RUN uv sync --frozen --group prod
 
 # Entrypoint script to handle migrations, collectstatic, and start the app.
 COPY entrypoint.sh /app/entrypoint.sh
