@@ -5,7 +5,7 @@ set -e
 
 # Install production dependencies
 echo "Installing production dependencies..."
-uv sync --group production
+uv sync --group prod
 
 # Install Tailwind CSS dependencies and build
 echo "Installing Tailwind CSS dependencies..."
