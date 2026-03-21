@@ -1,0 +1,32 @@
+{% load simulation_tags %}
+<div id="stage-pre_interview"
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'pre_interview' or simulation|stage_active:'initialized' %} border-2 border-accent{% endif %}{% if simulation|stage_locked:'pre_interview' %} opacity-50{% endif %}">
+  <div class="card-header">
+    <h2 class="card-title">
+      Pre-Interview
+      {% if simulation|stage_complete:"pre_interview" %}
+        <span class="badge badge-success badge-sm ml-2">Done</span>
+      {% elif simulation|stage_active:"pre_interview" or simulation|stage_active:"initialized" %}
+        <span class="badge badge-accent badge-sm ml-2">Ready</span>
+      {% else %}
+        <span class="badge badge-ghost badge-sm ml-2">Locked</span>
+      {% endif %}
+    </h2>
+  </div>
+  <div class="card-body">
+    <div class="flex justify-between items-center">
+      <div class="text-sm">Compute pre-interview scores and rankings for all student-school pairs.</div>
+      <div class="flex gap-2 flex-wrap">
+        <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View Interviews</a>
+        <button class="btn btn-sm btn-primary btn-outline"
+                hx-post="{% url 'nrmps:simulation_compute_pre_interview_all' pk=simulation.pk %}"
+                hx-target="#stage-pre_interview"
+                hx-swap="outerHTML"
+                hx-confirm="Compute pre-interview scores and rankings? This runs: 1) Students rate schools, 2) Schools rate students, 3) Compute all rankings."
+                {% if simulation|stage_locked:"pre_interview" %}disabled{% endif %}>
+          Compute Pre-Interview All
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

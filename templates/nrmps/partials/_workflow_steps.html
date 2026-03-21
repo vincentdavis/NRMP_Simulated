@@ -1,0 +1,11 @@
+{% load simulation_tags %}
+<div id="workflow-steps">
+  <ul class="steps steps-horizontal w-full mb-6">
+    {% for stage in stages %}
+      <li class="step{% if stage.complete %} step-primary{% elif stage.active %} step-accent{% endif %}"
+          data-content="{% if stage.complete %}&#10003;{% elif stage.active %}&#9679;{% endif %}">
+        <span class="text-xs{% if stage.locked %} opacity-50{% endif %}">{{ stage.label }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+</div>

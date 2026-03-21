@@ -19,6 +19,21 @@ from .models import Interview, Simulation
 logger = logging.getLogger(__name__)
 
 
+def _render_stage_response(request, template, simulation, extra_context=None):
+    """Render a stage card partial plus an OOB workflow-steps swap.
+
+    Every HTMX action that changes stage state should use this helper so the
+    step indicator stays in sync without a full page reload.
+    """
+    context = {"simulation": simulation, "stages": simulation.get_workflow_stages()}
+    if extra_context:
+        context.update(extra_context)
+    card_html = render(request, template, context).content.decode()
+    oob_html = render(request, "nrmps/partials/_workflow_steps.html", context).content.decode()
+    oob_div = f'<div id="workflow-steps" hx-swap-oob="outerHTML">{oob_html}</div>'
+    return HttpResponse(card_html + oob_div)
+
+
 @require_GET
 def index(request):
     """Home page (index)."""
@@ -182,6 +197,7 @@ def simulation_manage(request, pk: int):
         "config_form": config_form,
         "students_upload_form": StudentsUploadForm(),
         "schools_upload_form": SchoolsUploadForm(),
+        "stages": sim.get_workflow_stages(),
     }
     return render(request, "nrmps/simulation_manage.html", context)
 
@@ -206,7 +222,8 @@ def simulation_delete_students(request, pk: int):
     if sim.owner_id != request.user.id:
         raise Http404()
     sim.delete_students()
-    return render(request, "nrmps/partials/_population_counts.html", {"simulation": sim})
+    sim.regress_status("setup")
+    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
 
 
 @login_required
@@ -216,7 +233,8 @@ def simulation_delete_schools(request, pk: int):
     if sim.owner_id != request.user.id:
         raise Http404()
     sim.delete_schools()
-    return render(request, "nrmps/partials/_population_counts.html", {"simulation": sim})
+    sim.regress_status("setup")
+    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
 
 
 @login_required
@@ -227,7 +245,9 @@ def simulation_create_students(request, pk: int):
     if sim.owner_id != request.user.id:
         raise Http404()
     sim.create_students()
-    return render(request, "nrmps/partials/_population_counts.html", {"simulation": sim})
+    if sim.students.exists() and sim.schools.exists():
+        sim.advance_status("populations")
+    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
 
 
 @login_required
@@ -238,7 +258,9 @@ def simulation_create_schools(request, pk: int):
     if sim.owner_id != request.user.id:
         raise Http404()
     sim.create_schools()
-    return render(request, "nrmps/partials/_population_counts.html", {"simulation": sim})
+    if sim.students.exists() and sim.schools.exists():
+        sim.advance_status("populations")
+    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
 
 
 @login_required
@@ -257,7 +279,9 @@ def simulation_upload_students(request, pk: int):
             for chunk in file.chunks():
                 out.write(chunk)
         sim.upload_students()
-    return render(request, "nrmps/partials/_population_counts.html", {"simulation": sim})
+    if sim.students.exists() and sim.schools.exists():
+        sim.advance_status("populations")
+    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
 
 
 @login_required
@@ -276,7 +300,9 @@ def simulation_upload_schools(request, pk: int):
             for chunk in file.chunks():
                 out.write(chunk)
         sim.upload_schools()
-    return render(request, "nrmps/partials/_population_counts.html", {"simulation": sim})
+    if sim.students.exists() and sim.schools.exists():
+        sim.advance_status("populations")
+    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
 
 
 # --- CSV downloads ---
@@ -409,7 +435,8 @@ def simulation_initialize_interviews(request, pk: int):
     from .simulation_engine import initialize_interview
 
     initialize_interview(sim)
-    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+    sim.advance_status("initialized")
+    return _render_stage_response(request, "nrmps/partials/_stage_initialize.html", sim)
 
 
 @login_required
@@ -469,7 +496,22 @@ def simulation_compute_pre_interview_all(request, pk: int):
     from .simulation_engine import compute_pre_interview_scores_and_rankings
 
     compute_pre_interview_scores_and_rankings(sim)
-    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+    sim.advance_status("pre_interview")
+    return _render_stage_response(request, "nrmps/partials/_stage_pre_interview.html", sim)
+
+
+@login_required
+@require_http_methods(["POST"])
+def simulation_compute_post_interview_all(request, pk: int):
+    """Compute post-interview scores and rankings for all interviewed pairs."""
+    sim = get_object_or_404(Simulation, pk=pk)
+    if sim.owner_id != request.user.id:
+        raise Http404()
+    from .simulation_engine import compute_post_interview_scores_and_rankings
+
+    compute_post_interview_scores_and_rankings(sim)
+    sim.advance_status("post_interview")
+    return _render_stage_response(request, "nrmps/partials/_stage_post_interview.html", sim)
 
 
 @login_required

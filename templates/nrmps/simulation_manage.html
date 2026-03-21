@@ -14,6 +14,8 @@
       </div>
     </div>
 
+    {% include "nrmps/partials/_workflow_steps.html" %}
+
     <div class="grid lg:grid-cols-2 gap-6">
       <div>
         <form method="post" class="card bg-base-100 shadow-xl">
@@ -317,10 +319,13 @@
       </div>
 
       <div>
-        {% include "nrmps/partials/_population_counts.html" %}
-        <div class="mt-6">
-          {% include "nrmps/partials/_interview_counts.html" %}
-        </div>
+        {% include "nrmps/partials/_stage_populations.html" %}
+        {% include "nrmps/partials/_stage_initialize.html" %}
+        {% include "nrmps/partials/_stage_pre_interview.html" %}
+        {% include "nrmps/partials/_stage_invitations.html" %}
+        {% include "nrmps/partials/_stage_post_interview.html" %}
+        {% include "nrmps/partials/_stage_final_rankings.html" %}
+        {% include "nrmps/partials/_stage_match.html" %}
       </div>
     </div>
   </div>

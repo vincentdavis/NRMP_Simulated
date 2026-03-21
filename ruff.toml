@@ -1,5 +1,5 @@
 # Ruff configuration file
-target-version = "py312"
+target-version = "py313"
 line-length = 120
 
 [lint]
@@ -15,7 +15,7 @@ select = [
     # - ERRORS
     "E",
     # eradicate (commented-out code)
-#    "ERA",
+    #    "ERA",
     # Pyflakes
     "F",
     "FLY",
@@ -45,7 +45,6 @@ select = [
     "TRIO",
     # - Warning
     "W",
-
 ]
 ignore = ["D107"]
 # Allow fix for all enabled rules (when `--fix`) is provided.

@@ -164,12 +164,150 @@ def compute_pre_interview_scores_and_rankings(simulation: Simulation):
     compute_schools_pre_rankings(simulation)
 
 
-def interview(self):
-    """Students and schools interview each other.
+def students_rate_schools_post_interview(simulation: Simulation):
+    """Students update their ratings of schools after interviews.
 
-    Students and Schools update their ratings after the interview.
+    Steps:
+    1. Computes the students' post-interview rating of each school.
+
+    Details:
+    - Compute each student's post-interview observed score of each school.
+      score = sum_over_meta(school.score_meta[m] * student.meta_preference[m]) * rating_error
+    - Only updates interviews with status indicating they have been interviewed
     """
-    pass
+    # Use the latest config to get the applicant post-interview rating error
+    cfg = simulation.configs.order_by("-id").first()
+    rating_error = float(getattr(cfg, "applicant_post_interview_rating_error", 1.0) or 1.0)
+
+    from .models import Interview as InterviewModel
+
+    # Only update interviews that have been conducted
+    qs = InterviewModel.objects.select_related("student", "school").filter(
+        simulation=simulation, status="interviewed"
+    )
+    for inter in qs:
+        try:
+            val = _score(
+                inter.school.score_meta or {},
+                inter.student.meta_preference or {},
+                rating_error,
+            )
+        except Exception:
+            raise Exception(f"Error computing post-interview score for {inter}") from None
+        inter.student_post_observed_score_of_school = val
+        inter.save(update_fields=["student_post_observed_score_of_school"])
+
+
+def schools_rate_students_post_interview(simulation: Simulation):
+    """Schools update their ratings of students after interviews.
+
+    Steps:
+    1. Computes the schools' post-interview rating of each student.
+
+    Details:
+    - Compute each school's post-interview observed score of each student.
+      score = sum_over_meta(student.score_meta[m] * school.meta_preference[m]) * rating_error
+    - Only updates interviews with status indicating they have been interviewed
+    """
+    # Use the latest config to get the school post-interview rating error
+    cfg = simulation.configs.order_by("-id").first()
+    rating_error = float(getattr(cfg, "school_post_interview_rating_error", 1.0) or 1.0)
+
+    from .models import Interview as InterviewModel
+
+    # Only update interviews that have been conducted
+    qs = InterviewModel.objects.select_related("student", "school").filter(
+        simulation=simulation, status="interviewed"
+    )
+    for inter in qs:
+        try:
+            val = _score(
+                inter.student.score_meta or {},
+                inter.school.meta_preference or {},
+                rating_error,
+            )
+        except Exception:
+            raise Exception(f"Error computing post-interview score for {inter}") from None
+        inter.school_post_observed_score_of_student = val
+        inter.save(update_fields=["school_post_observed_score_of_student"])
+
+
+def compute_students_post_rankings(simulation: Simulation):
+    """Compute students' post-interview rankings of schools.
+
+    For each student, ranks their schools by student_post_observed_score_of_school.
+    Highest score gets rank 1.
+    Only includes interviews that have been conducted.
+    """
+    from .models import Interview as InterviewModel
+
+    # Group interviews by student
+    students = simulation.students.all()
+
+    for student in students:
+        # Get all interviews for this student with non-null post-interview scores
+        interviews = InterviewModel.objects.filter(
+            simulation=simulation,
+            student=student,
+            status="interviewed",
+            student_post_observed_score_of_school__isnull=False,
+        ).order_by("-student_post_observed_score_of_school")  # Highest score first
+
+        # Assign rankings (1 = highest score)
+        for rank, interview in enumerate(interviews, 1):
+            interview.students_post_rank_of_school = rank
+            interview.save(update_fields=["students_post_rank_of_school"])
+
+
+def compute_schools_post_rankings(simulation: Simulation):
+    """Compute schools' post-interview rankings of students.
+
+    For each school, ranks their students by school_post_observed_score_of_student.
+    Highest score gets rank 1.
+    Only includes interviews that have been conducted.
+    """
+    from .models import Interview as InterviewModel
+
+    # Group interviews by school
+    schools = simulation.schools.all()
+
+    for school in schools:
+        # Get all interviews for this school with non-null post-interview scores
+        interviews = InterviewModel.objects.filter(
+            simulation=simulation,
+            school=school,
+            status="interviewed",
+            school_post_observed_score_of_student__isnull=False,
+        ).order_by("-school_post_observed_score_of_student")  # Highest score first
+
+        # Assign rankings (1 = highest score)
+        for rank, interview in enumerate(interviews, 1):
+            interview.schools_post_rank_of_student = rank
+            interview.save(update_fields=["schools_post_rank_of_student"])
+
+
+def compute_post_interview_scores_and_rankings(simulation: Simulation):
+    """Complete post-interview process: scoring and ranking.
+
+    Performs all post-interview steps in sequence:
+    1. Students rate schools (compute post-interview observed scores)
+    2. Schools rate students (compute post-interview observed scores)
+    3. Compute student rankings of schools
+    4. Compute school rankings of students
+
+    Prerequisite: Interview objects must have status="interviewed"
+    """
+    # Step 1: Students rate schools post-interview
+    students_rate_schools_post_interview(simulation)
+
+    # Step 2: Schools rate students post-interview
+    schools_rate_students_post_interview(simulation)
+
+    # Step 3: Compute student post-interview rankings
+    compute_students_post_rankings(simulation)
+
+    # Step 4: Compute school post-interview rankings
+    compute_schools_post_rankings(simulation)
 
 
 def students_rank():

@@ -62,6 +62,20 @@ def generate_beta_score(mean: float, stddev: float) -> float:
     return float(beta.rvs(alpha, beta_param))
 
 
+SIMULATION_STAGES = [
+    ("setup", "Setup"),
+    ("populations", "Populations"),
+    ("initialized", "Initialized"),
+    ("pre_interview", "Pre-Interview"),
+    ("invitations", "Invitations"),
+    ("post_interview", "Post-Interview"),
+    ("final_rankings", "Final Rankings"),
+    ("matched", "Matched"),
+]
+
+STAGE_ORDER = [s[0] for s in SIMULATION_STAGES]
+
+
 class User(AbstractUser):
     """Custom user model extending Django's AbstractUser.
     Note: Django's AbstractUser already includes username, password, email fields
@@ -94,10 +108,60 @@ class Simulation(models.Model):
     description = models.TextField(default="")
     iterations = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(100)])
     created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=50, default="pending")
+    status = models.CharField(max_length=50, choices=SIMULATION_STAGES, default="setup")
 
     def __str__(self):
         return self.name
+
+    def stage_index(self) -> int:
+        """Return the zero-based index of the current status in STAGE_ORDER."""
+        try:
+            return STAGE_ORDER.index(self.status)
+        except ValueError:
+            return 0
+
+    def advance_status(self, to_stage: str):
+        """Advance the simulation status to *to_stage* if it is ahead of the current stage.
+
+        Saves only the status field. Does nothing if *to_stage* is at or behind
+        the current position.
+        """
+        if to_stage not in STAGE_ORDER:
+            return
+        target = STAGE_ORDER.index(to_stage)
+        if target > self.stage_index():
+            self.status = to_stage
+            self.save(update_fields=["status"])
+
+    def regress_status(self, to_stage: str):
+        """Regress the simulation status to *to_stage*.
+
+        Used when destructive actions (e.g. deleting populations) invalidate
+        later stages.
+        """
+        if to_stage not in STAGE_ORDER:
+            return
+        target = STAGE_ORDER.index(to_stage)
+        if target < self.stage_index():
+            self.status = to_stage
+            self.save(update_fields=["status"])
+
+    def get_workflow_stages(self) -> list[dict]:
+        """Build a list of stage dicts for template rendering.
+
+        Each dict has keys: key, label, complete, active, locked.
+        """
+        current_idx = self.stage_index()
+        stages = []
+        for idx, (key, label) in enumerate(SIMULATION_STAGES):
+            stages.append({
+                "key": key,
+                "label": label,
+                "complete": idx < current_idx,
+                "active": idx == current_idx,
+                "locked": idx > current_idx,
+            })
+        return stages
 
     def create_students(self) -> int:
         """Create the student population for this simulation using its latest SimulationConfig.

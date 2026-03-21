@@ -45,5 +45,6 @@ urlpatterns = (
         path("simulations/<int:pk>/compute-students-rankings/", views.simulation_compute_students_rankings, name="simulation_compute_students_rankings"),
         path("simulations/<int:pk>/compute-schools-rankings/", views.simulation_compute_schools_rankings, name="simulation_compute_schools_rankings"),
         path("simulations/<int:pk>/compute-pre-interview-all/", views.simulation_compute_pre_interview_all, name="simulation_compute_pre_interview_all"),
+        path("simulations/<int:pk>/compute-post-interview-all/", views.simulation_compute_post_interview_all, name="simulation_compute_post_interview_all"),
     ]
 )

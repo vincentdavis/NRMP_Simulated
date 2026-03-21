@@ -1,0 +1,31 @@
+{% load simulation_tags %}
+<div id="stage-post_interview"
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'post_interview' or simulation|stage_active:'pre_interview' %} border-2 border-accent{% endif %}{% if simulation|stage_locked:'post_interview' %} opacity-50{% endif %}">
+  <div class="card-header">
+    <h2 class="card-title">
+      Post-Interview
+      {% if simulation|stage_complete:"post_interview" %}
+        <span class="badge badge-success badge-sm ml-2">Done</span>
+      {% elif simulation|stage_active:"post_interview" or simulation|stage_active:"pre_interview" %}
+        <span class="badge badge-accent badge-sm ml-2">Ready</span>
+      {% else %}
+        <span class="badge badge-ghost badge-sm ml-2">Locked</span>
+      {% endif %}
+    </h2>
+  </div>
+  <div class="card-body">
+    <div class="flex justify-between items-center">
+      <div class="text-sm">Compute post-interview scores and rankings for interviewed pairs.</div>
+      <div class="flex gap-2">
+        <button class="btn btn-sm btn-primary btn-outline"
+                hx-post="{% url 'nrmps:simulation_compute_post_interview_all' pk=simulation.pk %}"
+                hx-target="#stage-post_interview"
+                hx-swap="outerHTML"
+                hx-confirm="Compute post-interview scores and rankings?"
+                {% if simulation|stage_locked:"post_interview" %}disabled{% endif %}>
+          Compute Post-Interview All
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

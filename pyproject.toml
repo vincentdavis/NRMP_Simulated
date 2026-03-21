@@ -2,31 +2,31 @@
 name = "nrmp-simulated"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
-    "django>=5.2.5",
-    "django-htmx>=1.23.2",
-    "django-tailwind>=4.2.0",
+    "dj-database-url>=3.1.2",
+    "django>=6.0.3",
+    "django-htmx>=1.27.0",
+    "django-tailwind>=4.4.2",
     "honcho>=2.0.0",
-    "logfire[django]>=4.3.6",
-    "scipy>=1.16.2",
+    "logfire[django]>=4.29.0",
+    "scipy>=1.17.1",
+    "whitenoise>=6.12.0",
 ]
 
 [dependency-groups]
 prod = [
-    "dj-database-url>=3.0.1",
     "gunicorn>=23.0.0",
     "psycopg[binary]>=3.2.10",
-    "whitenoise>=6.11.0",
 ]
 dev = [
     "cookiecutter>=2.6.0",
-    "django-browser-reload>=1.19.0",
-    "django-debug-toolbar>=6.0.0",
+    "django-browser-reload>=1.21.0",
+    "django-debug-toolbar>=6.1.0",
     "django-reset-migrations>=0.4.0",
-    "django-stubs>=5.2.2",
-    "mypy>=1.17.1",
-    "pytest>=8.4.1",
-    "ruff>=0.12.10",
-    "ty>=0.0.1a19",
+    "django-stubs>=5.2.8",
+    "django-tailwind[cookiecutter,honcho,reload]>=4.4.2",
+    "pytest>=9.0.2",
+    "ruff>=0.15.7",
+    "ty>=0.0.24",
 ]

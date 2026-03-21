@@ -1,0 +1,79 @@
+{% load simulation_tags %}
+<div id="stage-populations"
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'populations' or simulation|stage_active:'setup' %} border-2 border-accent{% endif %}{% if simulation|stage_locked:'populations' %} opacity-50{% endif %}">
+  <div class="card-header">
+    <h2 class="card-title">
+      Populations
+      {% if simulation|stage_complete:"populations" %}
+        <span class="badge badge-success badge-sm ml-2">Done</span>
+      {% elif simulation|stage_active:"populations" or simulation|stage_active:"setup" %}
+        <span class="badge badge-accent badge-sm ml-2">Active</span>
+      {% endif %}
+    </h2>
+  </div>
+  <div class="card-body">
+    <div class="mb-4">
+      <div class="flex justify-between items-center mb-2">
+        <div><strong>Students:</strong> {{ simulation.students.count }}</div>
+        <div class="flex gap-2 flex-wrap">
+          <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_students' pk=simulation.pk %}">View</a>
+          <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_students' pk=simulation.pk %}">CSV</a>
+          <button class="btn btn-sm btn-primary btn-outline"
+                  hx-post="{% url 'nrmps:simulation_create_students' pk=simulation.pk %}"
+                  hx-target="#stage-populations"
+                  hx-swap="outerHTML"
+                  hx-confirm="(Re)create students from the latest configuration? This will replace existing students.">
+            (re)Create
+          </button>
+          <button class="btn btn-sm btn-error btn-outline"
+                  hx-post="{% url 'nrmps:simulation_delete_students' pk=simulation.pk %}"
+                  hx-target="#stage-populations"
+                  hx-swap="outerHTML"
+                  hx-confirm="Delete all students for this simulation?">
+            Delete
+          </button>
+        </div>
+      </div>
+      <form hx-post="{% url 'nrmps:simulation_upload_students' pk=simulation.pk %}"
+            hx-target="#stage-populations"
+            hx-swap="outerHTML"
+            hx-encoding="multipart/form-data"
+            class="flex items-center gap-2">
+        <input type="file" name="file" accept=".csv" class="file-input file-input-sm file-input-bordered flex-1" required>
+        <button type="submit" class="btn btn-sm btn-primary">Upload CSV</button>
+      </form>
+    </div>
+    <div class="divider my-1"></div>
+    <div>
+      <div class="flex justify-between items-center mb-2">
+        <div><strong>Schools:</strong> {{ simulation.schools.count }}</div>
+        <div class="flex gap-2 flex-wrap">
+          <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_schools' pk=simulation.pk %}">View</a>
+          <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_schools' pk=simulation.pk %}">CSV</a>
+          <button class="btn btn-sm btn-primary btn-outline"
+                  hx-post="{% url 'nrmps:simulation_create_schools' pk=simulation.pk %}"
+                  hx-target="#stage-populations"
+                  hx-swap="outerHTML"
+                  hx-confirm="(Re)create schools from the latest configuration? This will replace existing schools.">
+            (re)Create
+          </button>
+          <button class="btn btn-sm btn-error btn-outline"
+                  hx-post="{% url 'nrmps:simulation_delete_schools' pk=simulation.pk %}"
+                  hx-target="#stage-populations"
+                  hx-swap="outerHTML"
+                  hx-confirm="Delete all schools for this simulation?">
+            Delete
+          </button>
+        </div>
+      </div>
+      <form hx-post="{% url 'nrmps:simulation_upload_schools' pk=simulation.pk %}"
+            hx-target="#stage-populations"
+            hx-swap="outerHTML"
+            hx-encoding="multipart/form-data"
+            class="flex items-center gap-2">
+        <input type="file" name="file" accept=".csv" class="file-input file-input-sm file-input-bordered flex-1" required>
+        <button type="submit" class="btn btn-sm btn-primary">Upload CSV</button>
+      </form>
+    </div>
+  </div>
+</div>
