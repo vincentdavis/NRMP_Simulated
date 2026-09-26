@@ -1,14 +1,17 @@
 {% extends "base.html" %}
-{% load list_tags humanize %}
+{% load list_tags humanize help_tags %}
 {% block title %}{{ name }} - run {{ run.number }} - {{ simulation.name }}{% endblock %}
 {% block content %}
 <div class="mt-4">
   {% include "nrmps/components/breadcrumbs.html" with current=name %}
   <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
     <h1 class="text-2xl font-bold min-w-0 break-words">{{ name }} – run {{ run.number }}</h1>
-    <a href="{% if applicant %}{% url 'nrmps:run_applicants' pk=simulation.pk number=run.number %}{% else %}{% url 'nrmps:run_programs' pk=simulation.pk number=run.number %}{% endif %}" class="btn btn-outline">
-      All {% if applicant %}applicants{% else %}programs{% endif %}
-    </a>
+    <div class="flex flex-wrap gap-2">
+      {% page_help "run_agent" %}
+      <a href="{% if applicant %}{% url 'nrmps:run_applicants' pk=simulation.pk number=run.number %}{% else %}{% url 'nrmps:run_programs' pk=simulation.pk number=run.number %}{% endif %}" class="btn btn-outline">
+        All {% if applicant %}applicants{% else %}programs{% endif %}
+      </a>
+    </div>
   </div>
 
   {% if journey %}
@@ -87,15 +90,15 @@
           <tr>
             {% sort_th "index" "#" "right" %}
             {% sort_th "name" "Name" %}
-            {% sort_th "pre_rank" "Pre-interview rank" "right" %}
-            <th scope="col">{% if applicant %}Signal sent{% else %}Signal received{% endif %}</th>
-            <th scope="col">Invited</th>
-            <th scope="col">Interview</th>
-            <th scope="col" class="text-right">Post-interview view</th>
-            <th scope="col" class="text-right">Their post-interview view</th>
-            {% sort_th "list_rank" "List rank" "right" %}
-            {% sort_th "their_list_rank" "Their list rank of it" "right" %}
-            <th scope="col">Match</th>
+            {% sort_th "pre_rank" "Pre-interview rank" "right" help="agent_stages.pre_rank" %}
+            <th scope="col">{% if applicant %}Signal sent{% else %}Signal received{% endif %} {% help_icon "column" "agent_stages.signal" %}</th>
+            <th scope="col">Invited {% help_icon "column" "agent_stages.wave" %}</th>
+            <th scope="col">Interview {% help_icon "column" "agent_stages.interview" %}</th>
+            <th scope="col" class="text-right">Post-interview view {% help_icon "column" "agent_stages.post" %}</th>
+            <th scope="col" class="text-right">Their post-interview view {% help_icon "column" "agent_stages.their_post" %}</th>
+            {% sort_th "list_rank" "List rank" "right" help="agent_stages.list_rank" %}
+            {% sort_th "their_list_rank" "Their list rank of it" "right" help="agent_stages.their_list_rank" %}
+            <th scope="col">Match {% help_icon "column" "agent_stages.match" %}</th>
           </tr>
         </thead>
         <tbody>
@@ -136,15 +139,15 @@
           <tr>
             {% sort_th "index" "#" "right" %}
             {% sort_th "name" "Name" %}
-            <th scope="col" class="text-right">True utility</th>
-            <th scope="col" class="text-right">Pre-interview view</th>
-            {% sort_th "true_rank" "True rank" "right" %}
-            {% sort_th "pre_rank" "Pre-interview rank" "right" %}
-            <th scope="col" class="text-right">Their true utility</th>
-            <th scope="col" class="text-right">Their pre-interview view</th>
+            <th scope="col" class="text-right">True utility {% help_icon "column" "agent_pre.true" %}</th>
+            <th scope="col" class="text-right">Pre-interview view {% help_icon "column" "agent_pre.observed" %}</th>
+            {% sort_th "true_rank" "True rank" "right" help="agent_pre.true_rank" %}
+            {% sort_th "pre_rank" "Pre-interview rank" "right" help="agent_pre.pre_rank" %}
+            <th scope="col" class="text-right">Their true utility {% help_icon "column" "agent_pre.their_true" %}</th>
+            <th scope="col" class="text-right">Their pre-interview view {% help_icon "column" "agent_pre.their_observed" %}</th>
             {% if has_their_ranks %}
-              {% sort_th "their_true_rank" "Their true rank of it" "right" %}
-              {% sort_th "their_pre_rank" "Their pre-interview rank of it" "right" %}
+              {% sort_th "their_true_rank" "Their true rank of it" "right" help="agent_pre.their_true_rank" %}
+              {% sort_th "their_pre_rank" "Their pre-interview rank of it" "right" help="agent_pre.their_pre_rank" %}
             {% endif %}
           </tr>
         </thead>

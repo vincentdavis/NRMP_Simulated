@@ -1,4 +1,4 @@
-{% load form_tags humanize %}
+{% load form_tags humanize help_tags %}
 {% comment %}
   The parameter editor, generated from the schema (nrmps.params_forms.ParamsForm): one section per parameter group,
   advanced options collapsed, list parameters as tables, and the parameters of planned features in a collapsed group.
@@ -21,6 +21,7 @@
         </select>
       </fieldset>
       <button type="submit" class="btn btn-sm btn-outline mb-1">Apply preset</button>
+      <span class="mb-1">{% help_icon "action" "apply_preset" %}</span>
     </form>
     <div class="divider my-1"></div>
   <form method="post" id="parameters" novalidate data-dirty-guard>
@@ -107,7 +108,9 @@
     <div class="card-actions justify-end items-center mt-2">
       <span class="badge badge-warning" data-dirty-indicator hidden>Unsaved changes</span>
       <button type="submit" class="btn btn-outline">Save</button>
+      {% help_icon "action" "save_params" %}
       <button type="submit" name="run" value="1" class="btn btn-primary">Save and run</button>
+      {% help_icon "action" "save_and_run" %}
     </div>
   </form>
   </div>

@@ -1,7 +1,8 @@
 {% extends "nrmps/runs/_layout.html" %}
-{% load list_tags humanize %}
+{% load list_tags humanize help_tags %}
 {% block run_actions %}
   <a href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='programs.csv' %}" class="btn btn-outline">Download CSV</a>
+  {% help_icon "action" "download_csv" %}
 {% endblock %}
 {% block run_content %}
   <p class="text-sm text-base-content/70 mb-4">
@@ -17,22 +18,22 @@
     <table class="table table-zebra table-sm">
       <thead>
         <tr>
-          {% sort_th "index" "#" "right" %}
-          {% sort_th "name" "Name" %}
-          {% sort_th "tier" "Tier" %}
-          {% sort_th "quality" "Quality" "right" %}
-          <th scope="col" class="text-right">Percentile</th>
-          {% sort_th "capacity" "Positions" "right" %}
+          {% sort_th "index" "#" "right" help="programs.index" %}
+          {% sort_th "name" "Name" help="programs.name" %}
+          {% sort_th "tier" "Tier" help="programs.tier" %}
+          {% sort_th "quality" "Quality" "right" help="programs.quality" %}
+          <th scope="col" class="text-right">Percentile {% help_icon "column" "programs.percentile" %}</th>
+          {% sort_th "capacity" "Positions" "right" help="programs.capacity" %}
           {% if has_stages %}
-            {% sort_th "applications" "Applications" "right" %}
-            {% sort_th "interviews" "Interviews" "right" %}
-            {% sort_th "fill" "Filled" "right" %}
+            {% sort_th "applications" "Applications" "right" help="programs.applications" %}
+            {% sort_th "interviews" "Interviews" "right" help="programs.interviews" %}
+            {% sort_th "fill" "Filled" "right" help="programs.fill" %}
           {% endif %}
-          <th scope="col">Attributes</th>
-          <th scope="col">Weights</th>
-          <th scope="col">First choice</th>
-          {% sort_th "fidelity" "Fidelity" "right" %}
-          {% sort_th "popularity" "Ranked first by" "right" %}
+          <th scope="col">Attributes {% help_icon "column" "programs.attributes" %}</th>
+          <th scope="col">Weights {% help_icon "column" "programs.weights" %}</th>
+          <th scope="col">First choice {% help_icon "column" "programs.first_choice" %}</th>
+          {% sort_th "fidelity" "Fidelity" "right" help="programs.fidelity" %}
+          {% sort_th "popularity" "Ranked first by" "right" help="programs.popularity" %}
         </tr>
       </thead>
       <tbody>

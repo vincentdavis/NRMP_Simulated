@@ -1,5 +1,5 @@
 {% extends "nrmps/runs/_layout.html" %}
-{% load humanize list_tags %}
+{% load humanize list_tags help_tags %}
 {% block run_content %}
   {% include "nrmps/runs/_stats.html" with items=stats %}
   {% include "nrmps/runs/_funnel.html" %}
@@ -48,15 +48,15 @@
         <table class="table table-zebra table-sm">
           <thead>
             <tr>
-              {% sort_th "applicant" "Applicant" %}
-              {% sort_th "program" "Program" %}
-              {% sort_th "pre_rank" "Applicant's pre-interview rank" "right" %}
-              <th scope="col">Signal</th>
-              <th scope="col">Invited</th>
-              <th scope="col">Interview</th>
-              {% sort_th "applicant_rank" "Applicant's list rank" "right" %}
-              {% sort_th "program_rank" "Program's list rank" "right" %}
-              <th scope="col">Match</th>
+              {% sort_th "applicant" "Applicant" help="applications.applicant" %}
+              {% sort_th "program" "Program" help="applications.program" %}
+              {% sort_th "pre_rank" "Applicant's pre-interview rank" "right" help="applications.pre_rank" %}
+              <th scope="col">Signal {% help_icon "column" "applications.signal" %}</th>
+              <th scope="col">Invited {% help_icon "column" "applications.invited" %}</th>
+              <th scope="col">Interview {% help_icon "column" "applications.interview" %}</th>
+              {% sort_th "applicant_rank" "Applicant's list rank" "right" help="applications.applicant_rank" %}
+              {% sort_th "program_rank" "Program's list rank" "right" help="applications.program_rank" %}
+              <th scope="col">Match {% help_icon "column" "applications.match" %}</th>
             </tr>
           </thead>
           <tbody>

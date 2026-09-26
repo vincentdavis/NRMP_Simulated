@@ -1,0 +1,31 @@
+{% comment %}
+  The Help button of a page and its panel (plan step 4.3; nrmps.templatetags.help_tags.page_help), from the help
+  registry: what the page is, what to do next, the buttons and the columns. A popover: Escape or a click outside
+  closes it. The popover element itself has no display class, which would override the hiding of closed popovers.
+{% endcomment %}
+<button type="button" class="btn btn-ghost" popovertarget="{{ id }}">Help</button>
+<div id="{{ id }}" popover class="page-help m-auto p-0 bg-transparent w-[36rem] max-w-[92vw]" role="dialog"
+     aria-labelledby="{{ id }}-title">
+  <div class="card bg-base-100 border border-base-300 shadow-xl max-h-[85vh] overflow-y-auto">
+  <div class="card-body text-sm">
+    <div class="flex justify-between items-start gap-2">
+      <h2 id="{{ id }}-title" class="card-title">{{ page.title }}</h2>
+      <button type="button" class="btn btn-ghost btn-sm" popovertarget="{{ id }}" popovertargetaction="hide">Close</button>
+    </div>
+    <p>{{ page.what }}</p>
+    {% if page.next_steps %}
+      <h3 class="font-semibold mt-2">What to do here</h3>
+      <ul class="list-disc ms-5 space-y-1">{% for step in page.next_steps %}<li>{{ step }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if actions %}
+      <h3 class="font-semibold mt-2">Buttons</h3>
+      <dl class="space-y-1">{% for entry in actions %}<div><dt class="font-medium">{{ entry.title }}</dt><dd>{{ entry.text }}</dd></div>{% endfor %}</dl>
+    {% endif %}
+    {% if columns %}
+      <h3 class="font-semibold mt-2">Columns</h3>
+      <dl class="space-y-1">{% for entry in columns %}<div><dt class="font-medium">{{ entry.title }}</dt><dd>{{ entry.text }}</dd></div>{% endfor %}</dl>
+    {% endif %}
+    {% if page.more %}<p class="mt-2"><a class="link" href="{% url 'nrmps:help' %}#{{ page.more }}">Learn more in the help</a></p>{% endif %}
+  </div>
+  </div>
+</div>

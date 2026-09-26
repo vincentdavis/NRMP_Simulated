@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load form_tags %}
+{% load form_tags help_tags %}
 {% block title %}{{ simulation.name }} - NRMP Simulations{% endblock %}
 {% block content %}
   <div class="mt-4">
@@ -7,6 +7,7 @@
     <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
       <h1 class="text-2xl font-bold min-w-0 break-words">{{ simulation.name }}</h1>
       <div class="flex flex-wrap gap-2">
+        {% page_help "simulation_manage" %}
         <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
         <form method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}"
               data-confirm="Delete the simulation “{{ simulation.name }}” with its parameters, uploaded files and {{ recent_runs|length }}{% if recent_runs|length >= 10 %} or more{% endif %} runs? This cannot be undone.">

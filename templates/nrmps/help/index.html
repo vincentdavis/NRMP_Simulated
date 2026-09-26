@@ -186,7 +186,7 @@
             </thead>
             <tbody>
               {% for row in section.rows %}
-                <tr>
+                <tr id="{{ row.anchor }}" class="scroll-mt-4">
                   <td class="font-medium">{{ row.title }}{% if not row.implemented and section.implemented %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}</td>
                   <td>{{ row.description }}{% if row.unit %} <span class="text-base-content/70">({{ row.unit }})</span>{% endif %}</td>
                   <td class="text-right tabular-nums">{{ row.limits }}</td>

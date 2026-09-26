@@ -1,9 +1,13 @@
 {% extends "base.html" %}
+{% load help_tags %}
 {% block title %}Simulations - NRMP Simulations{% endblock %}
 {% block content %}
 <div class="flex flex-wrap gap-2 justify-between items-center mb-6">
   <h1 class="text-3xl font-bold">Your simulations</h1>
-  <a class="btn btn-primary" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
+  <div class="flex flex-wrap gap-2">
+    {% page_help "simulation_list" %}
+    <a class="btn btn-primary" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
+  </div>
 </div>
 
 {% if simulations %}

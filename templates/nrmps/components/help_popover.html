@@ -1,0 +1,18 @@
+{% comment %}
+  A "?" button with a popover (plan step 4.3; nrmps.templatetags.help_tags.help_icon). The native Popover API puts
+  it in the top layer (never clipped by a scrolling table) and closes it on Escape or a click outside; where the
+  browser supports anchor positioning it opens next to its button, elsewhere in the middle of the screen. The
+  popover element itself has no display class: one would override the browser's hiding of closed popovers.
+{% endcomment %}
+<button type="button" class="btn btn-ghost btn-circle btn-xs align-middle" popovertarget="{{ id }}"
+        style="anchor-name: --{{ id }}" aria-label="Help: {{ entry.title }}">?</button>
+<div id="{{ id }}" popover class="help-popover m-auto p-0 bg-transparent w-72 max-w-[85vw]"
+     style="position-anchor: --{{ id }}" role="note" aria-label="{{ entry.title }}">
+  <div class="card card-sm bg-base-100 border border-base-300 shadow-lg">
+    <div class="card-body text-sm font-normal text-left whitespace-normal">
+      <p class="font-semibold">{{ entry.title }}</p>
+      <p>{{ entry.text }}</p>
+      {% if entry.more %}<a class="link" href="{% url 'nrmps:help' %}#{{ entry.more }}">Learn more in the help</a>{% endif %}
+    </div>
+  </div>
+</div>

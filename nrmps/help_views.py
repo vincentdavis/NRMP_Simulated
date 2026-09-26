@@ -29,42 +29,23 @@ from .engine import (
     validate,
 )
 from .engine import pipeline as engine_pipeline
+from .help_registry import param_anchor, param_limits, param_value
 from .limits import max_pairs
 from .params import ParamField, SimulationParams, iter_fields, list_fields
-from .params_forms import IMPLEMENTED_SECTIONS, SECTIONS, choice_label
+from .params_forms import IMPLEMENTED_SECTIONS, SECTIONS
 from .population_csv import MAX_UPLOAD_BYTES, MAX_UPLOAD_ROWS, columns
-
-
-def _value(value: Any) -> str:
-    """Return a default value as text for the reference table."""
-    if value is None:
-        return "blank"
-    if isinstance(value, bool):
-        return "on" if value else "off"
-    if isinstance(value, str):
-        return choice_label(value)
-    if isinstance(value, float):
-        return f"{value:g}"
-    return str(value)
 
 
 def _row(spec: ParamField) -> dict[str, Any]:
     """Describe one parameter for the reference table."""
-    if spec.minimum is not None or spec.maximum is not None:
-        low = "" if spec.minimum is None else f"{'>' if spec.exclusive_minimum else ''}{spec.minimum:g}"
-        high = "" if spec.maximum is None else f"{spec.maximum:g}"
-        limits = f"{low}\u2013{high}"  # en dash
-    elif spec.choices:
-        limits = ", ".join(choice_label(choice) for choice in spec.choices)
-    else:
-        limits = ""
     return {
         "path": spec.path,
+        "anchor": param_anchor(spec.path),
         "title": spec.title,
         "description": spec.description,
         "unit": spec.unit,
-        "limits": limits,
-        "default": _value(spec.default) if not isinstance(spec.default, list | dict) else "",
+        "limits": param_limits(spec),
+        "default": param_value(spec.default) if not isinstance(spec.default, list | dict) else "",
         "implemented": spec.implemented,
     }
 

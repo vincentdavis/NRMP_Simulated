@@ -211,6 +211,7 @@ def _run_context(run: SimulationRun, tab: str, **extra: Any) -> dict[str, Any]:
         "run": run,
         "tab": tab,
         "tab_label": "" if tab == "summary" else labels[tab],
+        "help_page": f"run_{tab}",
         "tabs": tabs,
         "metrics": metrics,
         "outcomes": outcomes,

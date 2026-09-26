@@ -1,4 +1,4 @@
-{% load humanize static %}
+{% load humanize static help_tags %}
 {% comment %}
   One side's population source: generated or an uploaded CSV, with the upload form (parameter: side, an entry of
   `sides` from views.manage_context). Upload and removal post with HTMX and get this block back.
@@ -18,6 +18,7 @@
         <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
         Generate from the parameters instead
       </button>
+      {% help_icon "action" "remove_upload" side.key %}
     </form>
   {% else %}
     <p class="mb-2">Generated from the parameters.</p>
@@ -45,6 +46,7 @@
       <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
       Upload CSV
     </button>
+    {% help_icon "action" "upload" side.key %}
   </form>
   <p class="text-xs text-base-content/70 mt-1">
     Columns for the current parameters: <code class="break-all">{{ side.columns|join:"," }}</code>. The weight

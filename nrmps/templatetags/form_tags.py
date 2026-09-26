@@ -5,6 +5,8 @@ import copy
 from django import template
 from django.forms import widgets
 
+from nrmps.help_registry import param_anchor, param_limits, param_value
+
 register = template.Library()
 
 # daisyUI 5 component class for each widget type; each also has an "-error" variant.
@@ -47,6 +49,22 @@ def field_row(field, label: str | None = None):
         "is_checkbox": isinstance(widget, widgets.CheckboxInput),
         # Forms list parameters the engine does not use yet in `planned_fields`.
         "planned": field.name in getattr(field.form, "planned_fields", ()),
+        "facts": _parameter_facts(field),
+    }
+
+
+def _parameter_facts(field) -> dict[str, str] | None:
+    """Return a schema parameter's range, unit, default and help anchor (None for fields of other forms)."""
+    spec = getattr(field.form, "specs", {}).get(field.name)
+    if spec is None:
+        return None
+    default = "" if isinstance(spec.default, list | dict) else param_value(spec.default)
+    limits = param_limits(spec)
+    return {
+        "range": "" if spec.choices else limits,
+        "unit": spec.unit,
+        "default": default,
+        "anchor": param_anchor(spec.path),
     }
 
 

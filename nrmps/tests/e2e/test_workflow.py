@@ -138,7 +138,33 @@ def test_a_preset_can_be_applied_after_confirming(logged_in_page, live, simulati
     page = logged_in_page
     page.goto(f"{live}/simulations/{simulation.pk}/")
     page.get_by_label("Start again from a preset").select_option("classroom")
-    page.get_by_role("button", name="Apply preset").click()
+    page.get_by_role("button", name="Apply preset", exact=True).click()
     _confirm(page)
     expect(page.locator("#toasts")).to_contain_text("Applied the preset “Small classroom market”")
     assert Simulation.objects.get(pk=simulation.pk).get_params().market.n_applicants == 60
+
+
+def test_help_popovers_and_the_help_panel_work_by_keyboard(logged_in_page, live, simulation, finished_run):
+    """Plan step 4.3: "?" opens its popover (Escape closes it), and Help opens the page's panel."""
+    from axe_playwright_python.sync_playwright import Axe
+
+    page = logged_in_page
+    page.goto(f"{live}/simulations/{simulation.pk}/runs/1/applicants/")
+    button = page.get_by_role("button", name="Help: Strength")
+    popover = page.locator("#help-column-applicants-strength")
+    expect(popover).to_be_hidden()
+    button.focus()
+    page.keyboard.press("Enter")
+    expect(popover).to_be_visible()
+    expect(popover).to_contain_text("Latent strength on the z-scale")
+    serious = [v["id"] for v in Axe().run(page).response["violations"] if v["impact"] in {"serious", "critical"}]
+    assert serious == []
+    page.keyboard.press("Escape")
+    expect(popover).to_be_hidden()
+
+    page.get_by_role("button", name="Help", exact=True).click()
+    panel = page.get_by_role("dialog", name="The applicants of a run")
+    expect(panel).to_be_visible()
+    expect(panel).to_contain_text("Ranked first by")
+    panel.get_by_role("button", name="Close").click()
+    expect(panel).to_be_hidden()

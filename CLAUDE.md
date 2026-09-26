@@ -140,6 +140,8 @@ nrmps/
 ├── charts.py             # payloads of the run page's diagnostic charts (drawn by static/js/nrmp-charts.js)
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
 ├── help_views.py         # /help/ (reference generated from the schema) and the staff-only developer reference
+├── help_registry.py      # help for actions, table columns and pages ("?" popovers, Help panels)
+├── checks.py             # system checks of the help (nrmps.H001-H003)
 ├── ops_views.py          # staff-only /ops/: runs per day, failures, durations, queue, workers, quota use
 ├── accounts.py           # confirmation tokens and emails, the personal data export
 ├── versions.py           # version stamps stored with runs
@@ -150,7 +152,8 @@ nrmps/
 ├── admin.py              # admin registrations (runs and artifacts read-only)
 ├── management/commands/  # nrmp_run (the engine headless), nrmp_validate (validation report), seed_demo,
 │                         #   nrmp_worker (queued runs), nrmp_cleanup
-└── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link), format_tags (percent)
+└── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link), format_tags
+                          #   (percent), help_tags (help_icon, page_help)
 templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/ (the run's tabs
                           #   extend runs/_layout.html), help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
@@ -173,6 +176,10 @@ docs/                     # review, plan, status, deployment, model spec
 - Render form fields with `{% load form_tags %}{% field_row form.field %}` (daisyUI 5 fieldset with help text and
   errors wired to `aria-describedby`); sortable list headers with `{% load list_tags %}{% sort_th key label %}`.
 - Use daisyUI 5 class names only; `nrmps/tests/test_css_classes.py` fails on classes missing from the built CSS.
+- Help: every table column and action button needs an entry in `nrmps/help_registry.py`; use
+  `{% sort_th key label align help="table.column" %}` or `{% help_icon "column" "table.column" %}` in a `<th>`, and
+  `{% help_icon "action" key %}` next to a button. New pages add a `PAGES` entry and `{% page_help key %}`. Never put
+  a display class (card, flex, block) on an element with the `popover` attribute: it would show while closed.
 - Charts: add a payload in `nrmps/charts.py` and a figure with
   `{% include "nrmps/components/chart_figure.html" with chart=... key=... kind=... title=... %}`; register new kinds
   in `static/js/nrmp-charts.js`. Every chart needs a summary sentence (and a table where the numbers matter), and

@@ -1,11 +1,14 @@
 {% extends "base.html" %}
-{% load form_tags %}
+{% load form_tags help_tags %}
 {% block title %}{% if create %}New simulation{% else %}Edit simulation{% endif %} - NRMP Simulations{% endblock %}
 {% block content %}
 <div class="max-w-2xl mx-auto">
   <div class="flex flex-wrap gap-2 justify-between items-center mb-6">
     <h1 class="text-3xl font-bold">{% if create %}New simulation{% else %}Edit simulation{% endif %}</h1>
-    <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
+    <div class="flex flex-wrap gap-2">
+      {% if create %}{% page_help "simulation_create" %}{% endif %}
+      <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
+    </div>
   </div>
   <div class="card bg-base-100 shadow-xl">
     <form method="post" class="card-body" novalidate>

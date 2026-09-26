@@ -1,5 +1,5 @@
 {% extends "nrmps/runs/_layout.html" %}
-{% load humanize %}
+{% load humanize help_tags %}
 {% block run_actions %}
   {% if not run.is_active %}
     <form method="post" action="{% url 'nrmps:run_delete' pk=simulation.pk number=run.number %}"
@@ -7,6 +7,7 @@
       {% csrf_token %}
       <button type="submit" class="btn btn-error">Delete run</button>
     </form>
+    {% help_icon "action" "delete_run" %}
   {% endif %}
 {% endblock %}
 {% block run_content %}

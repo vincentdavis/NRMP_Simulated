@@ -410,7 +410,7 @@ def test_runs_from_before_the_match_still_open(auth_client, finished_run):
     assert auth_client.get(_run_url(finished_run, "run_pre_interview")).status_code == 200
     applicants = auth_client.get(_run_url(finished_run, "run_applicants"))
     assert not applicants.context["has_stages"]
-    assert "Matched to" not in applicants.content.decode()
+    assert "sort=match" not in applicants.content.decode()  # no Matched to column
     page = auth_client.get(_run_url(finished_run, "run_applicant", index=1))
     assert page.context["view"] == "pre"
     assert "In the match" not in page.content.decode()

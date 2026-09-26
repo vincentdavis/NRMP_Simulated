@@ -14,3 +14,19 @@
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* Help popovers (plan step 4.3) open below their "?" button where the browser supports anchor positioning, and flip
+   when there is no room; elsewhere they keep the browser's default place, the middle of the screen. */
+@supports (position-area: bottom) {
+  .help-popover {
+    inset: auto;
+    margin: 0.25rem;
+    position-area: bottom span-left;
+    position-try-fallbacks: flip-block, flip-inline;
+  }
+}
+
+/* The Help panel of a page dims the page behind it. */
+.page-help::backdrop {
+  background: rgb(0 0 0 / 0.35);
+}
