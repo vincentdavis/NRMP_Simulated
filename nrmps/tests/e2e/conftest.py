@@ -13,6 +13,28 @@ os.environ.setdefault("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
 
 from nrmps.tests.conftest import PASSWORD
 
+# Every page reports what its Content Security Policy (report-only, settings.SECURE_CSP_REPORT_ONLY) would block.
+CSP_LISTENER = """
+document.addEventListener("securitypolicyviolation", (event) => {
+  const where = `${event.sourceFile}:${event.lineNumber}`;
+  window.nrmpCspViolation(`${event.effectiveDirective} blocked ${event.blockedURI} at ${where}`);
+});
+"""
+
+
+@pytest.fixture(autouse=True)
+def csp_violations(page):
+    """Fail any browser test in which a page breaks the Content Security Policy (plan step 5.1)."""
+    found: list[str] = []
+
+    def report(violation: str) -> None:
+        found.append(violation)
+
+    page.expose_function("nrmpCspViolation", report)
+    page.add_init_script(CSP_LISTENER)
+    yield found
+    assert found == [], f"Content Security Policy violations: {found}"
+
 
 @pytest.fixture
 def live(live_server, settings):

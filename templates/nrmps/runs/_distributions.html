@@ -1,12 +1,13 @@
+{% load chart_tags %}
 {% comment %}Distribution charts of the population. Context: charts.{% endcomment %}
 {% if charts %}
   <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="histograms-title">
     <div class="card-body">
       <h2 id="histograms-title" class="card-title">Distributions</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {% if charts.strength %}{% include "nrmps/components/chart_figure.html" with chart=charts.strength key="strength" kind="histogram" title="Did the generator produce the applicants asked for?" table="histogram" x_label="Strength (z)" y_label="Applicants" %}{% endif %}
-        {% if charts.quality %}{% include "nrmps/components/chart_figure.html" with chart=charts.quality key="quality" kind="histogram" title="Did the generator produce the programs asked for?" table="histogram" x_label="Quality (z)" y_label="Programs" %}{% endif %}
-        {% if charts.capacity %}{% include "nrmps/components/chart_figure.html" with chart=charts.capacity key="capacity" kind="histogram" title="How are the positions spread over programs?" table="histogram" x_label="Positions" y_label="Programs" %}{% endif %}
+        {% if charts.strength %}{% chart_figure charts.strength "strength" "histogram" table="histogram" x_label="Strength (z)" y_label="Applicants" %}{% endif %}
+        {% if charts.quality %}{% chart_figure charts.quality "quality" "histogram" table="histogram" x_label="Quality (z)" y_label="Programs" %}{% endif %}
+        {% if charts.capacity %}{% chart_figure charts.capacity "capacity" "histogram" table="histogram" x_label="Positions" y_label="Programs" %}{% endif %}
       </div>
     </div>
   </section>

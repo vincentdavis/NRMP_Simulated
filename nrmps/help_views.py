@@ -31,6 +31,7 @@ from .engine import (
 from .engine import pipeline as engine_pipeline
 from .guide import INDEX, apply_values, guide_pages, help_url_parts, render_page
 from .help_registry import param_anchor, param_limits, param_value
+from .help_search import MAX_RESULTS, search
 from .params import ParamField, SimulationParams, iter_fields, list_fields
 from .params_forms import IMPLEMENTED_SECTIONS, SECTIONS
 
@@ -60,6 +61,7 @@ def parameter_sections() -> list[dict[str, Any]]:
         tables = [
             {
                 "path": path,
+                "anchor": param_anchor(path),
                 "title": list_field.title,
                 "description": list_field.description,
                 "columns": [_row(spec) for spec in iter_fields(item_model, implemented=key in IMPLEMENTED_SECTIONS)],
@@ -87,14 +89,29 @@ def help_url(target: str) -> str:
     return f"{url}#{anchor}" if anchor else url
 
 
+def _pages() -> list[dict[str, str]]:
+    return [{"slug": page.slug, "title": page.title, "url": help_url(page.slug)} for page in guide_pages()]
+
+
 def _guide_response(request, slug: str):
     try:
         rendered = render_page(slug)
     except KeyError as exc:
         raise Http404("No such help page") from exc
-    pages = [{"slug": page.slug, "title": page.title, "url": help_url(page.slug)} for page in guide_pages()]
-    context = {"rendered": rendered, "pages": pages, "summary": apply_values(rendered.page.summary)}
+    context = {"rendered": rendered, "pages": _pages(), "summary": apply_values(rendered.page.summary)}
     return render(request, "nrmps/help/page.html", context)
+
+
+MAX_QUERY = 100  # characters of a search query
+
+
+@login_not_required
+@require_GET
+def help_search(request):
+    """Search the help (plan step 5.1): the guide, the glossary, the parameters, the charts, columns and buttons."""
+    query = " ".join(request.GET.get("q", "").split())[:MAX_QUERY]
+    context = {"query": query, "results": search(query) if query else [], "pages": _pages(), "max_results": MAX_RESULTS}
+    return render(request, "nrmps/help/search.html", context)
 
 
 @login_not_required

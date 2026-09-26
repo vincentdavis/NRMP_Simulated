@@ -13,6 +13,7 @@ from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.text import slugify
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django_htmx.http import trigger_client_event
 from pydantic import ValidationError
@@ -78,6 +79,52 @@ def task_health() -> dict[str, Any]:
         health["worker_last_seen_seconds"] = seconds
         health["worker"] = "ok" if seconds is not None and seconds <= WORKER_STALE_SECONDS else "missing"
     return health
+
+
+# Content Security Policy reports (plan step 5.1): at most this many bytes each, and each distinct violation is logged
+# once per process (the set is emptied when it reaches CSP_SEEN_MAX), so a page that breaks the policy on every view
+# cannot flood the logs.
+MAX_CSP_REPORT_BYTES = 10_000
+CSP_SEEN_MAX = 1000
+_csp_seen: set[tuple[str, str, str]] = set()
+
+
+def _report_field(report: dict[str, Any], *keys: str) -> str:
+    """Return the first of a CSP report's fields that is set, without its query string, at most 200 characters."""
+    value = next((str(report[key]) for key in keys if report.get(key) not in (None, "")), "")
+    return value.split("?", 1)[0][:200]
+
+
+@csrf_exempt
+@login_not_required
+@require_POST
+def csp_report(request):
+    """Log a Content Security Policy violation reported by a browser (the policy is report-only; settings.py)."""
+    if len(request.body) > MAX_CSP_REPORT_BYTES:
+        return HttpResponse(status=413)
+    try:
+        report = json.loads(request.body).get("csp-report")
+    except ValueError, AttributeError:
+        return HttpResponse(status=400)
+    if not isinstance(report, dict):
+        return HttpResponse(status=400)
+    directive = _report_field(report, "effective-directive", "violated-directive")
+    blocked = _report_field(report, "blocked-uri")
+    source = _report_field(report, "source-file")
+    key = (directive, blocked, source)
+    if key not in _csp_seen:
+        if len(_csp_seen) >= CSP_SEEN_MAX:
+            _csp_seen.clear()
+        _csp_seen.add(key)
+        logger.warning(
+            "CSP violation (report-only): %s blocked %s on %s (%s line %s)",
+            directive or "?",
+            blocked or "?",
+            _report_field(report, "document-uri") or "?",
+            source or "?",
+            _report_field(report, "line-number") or "?",
+        )
+    return HttpResponse(status=204)
 
 
 @login_not_required

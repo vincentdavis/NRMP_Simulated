@@ -1,0 +1,19 @@
+{% comment %}
+  The guide's menu (plan steps 4.4 and 5.1): a search box and the pages. Context: pages, current (the page's slug),
+  query (on the search page).
+{% endcomment %}
+<div class="lg:col-span-1 min-w-0 space-y-4">
+  <form role="search" method="get" action="{% url 'nrmps:help_search' %}" class="join w-full">
+    <label for="help-search" class="sr-only">Search the help</label>
+    <input type="search" id="help-search" name="q" value="{{ query|default:'' }}" maxlength="100"
+           class="input input-sm join-item w-full" placeholder="Search the help">
+    <button type="submit" class="btn btn-sm join-item">Search</button>
+  </form>
+  <nav aria-label="Help pages">
+    <ul class="menu bg-base-200 rounded-box w-full">
+      {% for page in pages %}
+        <li><a href="{{ page.url }}"{% if page.slug == current %} class="menu-active" aria-current="page"{% endif %}>{{ page.title }}</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+</div>

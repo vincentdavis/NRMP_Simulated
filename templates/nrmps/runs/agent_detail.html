@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load list_tags humanize help_tags %}
+{% load static list_tags humanize help_tags chart_tags %}
 {% block title %}{{ name }} - run {{ run.number }} - {{ simulation.name }}{% endblock %}
 {% block content %}
 <div class="mt-4">
@@ -59,6 +59,18 @@
         {% endif %}
       </div>
     </section>
+    {% if ego %}
+      <section class="card bg-base-100 shadow-xl mb-4" aria-labelledby="ego-title">
+        <div class="card-body">
+          <h2 id="ego-title" class="card-title">Applications by how far they got</h2>
+          {% if applicant %}
+            {% chart_figure ego "ego_applicant" "ego" height="h-96" %}
+          {% else %}
+            {% chart_figure ego "ego_program" "ego" height="h-96" %}
+          {% endif %}
+        </div>
+      </section>
+    {% endif %}
     <nav class="tabs tabs-box mb-4 w-fit" aria-label="Tables">
       <a class="tab{% if view == 'stages' %} tab-active{% else %} text-base-content{% endif %}" href="{% querystring view=None sort=None order=None page=None %}"{% if view == 'stages' %} aria-current="page"{% endif %}>
         {% if applicant %}Applications{% else %}Applications received{% endif %} ({{ journey.applied|intcomma }})
@@ -174,4 +186,11 @@
   {% endif %}
   {% include "nrmps/components/pagination.html" with label="Pages" %}
 </div>
+{% endblock %}
+{% block extra_js %}
+  {% if ego %}
+    <script src="{% static 'vendor/graphology/0.26.0/graphology.umd.min.js' %}"></script>
+    <script src="{% static 'vendor/sigma/3.0.3/sigma.min.js' %}"></script>
+    <script src="{% static 'js/nrmp-charts.js' %}"></script>
+  {% endif %}
 {% endblock %}

@@ -96,14 +96,29 @@ def test_a_server_error_is_reported_instead_of_ignored(logged_in_page, live, sim
     expect(page.locator("#toasts .alert-error")).to_contain_text("error 500")
 
 
-def test_dark_mode_toggle_persists(logged_in_page, live):
+def test_display_settings_persist(logged_in_page, live):
+    """The theme (the system's, light or dark) and patterns in charts are kept across pages (plan step 5.1)."""
     page = logged_in_page
     page.emulate_media(color_scheme="light")
     page.goto(f"{live}/simulations/")
-    page.get_by_role("button", name="Toggle dark mode").click()
+    page.get_by_role("button", name="Display settings").click()
+    settings = page.get_by_role("dialog", name="Display settings")
+    expect(settings.get_by_role("radio", name="Same as the system")).to_be_checked()
+    settings.get_by_role("radio", name="Dark").check()
     expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    settings.get_by_role("checkbox", name="Patterns as well as colours").check()
+    expect(page.locator("html")).to_have_attribute("data-chart-patterns", "on")
     page.reload()
     expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+    expect(page.locator("html")).to_have_attribute("data-chart-patterns", "on")
+    page.get_by_role("button", name="Display settings").click()
+    expect(settings.get_by_role("radio", name="Dark")).to_be_checked()
+    settings.get_by_role("radio", name="Same as the system").check()
+    expect(page.locator("html")).not_to_have_attribute("data-theme", "dark")
+    page.keyboard.press("Escape")
+    expect(settings).to_be_hidden()
+    page.reload()
+    assert page.evaluate("document.documentElement.dataset.theme") is None
 
 
 def test_the_setup_form_previews_edits_syncs_sliders_and_flags_unsaved_changes(logged_in_page, live, simulation):

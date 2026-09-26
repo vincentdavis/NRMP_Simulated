@@ -77,3 +77,10 @@ def test_internal_links_of_the_guide_resolve(client, simulation):
             if href.startswith("/static/"):
                 continue
             assert client.get(href).status_code in {200, 302}, (page.slug, href)
+
+
+def test_glossary_terms_can_be_linked_to(client):
+    """Each term of a definition list gets an id (plan step 5.1), so search results and links can point at it."""
+    body = client.get(reverse("nrmps:help_page", kwargs={"slug": "glossary"})).content.decode()
+    assert '<dt id="term-blocking-pair">Blocking pair</dt>' in body
+    assert body.count('<dt id="term-') == body.count("<dt")

@@ -5,13 +5,25 @@ import json
 import numpy as np
 import pytest
 from django.urls import reverse
+from django.utils.html import escape
 
-from nrmps.charts import digits, fit_check, funnel, gini, perception_samples, requested_histogram, run_charts
+from nrmps import help_registry
+from nrmps.charts import (
+    EGO_MAX_NODES,
+    digits,
+    ego_network,
+    fit_check,
+    funnel,
+    gini,
+    perception_samples,
+    requested_histogram,
+    run_charts,
+)
 from nrmps.engine.metrics import histogram
 from nrmps.engine.population import generate_population
 from nrmps.models import RunArtifact, SimulationRun
 from nrmps.params import SimulationParams
-from nrmps.runs import RunData
+from nrmps.runs import RunData, StageRows
 
 TIERS = [{"name": "top", "share": 0.2, "quality_mean": 1.5}, {"name": "rest", "share": 0.8, "quality_mean": -0.4}]
 
@@ -151,3 +163,86 @@ def test_runs_from_before_the_match_draw_the_population_charts(auth_client, fini
     charts = run_charts(RunData(finished_run))
     assert "funnel" not in charts
     assert charts["perception_applicants"]["payload"]["post"] is None
+
+
+# --- Plan step 5.1: the chart catalog and the network of one agent ---------------------------------------------------
+
+
+def test_every_chart_on_the_run_tabs_has_its_question_and_help(auth_client, finished_run):
+    """Captions and "?" popovers come from the chart catalog; each chart carries its colour role."""
+    kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number}
+    shown = set()
+    for view in ("nrmps:run_population", "nrmps:run_pre_interview", "nrmps:run_applications"):
+        body = auth_client.get(reverse(view, kwargs=kwargs)).content.decode()
+        for key, chart in help_registry.CHARTS.items():
+            if f'popovertarget="help-chart-{key.replace("_", "-")}"' in body:
+                shown.add(key)
+                assert escape(str(chart.title)) in body
+        assert 'data-series="program"' in body or view == "nrmps:run_applications"
+    assert shown == {key for key, chart in help_registry.CHARTS.items() if chart.tab != "agent"}
+
+
+def _stage_rows(**changes):
+    rows = StageRows.empty(10)
+    rows.applied[:8] = True
+    rows.wave[:5] = 1
+    rows.interviewed[:4] = True
+    rows.list_rank[:3] = [1, 2, 3]
+    rows.matched[1] = True
+    for name, value in changes.items():
+        setattr(rows, name, value)
+    return rows
+
+
+def test_the_network_places_each_application_at_the_stage_it_reached():
+    names = [f"Program {k}" for k in range(10)]
+    chart = ego_network(_stage_rows(), names, "Ann", applicant=True)
+    stages = dict(chart["payload"]["nodes"])
+    assert stages == {
+        "Program 1": 4,  # matched
+        "Program 0": 3,  # ranked, not matched
+        "Program 2": 3,
+        "Program 3": 2,  # interviewed, not ranked
+        "Program 4": 1,  # invited, no interview
+        "Program 5": 0,  # applied only
+        "Program 6": 0,
+        "Program 7": 0,
+    }
+    assert [node[1] for node in chart["payload"]["nodes"]] == sorted(stages.values(), reverse=True)
+    assert chart["summary"] == (
+        "Ann's 8 applications by how far each got: 1 matched; 2 ranked, not matched; 1 interviewed, not ranked; "
+        "1 invited, no interview; 3 not invited."
+    )
+    assert [item.get("count") for item in chart["legend"]] == [None, 3, 1, 1, 2, 1]
+    assert chart["legend"][0] == {"label": "This applicant", "dot": "viz-dot-series-1"}
+
+
+def test_the_network_of_a_program_and_its_limits():
+    names = [f"Applicant {k}" for k in range(10)]
+    chart = ego_network(_stage_rows(), names, "General", applicant=False)
+    assert chart["payload"]["side"] == "program"
+    assert chart["summary"].startswith("The 8 applications to General by how far each got")
+    assert ego_network(StageRows.empty(10), names, "Empty", applicant=False) is None
+
+
+def test_a_large_network_keeps_the_applications_that_got_furthest(monkeypatch):
+    monkeypatch.setattr("nrmps.charts.EGO_MAX_NODES", 5)
+    names = [f"Applicant {k}" for k in range(10)]
+    chart = ego_network(_stage_rows(), names, "General", applicant=False)
+    assert [node[1] for node in chart["payload"]["nodes"]] == [4, 3, 3, 2, 1]
+    assert chart["summary"].endswith("The network shows the 5 that got furthest.")
+    assert EGO_MAX_NODES >= 1000  # the real limit leaves room for large programs
+
+
+def test_the_agent_pages_embed_the_network_and_load_its_libraries(auth_client, finished_run):
+    kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number, "index": 1}
+    for view, key in (("nrmps:run_applicant", "ego_applicant"), ("nrmps:run_program", "ego_program")):
+        body = auth_client.get(reverse(view, kwargs=kwargs)).content.decode()
+        assert 'data-chart="ego"' in body
+        assert escape(str(help_registry.CHARTS[key].title)) in body
+        assert "vendor/sigma/3.0.3/sigma.min.js" in body
+        assert "vendor/graphology/0.26.0/graphology.umd.min.js" in body
+        assert "vendor/echarts" not in body  # a network page needs no chart library
+        side = key.removeprefix("ego_")
+        script = body.split(f'id="chart-ego-{side}" type="application/json">')[1].split("</script>")[0]
+        assert json.loads(script)["side"] == side

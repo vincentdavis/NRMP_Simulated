@@ -139,13 +139,15 @@ nrmps/
 ├── views.py              # public pages, simulation list, the simulation page, runs and uploads (HTMX)
 ├── run_views.py          # a run's tabs (summary, population, before interviews, applications with filters, match),
 │                         #   the applicant and program lists, one agent's stages, downloads
-├── charts.py             # payloads of the run page's diagnostic charts (drawn by static/js/nrmp-charts.js)
+├── charts.py             # chart payloads: the run tabs' charts, one agent's network (static/js/nrmp-charts.js)
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
 ├── help_views.py         # the /help/ guide pages and the staff-only developer reference
 ├── guide.py              # renders the guide: Markdown in help_content/, TeX formulas to MathML, shortcodes
 ├── help_content/         # the guide's pages (Markdown with front matter; {{value}} and [[block]] shortcodes)
-├── help_registry.py      # help for actions, table columns and pages ("?" popovers, Help panels)
-├── checks.py             # system checks of the help (nrmps.H001-H003)
+├── help_registry.py      # help for actions, table columns, pages and charts (the chart catalog: "?" popovers,
+│                         #   Help panels, the guide's chart section)
+├── help_search.py        # search of the help (/help/search/): guide sections, glossary, parameters, charts ...
+├── checks.py             # system checks of the help (nrmps.H001-H004)
 ├── ops_views.py          # staff-only /ops/: runs per day, failures, durations, queue, workers, quota use
 ├── accounts.py           # confirmation tokens and emails, the personal data export
 ├── versions.py           # version stamps stored with runs
@@ -157,20 +159,23 @@ nrmps/
 ├── management/commands/  # nrmp_run (the engine headless), nrmp_validate (validation report), seed_demo,
 │                         #   nrmp_worker (queued runs), nrmp_cleanup
 └── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link), format_tags
-                          #   (percent), help_tags (help_icon, page_help)
+                          #   (percent), help_tags (help_icon, page_help), chart_tags (chart_figure)
 templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/ (the run's tabs
                           #   extend runs/_layout.html), help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
-static/js/site.js         # toasts, confirmation dialog, HTMX errors, sliders, unsaved-changes guard, theme, list editors
-static/js/nrmp-charts.js  # draws [data-chart] elements with ECharts from json_script payloads (theme-aware)
-static/vendor/            # htmx, Alpine.js and ECharts by version (`npm run vendor` in theme/static_src)
+static/js/site.js         # toasts, confirmation dialog, HTMX errors, sliders, unsaved-changes guard, display
+                          #   settings (theme, chart patterns), autosubmit selects, list editors
+static/js/nrmp-charts.js  # the chart registry: draws [data-chart] elements (ECharts charts, sigma.js networks) from
+                          #   json_script payloads when they come into view; chart tokens, tip(), format.*
+static/vendor/            # htmx, Alpine.js, ECharts, sigma.js and graphology by version (`npm run vendor`)
 docs/                     # review, plan, status, deployment, model spec
 ```
 
 ### Technology Stack
 
 - Django 6.1 (LoginRequiredMiddleware, MAILERS email), SQLite for development, PostgreSQL in production (Railway)
-- HTMX + Alpine.js, Tailwind CSS 4 + daisyUI 5 (built by django-tailwind's npm project), Apache ECharts 6 (charts)
+- HTMX + Alpine.js, Tailwind CSS 4 + daisyUI 5 (built by django-tailwind's npm project), Apache ECharts 6 (charts),
+  sigma.js 3 + graphology (networks), all vendored; Django's Content Security Policy (report-only for now)
 - django-axes (login throttling), WhiteNoise (compressed, hashed static files), Logfire (only with a token)
 - Tests: pytest-django, hypothesis, Playwright + axe; ruff, mypy (django-stubs), codespell; GitHub Actions
 
@@ -184,10 +189,15 @@ docs/                     # review, plan, status, deployment, model spec
   `{% sort_th key label align help="table.column" %}` or `{% help_icon "column" "table.column" %}` in a `<th>`, and
   `{% help_icon "action" key %}` next to a button. New pages add a `PAGES` entry and `{% page_help key %}`. Never put
   a display class (card, flex, block) on an element with the `popover` attribute: it would show while closed.
-- Charts: add a payload in `nrmps/charts.py` and a figure with
-  `{% include "nrmps/components/chart_figure.html" with chart=... key=... kind=... title=... %}`; register new kinds
-  in `static/js/nrmp-charts.js`. Every chart needs a summary sentence (and a table where the numbers matter), and
-  tooltip text must go through `NRMPCharts.escape`.
+- Charts: add a payload in `nrmps/charts.py`, an entry in the chart catalog (`help_registry.CHARTS`: the question
+  it answers, what it shows, how to read it), and a figure with `{% load chart_tags %}{% chart_figure chart "key"
+  "kind" %}`; register new kinds in `static/js/nrmp-charts.js` (ECharts, or `{engine: "sigma"}` for networks). Every
+  chart needs a summary sentence (and a table where the numbers matter). Build tooltips with `tip()` (it escapes
+  every value; names come from uploaded files) and numbers with `format.*`; take colours from the tokens
+  (`--viz-*` in styles.css), never hard-coded.
+- Scripts are static files: no inline `<script>` (except with `nonce="{{ csp_nonce }}"`) and no inline event
+  handlers (`onchange=`); the Content Security Policy (report-only, enforced from step 5.5) would block them, and
+  every browser test fails on a violation.
 
 **Code Style**:
 - Line length: 120 characters

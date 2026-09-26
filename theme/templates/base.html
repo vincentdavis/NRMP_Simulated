@@ -8,7 +8,7 @@
     <title>{% block title %}NRMP Simulations{% endblock %}</title>
     <link rel="icon" type="image/png" href="{% static 'NRMP_Simulations_favcon.png' %}">
     {# Apply a saved light/dark choice before first paint; without one, daisyUI follows the system setting. #}
-    <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+    <script nonce="{{ csp_nonce }}">try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
     {% tailwind_css %}
     {% block extra_head %}{% endblock %}
 </head>
@@ -52,13 +52,32 @@
         </nav>
 
         <div class="navbar-end gap-2">
-            <button type="button" class="btn btn-ghost btn-sm" data-theme-toggle aria-pressed="false"
-                    aria-label="Toggle dark mode" title="Toggle dark mode">
+            {# Display settings (plan step 5.1): the theme (the system's, light or dark) and patterns in charts, kept in #}
+            {# the browser by static/js/site.js. A popover, like the help: Escape or a click outside closes it. #}
+            <button type="button" class="btn btn-ghost btn-sm" popovertarget="display-settings"
+                    style="anchor-name: --display-settings" aria-label="Display settings" title="Display settings">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                           d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
                 </svg>
             </button>
+            <div id="display-settings" popover class="help-popover m-auto p-0 bg-transparent w-64 max-w-[85vw]"
+                 style="position-anchor: --display-settings" role="dialog" aria-label="Display settings">
+                <div class="card card-sm bg-base-100 border border-base-300 shadow-lg">
+                    <div class="card-body text-sm">
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Theme</legend>
+                            <label class="flex items-center gap-2 cursor-pointer" for="display-theme-system"><input type="radio" id="display-theme-system" name="display-theme" value="system" class="radio radio-sm" data-display-theme> Same as the system</label>
+                            <label class="flex items-center gap-2 cursor-pointer" for="display-theme-light"><input type="radio" id="display-theme-light" name="display-theme" value="light" class="radio radio-sm" data-display-theme> Light</label>
+                            <label class="flex items-center gap-2 cursor-pointer" for="display-theme-dark"><input type="radio" id="display-theme-dark" name="display-theme" value="dark" class="radio radio-sm" data-display-theme> Dark</label>
+                        </fieldset>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Charts</legend>
+                            <label class="flex items-center gap-2 cursor-pointer" for="display-patterns"><input type="checkbox" id="display-patterns" class="checkbox checkbox-sm" data-display-patterns> Patterns as well as colours</label>
+                        </fieldset>
+                    </div>
+                </div>
+            </div>
             {% if request.user.is_authenticated %}
                 <span class="text-sm hidden sm:inline">{{ request.user.get_username }}</span>
                 <form method="post" action="{% url 'nrmps:logout' %}">

@@ -1,24 +1,30 @@
-{% load humanize format_tags %}
+{% load humanize format_tags help_tags %}
 {% comment %}
-  One diagnostic chart (plan step 3.8), drawn by static/js/nrmp-charts.js from a json_script payload. The summary
-  sentence describes the chart for screen readers and shows below it, and "The numbers" gives its data as a table,
-  so nothing depends on the drawing. Parameters: chart (from nrmps.charts: payload, summary, rows, digits), key
-  (unique id), kind (histogram, scatter, demand, lorenz, funnel), title, table (histogram, demand, funnel or empty),
-  height (a Tailwind height class), x_label and y_label (axis names), payload (id of a payload written by another
-  figure, to reuse it).
+  One chart (plan steps 3.8 and 5.1), rendered by {% chart_figure %} (nrmps/templatetags/chart_tags.py) and drawn by
+  static/js/nrmp-charts.js from a json_script payload. The caption and the "?" help come from the chart catalog
+  (help_registry.CHARTS). The summary sentence describes the chart for screen readers and shows below it; a key lists
+  a network's colours with their counts, and "The numbers" gives the data as a table, so nothing depends on the
+  drawing. Context: chart (payload, summary, rows, digits, legend), key, kind, entry, element_id, table, height,
+  x_label, y_label, payload.
 {% endcomment %}
-{% with element_id="chart-"|add:key %}
 <figure class="block w-full min-w-0">
-  <figcaption class="font-medium">{{ title }}</figcaption>
+  <figcaption class="font-medium">{{ entry.title }} {% help_icon "chart" key %}</figcaption>
   {% if not payload %}{{ chart.payload|json_script:element_id }}{% endif %}
-  <div class="{{ height|default:'h-64' }} w-full" data-chart="{{ kind }}" data-payload="{{ payload|default:element_id }}"
+  <div class="{{ height }} w-full" data-chart="{{ kind }}" data-payload="{{ payload|default:element_id }}" data-series="{{ entry.side }}"
        {% if x_label %}data-x-label="{{ x_label }}"{% endif %} {% if y_label %}data-y-label="{{ y_label }}"{% endif %}
-       role="img" aria-label="{{ title }}" aria-describedby="{{ element_id }}-summary"></div>
+       role="img" aria-label="{{ entry.title }}" aria-describedby="{{ element_id }}-summary"></div>
   <p id="{{ element_id }}-summary" class="text-sm text-base-content/70">{{ chart.summary }}</p>
+  {% if chart.legend %}
+    <ul class="flex flex-wrap gap-x-4 gap-y-1 text-sm mt-1" aria-label="Key">
+      {% for item in chart.legend %}
+        <li><span class="viz-dot {{ item.dot }}" aria-hidden="true"></span> {{ item.label }}{% if "count" in item %}: {{ item.count|intcomma }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
   {% if table and chart.rows %}
     <details class="collapse collapse-arrow bg-base-200 mt-2">
       <summary class="collapse-title text-sm font-medium">The numbers</summary>
-      <div class="collapse-content overflow-x-auto" tabindex="0" role="region" aria-label="{{ title }}: the numbers">
+      <div class="collapse-content overflow-x-auto" tabindex="0" role="region" aria-label="{{ entry.title }}: the numbers">
         <table class="table table-xs">
           {% if table == "histogram" %}
             <thead><tr><th scope="col" class="text-right">From</th><th scope="col" class="text-right">To</th><th scope="col" class="text-right">Count</th>{% if chart.deviation is not None %}<th scope="col" class="text-right">Requested</th>{% endif %}</tr></thead>
@@ -53,4 +59,3 @@
     </details>
   {% endif %}
 </figure>
-{% endwith %}

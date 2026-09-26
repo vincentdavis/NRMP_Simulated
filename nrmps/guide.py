@@ -7,8 +7,8 @@ TeX between dollar signs are turned into MathML, which browsers display and scre
 Pages can use two kinds of shortcode, so numbers come from the code rather than being copied into the text:
 
 - `{{name}}` inline: a value such as the default market size (VALUES);
-- `[[name]]` alone in a paragraph: a block of HTML such as the parameter reference or a worked example computed by
-  the engine (BLOCKS).
+- `[[name]]` alone in a paragraph: a block of HTML such as the parameter reference, the chart catalog or a worked
+  example computed by the engine (BLOCKS).
 """
 
 import functools
@@ -23,6 +23,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.templatetags.static import static
 from django.utils.safestring import SafeString, mark_safe
+from django.utils.text import slugify
 from latex2mathml.converter import convert as tex_to_mathml
 from markdown_it import MarkdownIt
 from mdit_py_plugins.anchors import anchors_plugin
@@ -166,8 +167,30 @@ def _worked_example() -> str:
     return render_to_string("nrmps/help/_worked_example.html", {"example": worked_example()})
 
 
+def chart_catalog() -> list[dict[str, object]]:
+    """Return the chart catalog grouped by where the charts appear, in the order of help_registry.CHART_PLACES."""
+    from . import help_registry
+
+    return [
+        {
+            "title": title,
+            "charts": [
+                {"key": key, "anchor": help_registry.chart_anchor(key), "entry": entry}
+                for key, entry in help_registry.CHARTS.items()
+                if entry.tab == place
+            ],
+        }
+        for place, title in help_registry.CHART_PLACES.items()
+    ]
+
+
+def _chart_catalog() -> str:
+    return render_to_string("nrmps/help/_chart_catalog.html", {"places": chart_catalog()})
+
+
 BLOCKS: dict[str, Callable[[], str]] = {
     "param_reference": _param_reference,
+    "chart_catalog": _chart_catalog,
     "worked_example": _worked_example,
 }
 
@@ -179,6 +202,21 @@ def apply_values(text: str) -> str:
         return VALUES[match.group(1)]()
 
     return re.sub(r"\{\{\s*([a-z_]+)\s*\}\}", value, text)
+
+
+def _term_ids(rendered: str) -> str:
+    """Give each term of a definition list (the glossary) an id, "term-<slug>", so it can be linked to."""
+    taken: set[str] = set()
+
+    def term(match: re.Match[str]) -> str:
+        base = "term-" + (slugify(html.unescape(re.sub(r"<[^>]+>", " ", match.group(1)))) or "entry")
+        anchor, n = base, 2
+        while anchor in taken:
+            anchor, n = f"{base}-{n}", n + 1
+        taken.add(anchor)
+        return f'<dt id="{anchor}">{match.group(1)}</dt>'
+
+    return re.sub(r"<dt>(.*?)</dt>", term, rendered, flags=re.DOTALL)
 
 
 def _apply_blocks(rendered: str) -> str:
@@ -195,7 +233,7 @@ def render_page(slug: str) -> RenderedPage:
     if page is None:
         raise KeyError(slug)
     text = (CONTENT / f"{slug}.md").read_text(encoding="utf-8")
-    rendered = _apply_blocks(_markdown().render(apply_values(text)))
+    rendered = _apply_blocks(_term_ids(_markdown().render(apply_values(text))))
     # A wide formula scrolls sideways on a small screen, so keyboard users must be able to focus it.
     rendered = rendered.replace('<div class="math block">', '<div class="math block" tabindex="0">')
     sections = [

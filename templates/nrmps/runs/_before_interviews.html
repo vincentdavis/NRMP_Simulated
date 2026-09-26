@@ -1,4 +1,4 @@
-{% load humanize %}
+{% load humanize chart_tags %}
 {% comment %}The pre-interview diagnostics (docs/model_spec.md §10). Context: metrics, charts.{% endcomment %}
 <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="diagnostics-title">
   <div class="card-body">
@@ -30,13 +30,13 @@
     </div>
     {% if charts %}
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
-        {% if charts.applicant_fidelity %}{% include "nrmps/components/chart_figure.html" with chart=charts.applicant_fidelity key="applicant-fidelity" kind="histogram" title="How well does each applicant know their true order?" table="histogram" x_label="Rank correlation, true and pre-interview order" y_label="Applicants" %}{% endif %}
-        {% if charts.program_fidelity %}{% include "nrmps/components/chart_figure.html" with chart=charts.program_fidelity key="program-fidelity" kind="histogram" title="How well does each program know its true order?" table="histogram" x_label="Rank correlation, true and pre-interview order" y_label="Programs" %}{% endif %}
-        {% include "nrmps/components/chart_figure.html" with chart=charts.perception_applicants key="perception-applicants" kind="scatter" title="How accurately do applicants see programs?" height="h-72" %}
-        {% include "nrmps/components/chart_figure.html" with chart=charts.perception_programs key="perception-programs" kind="scatter" title="How accurately do programs see applicants?" height="h-72" %}
+        {% if charts.applicant_fidelity %}{% chart_figure charts.applicant_fidelity "applicant_fidelity" "histogram" table="histogram" x_label="Rank correlation, true and pre-interview order" y_label="Applicants" %}{% endif %}
+        {% if charts.program_fidelity %}{% chart_figure charts.program_fidelity "program_fidelity" "histogram" table="histogram" x_label="Rank correlation, true and pre-interview order" y_label="Programs" %}{% endif %}
+        {% chart_figure charts.perception_applicants "perception_applicants" "scatter" height="h-72" %}
+        {% chart_figure charts.perception_programs "perception_programs" "scatter" height="h-72" %}
         {% if charts.demand %}
-          {% include "nrmps/components/chart_figure.html" with chart=charts.demand key="demand" kind="demand" title="Is demand concentrated on a few programs?" table="demand" height="h-72" %}
-          {% include "nrmps/components/chart_figure.html" with chart=charts.lorenz key="lorenz" kind="lorenz" payload="chart-demand" title="How unequal is first-choice demand?" height="h-72" %}
+          {% chart_figure charts.demand "demand" "demand" table="demand" height="h-72" %}
+          {% chart_figure charts.lorenz "lorenz" "lorenz" payload="chart-demand" height="h-72" %}
         {% endif %}
       </div>
     {% endif %}

@@ -1,10 +1,12 @@
 """The help registry (plan step 4.3): what every action, table column and page means, in one place.
 
 Parameters are described by the typed schema (`nrmps.params`: title, description, unit, range, default), so the
-registry covers the rest: ACTIONS (buttons that change something), COLUMNS (table columns, keyed "table.column") and
-PAGES (the Help panel of each page). The "?" popovers and the Help panels read it (`nrmps.templatetags.help_tags`),
-and `nrmps.checks` verifies it at start-up: every parameter has a description, every page lists only known actions
-and columns, and every "Learn more" link points at a section of the help page. Strings are marked for translation.
+registry covers the rest: ACTIONS (buttons that change something), COLUMNS (table columns, keyed "table.column"),
+PAGES (the Help panel of each page) and CHARTS (the chart catalog, plan step 5.1: what each chart shows and how to
+read it). The "?" popovers, the Help panels and the guide's chart section read it (`nrmps.templatetags.help_tags`,
+`nrmps.guide`), and `nrmps.checks` verifies it at start-up: every parameter has a description, every page lists only
+known actions and columns, every chart is fully described, and every "Learn more" link points at a section of the
+help. Strings are marked for translation.
 """
 
 from dataclasses import dataclass, field
@@ -376,6 +378,195 @@ PAGES: dict[str, PageHelp] = {
         more="results",
     ),
 }
+
+
+@dataclass(frozen=True)
+class ChartHelp:
+    """One chart of the catalog (VIZ-19, HELP-25): the question it answers, what it shows, how to read it."""
+
+    title: Text  # the question the chart answers, also its caption
+    what: Text
+    how: Text
+    caveats: Text = ""
+    tab: str = ""  # where it appears: a key of CHART_PLACES
+    side: str = "applicant"  # the colour of a one-sided chart: "applicant" or "program"
+
+    @property
+    def text(self) -> str:
+        """Return the popover text: what the chart shows, how to read it and its caveats."""
+        return " ".join(str(part) for part in (self.what, self.how, self.caveats) if part)
+
+
+# Where the charts appear, in the order the guide lists them.
+CHART_PLACES: dict[str, Text] = {
+    "population": _("Population tab"),
+    "pre_interview": _("Before interviews tab"),
+    "applications": _("Applications and interviews tab"),
+    "agent": _("One applicant's or program's page"),
+}
+
+CHARTS: dict[str, ChartHelp] = {
+    "strength": ChartHelp(
+        _("Did the generator produce the applicants asked for?"),
+        _(
+            "A histogram of applicant strength (z-scores) in this run. When the applicants were generated, a line "
+            "shows the counts the parameters ask for: the mixture of the applicant groups' normal distributions."
+        ),
+        _(
+            "Bars that follow the line mean the population is what the parameters describe. The summary gives the "
+            "largest deviation in standard errors; above 4, the generator did not produce what was asked."
+        ),
+        _("Uploaded applicants have no line: their strengths are given, not drawn."),
+        tab="population",
+    ),
+    "quality": ChartHelp(
+        _("Did the generator produce the programs asked for?"),
+        _(
+            "A histogram of program quality (z-scores) in this run, with the counts the parameters ask for (the "
+            "tiers' normal distributions, or one normal distribution without tiers) when the programs were generated."
+        ),
+        _("Bars that follow the line mean the programs are what the parameters describe."),
+        _("Uploaded programs have no line: their qualities are given, not drawn."),
+        tab="population",
+        side="program",
+    ),
+    "capacity": ChartHelp(
+        _("How are the positions spread over programs?"),
+        _("How many programs have each number of positions."),
+        _(
+            "A long right tail means a few large programs hold many of the positions. The key numbers above give the "
+            "median and the range."
+        ),
+        tab="population",
+        side="program",
+    ),
+    "applicant_fidelity": ChartHelp(
+        _("How well does each applicant know their true order?"),
+        _(
+            "For each applicant, the rank correlation (Spearman) between their true ordering of every program and "
+            "their view of it before interviews."
+        ),
+        _(
+            "1 is a perfect view; values near 0 mean the pre-interview view says little about the truth. The spread "
+            "shows how unevenly information falls among applicants."
+        ),
+        _("Before interviews only: interviews reveal more, as the Applications and interviews tab shows."),
+        tab="pre_interview",
+    ),
+    "program_fidelity": ChartHelp(
+        _("How well does each program know its true order?"),
+        _(
+            "For each program, the rank correlation (Spearman) between its true ordering of every applicant and its "
+            "view of it before interviews."
+        ),
+        _("1 is a perfect view; values near 0 mean the pre-interview view says little about the truth."),
+        _("Before interviews only: interviews reveal more, as the Applications and interviews tab shows."),
+        tab="pre_interview",
+        side="program",
+    ),
+    "perception_applicants": ChartHelp(
+        _("How accurately do applicants see programs?"),
+        _(
+            "True against observed utility for a sample of applicant\u2013program pairs: before interviews, the true "
+            "utility against the pre-interview view; after interviews, for a sample of interviews, the realised "
+            "utility against the view after the interview."
+        ),
+        _(
+            "Points on the dashed line are seen exactly; the wider the cloud around it, the noisier the view. The "
+            "summary gives each cloud's correlation."
+        ),
+        _("A sample of at most 1,500 points per series, the same on every visit (drawn from the run's seed)."),
+        tab="pre_interview",
+    ),
+    "perception_programs": ChartHelp(
+        _("How accurately do programs see applicants?"),
+        _(
+            "True against observed utility for a sample of program\u2013applicant pairs, before interviews and (for a "
+            "sample of interviews) after them."
+        ),
+        _(
+            "Points on the dashed line are seen exactly; the wider the cloud around it, the noisier the view. The "
+            "summary gives each cloud's correlation."
+        ),
+        _("A sample of at most 1,500 points per series, the same on every visit (drawn from the run's seed)."),
+        tab="pre_interview",
+        side="program",
+    ),
+    "demand": ChartHelp(
+        _("Is demand concentrated on a few programs?"),
+        _(
+            "How many applicants rank each program first before interviews, most wanted first, with each program's "
+            "number of positions as a mark."
+        ),
+        _(
+            "Bars far above their mark are programs many more applicants want than they can take. With many "
+            "programs, zoom with the slider under the chart."
+        ),
+        _("First choices before interviews, not the final rank order lists."),
+        tab="pre_interview",
+        side="program",
+    ),
+    "lorenz": ChartHelp(
+        _("How unequal is first-choice demand?"),
+        _(
+            "The Lorenz curve of first-choice demand: programs from the least to the most wanted, against their "
+            "cumulative share of first choices."
+        ),
+        _(
+            "The dashed diagonal is equal demand; the further the curve sags below it, the more concentrated demand "
+            "is. The Gini coefficient in the summary is twice the area between them (0 = equal, 1 = everyone wants "
+            "the same program)."
+        ),
+        tab="pre_interview",
+        side="program",
+    ),
+    "funnel": ChartHelp(
+        _("Where do applications drop out?"),
+        _(
+            "Every application through the stages: invited to interview or not, interviewed or not (declined, or "
+            "over the applicant's interview cap), on the applicant's rank order list or not, matched or not."
+        ),
+        _("Each band's width is a number of applications; hover a band for its count and share. Grey marks drop-offs."),
+        _("It counts applications (applicant\u2013program pairs), not applicants."),
+        tab="applications",
+    ),
+    "ego_applicant": ChartHelp(
+        _("How far did each of this applicant's applications get?"),
+        _(
+            "Every program the applicant applied to, on rings by how far the application got: applied only on the "
+            "outer ring, then invited, interviewed and ranked, and the match in the middle."
+        ),
+        _("Hover a program for its name. The table below lists every application with its details."),
+        _("Ranked means the applicant ranked the program; whether the program ranked them is in the table."),
+        tab="agent",
+    ),
+    "ego_program": ChartHelp(
+        _("How far did each application to this program get?"),
+        _(
+            "Every applicant who applied to the program, on rings by how far the application got: applied only on "
+            "the outer ring, then invited, interviewed and ranked, and the matches in the middle."
+        ),
+        _("Hover an applicant for their name. The table below lists every application with its details."),
+        _("Ranked means the program ranked the applicant; whether the applicant ranked it is in the table."),
+        tab="agent",
+        side="program",
+    ),
+}
+
+
+def chart(key: str) -> ChartHelp:
+    """Return a chart's catalog entry; raise KeyError for a chart the catalog does not describe."""
+    return CHARTS[key]
+
+
+def chart_anchor(key: str) -> str:
+    """Return the id of a chart's entry in the guide's chart section."""
+    return "chart-" + key.replace("_", "-")
+
+
+def chart_target(key: str) -> str:
+    """Return the help target of a chart's entry in the guide."""
+    return f"results#{chart_anchor(key)}"
 
 
 def column(key: str) -> HelpEntry:

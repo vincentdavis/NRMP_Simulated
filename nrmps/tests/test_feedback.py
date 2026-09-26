@@ -74,4 +74,6 @@ def test_theme_is_not_forced_to_light(client):
     """daisyUI follows the system theme unless the visitor chose one (UX-23)."""
     body = client.get(reverse("nrmps:index")).content.decode()
     assert 'data-theme="light"' not in body
-    assert "data-theme-toggle" in body
+    assert 'popovertarget="display-settings"' in body
+    for value in ("system", "light", "dark"):
+        assert f'name="display-theme" value="{value}"' in body

@@ -1,0 +1,16 @@
+{% comment %}
+  The chart catalog in the guide (plan step 5.1; nrmps.guide.chart_catalog): every chart, grouped by where it
+  appears, with the question it answers, what it shows, how to read it and its caveats. The "?" popovers beside the
+  charts link to these entries (help_registry.chart_target), so the text is written once.
+{% endcomment %}
+{% for place in places %}
+  <h3 class="text-lg font-semibold mt-6 mb-2">{{ place.title }}</h3>
+  {% for chart in place.charts %}
+    <section id="{{ chart.anchor }}" class="mb-4 max-w-prose scroll-mt-4" aria-labelledby="{{ chart.anchor }}-title">
+      <h4 id="{{ chart.anchor }}-title" class="font-semibold">{{ chart.entry.title }}</h4>
+      <p>{{ chart.entry.what }}</p>
+      <p><span class="font-medium">How to read it:</span> {{ chart.entry.how }}</p>
+      {% if chart.entry.caveats %}<p class="text-base-content/70"><span class="font-medium">Note:</span> {{ chart.entry.caveats }}</p>{% endif %}
+    </section>
+  {% endfor %}
+{% endfor %}

@@ -2,6 +2,7 @@
 
 import pytest
 from axe_playwright_python.sync_playwright import Axe
+from playwright.sync_api import expect
 
 from nrmps.guide import guide_pages
 
@@ -16,6 +17,7 @@ PUBLIC = [
     "/signup/",
     # Every page of the guide (plan step 4.7: a new page is checked without editing this list).
     *(f"/help/{page.slug}/" if page.slug != "index" else "/help/" for page in guide_pages()),
+    "/help/search/?q=interview",
     "/account/password/reset/",
     "/account/password/reset/sent/",
 ]
@@ -90,18 +92,30 @@ def test_private_pages_have_no_serious_accessibility_violations(logged_in_page, 
     assert _serious_violations(page) == []
 
 
+def _draw_every_chart(page, count: int) -> None:
+    """Scroll each chart into view (they are drawn when they come near the screen) and wait until it is drawn."""
+    charts = page.locator("[data-chart]")
+    assert charts.count() == count
+    for k in range(count):
+        charts.nth(k).scroll_into_view_if_needed()
+        expect(charts.nth(k).locator("canvas").first).to_be_attached()
+    assert page.locator("[data-chart-failed]").count() == 0
+
+
 @pytest.mark.parametrize(("tab", "count"), [("population", 3), ("before-interviews", 6), ("applications", 1)])
 def test_the_run_tabs_draw_every_chart_without_script_errors(logged_in_page, live, worked_simulation, tab, count):
-    """ECharts draws each diagnostic chart (plan step 3.8), and again after the theme changes."""
+    """ECharts draws each chart as it comes into view (plan steps 3.8, 5.1), and again after the theme changes."""
     page = logged_in_page
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/{tab}/")
-    assert page.locator("[data-chart]").count() == count
-    page.wait_for_function(f"document.querySelectorAll('[data-chart] canvas').length === {count}")
+    _draw_every_chart(page, count)
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     page.wait_for_timeout(200)
-    assert page.locator("[data-chart] canvas").count() == count
+    assert page.locator("[data-chart] canvas").count() >= count
+    # ECharts leaves the page's own label alone: each chart is named by its caption, the catalog's question.
+    labels = page.locator("[data-chart]").evaluate_all("els => els.map((el) => el.getAttribute('aria-label') || '')")
+    assert all(label.endswith("?") for label in labels), labels
     assert errors == []
     page.set_viewport_size(PHONE)
     page.wait_for_timeout(200)
@@ -134,3 +148,21 @@ def test_dark_theme_has_no_serious_accessibility_violations(logged_in_page, live
     page.emulate_media(color_scheme="dark")
     page.goto(live + path.format(pk=worked_simulation.pk))
     assert _serious_violations(page) == []
+
+
+@pytest.mark.parametrize("side", ["applicants", "programs"])
+def test_an_agents_page_draws_its_applications_as_a_network(logged_in_page, live, worked_simulation, side):
+    """sigma.js draws one agent's applications by stage (plan step 5.1), again after the theme changes."""
+    page = logged_in_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/{side}/1/")
+    _draw_every_chart(page, 1)
+    network = page.locator('[data-chart="ego"]')
+    assert network.get_attribute("aria-label", timeout=1000).endswith("?")
+    assert page.get_by_role("list", name="Key").get_by_role("listitem").count() == 6
+    page.evaluate("document.documentElement.dataset.theme = 'dark'")
+    page.wait_for_timeout(200)
+    expect(network.locator("canvas").first).to_be_attached()
+    assert page.locator("[data-chart-failed]").count() == 0
+    assert errors == []

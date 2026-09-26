@@ -6,13 +6,7 @@
 {% block title %}{% if rendered.page.slug != "index" %}{{ rendered.page.title }} - {% endif %}Help - NRMP Simulations{% endblock %}
 {% block content %}
 <div class="py-4 grid grid-cols-1 lg:grid-cols-4 gap-8">
-  <nav aria-label="Help pages" class="lg:col-span-1 min-w-0">
-    <ul class="menu bg-base-200 rounded-box w-full">
-      {% for page in pages %}
-        <li><a href="{{ page.url }}"{% if page.slug == rendered.page.slug %} class="menu-active" aria-current="page"{% endif %}>{{ page.title }}</a></li>
-      {% endfor %}
-    </ul>
-  </nav>
+  {% include "nrmps/help/_menu.html" with current=rendered.page.slug %}
   <article class="lg:col-span-3 min-w-0 help-prose">
     <h1 class="text-3xl font-bold mb-2">{{ rendered.page.title }}</h1>
     {% if rendered.page.summary %}<p class="text-base-content/80 mb-4">{{ summary }}</p>{% endif %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% comment %}
+  Search results in the help (plan step 5.1; nrmps.help_search): every entry that contains all the words, the most
+  relevant first. Context: query, results (entry: title, text, url, kind; snippet), pages, max_results.
+{% endcomment %}
+{% block title %}{% if query %}“{{ query }}” - {% endif %}Search the help - NRMP Simulations{% endblock %}
+{% block content %}
+<div class="py-4 grid grid-cols-1 lg:grid-cols-4 gap-8">
+  {% include "nrmps/help/_menu.html" with current="" %}
+  <section class="lg:col-span-3 min-w-0" aria-labelledby="search-title">
+    <h1 id="search-title" class="text-3xl font-bold mb-2">Search the help</h1>
+    {% if not query %}
+      <p>Type a word or two, such as <em>signal</em>, <em>blocking pair</em> or <em>noise</em>. The search
+        covers the guide, the glossary, every parameter, the charts, and the columns and buttons of the pages.</p>
+    {% elif results %}
+      <p class="text-base-content/80 mb-4">
+        {% if results|length >= max_results %}The first {{ results|length }}{% else %}{{ results|length }}{% endif %}
+        result{{ results|length|pluralize }} for “{{ query }}”.
+      </p>
+      <ol class="space-y-4">
+        {% for result in results %}
+          <li>
+            <p><span class="badge badge-outline badge-sm align-middle">{{ result.entry.kind }}</span>
+              <a class="link font-medium" href="{{ result.entry.url }}">{{ result.entry.title }}</a></p>
+            {% if result.snippet %}<p class="text-sm text-base-content/80 max-w-prose break-words">{{ result.snippet }}</p>{% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p>Nothing in the help mentions “{{ query }}”. Try fewer words, or another word for the same thing; the
+        <a class="link" href="{% url 'nrmps:help_page' slug='glossary' %}">glossary</a> lists the words the simulator uses.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

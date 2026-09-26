@@ -8,6 +8,7 @@ app_name = "nrmps"
 urlpatterns = [
     path("", views.index, name="index"),
     path("healthz", views.healthz, name="healthz"),
+    path("csp-report/", views.csp_report, name="csp_report"),
     # Auth routes
     path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
@@ -66,6 +67,7 @@ urlpatterns = [
     path("terms/", views.terms, name="terms"),
     path("help/", help_views.help_index, name="help"),
     path("help/developer/", help_views.developer_reference, name="developer_reference"),
+    path("help/search/", help_views.help_search, name="help_search"),
     path("help/<slug:slug>/", help_views.help_page, name="help_page"),
     path("ops/", ops_views.ops, name="ops"),
     path("documentation/", help_views.documentation_redirect, name="documentation"),

@@ -97,6 +97,13 @@ Once HTTPS is confirmed everywhere, raise `SECURE_HSTS_SECONDS` to `31536000`. S
 purpose, so their deploy-check warnings (`security.W005`, `security.W021`) are silenced in the settings; CI runs
 `manage.py check --deploy --fail-level WARNING`, so any other warning fails the build.
 
+**Content Security Policy.** Every response carries a report-only policy (`SECURE_CSP_REPORT_ONLY` in the settings):
+scripts, styles, images and connections from the site itself only, one nonce'd inline script, no frames. Nothing is
+blocked yet; browsers report what the policy would block to `/csp-report/`, and the app logs each distinct violation
+once per process as a warning ("CSP violation (report-only): ..."), in the logs and Logfire. A report there after a
+deploy is worth a look: it is either a page that would break once the policy is enforced (plan step 5.5) or a
+browser extension. Libraries are vendored under `static/vendor/`; nothing loads from a CDN.
+
 ## Email
 
 Email confirmation links and password-reset links need outgoing email. Set, for any SMTP provider (Postmark,

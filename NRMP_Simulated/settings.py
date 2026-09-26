@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.csp import CSP
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -119,6 +120,7 @@ if DEBUG:
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # Static files for production
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -153,6 +155,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.csp",
                 "nrmps.context_processors.site",
             ],
         },
@@ -359,6 +362,26 @@ if not DEBUG:
     # `check --deploy` warning fails CI.
     SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "3600"))
     SILENCED_SYSTEM_CHECKS = ["security.W005", "security.W021"]
+
+
+# Content Security Policy (plan step 5.1, ENG-22), report-only for now: browsers report what the policy would block to
+# /csp-report/ (logged by nrmps.views.csp_report) and block nothing. Step 5.5 enforces it (SECURE_CSP) once the list
+# editors use Alpine's CSP build, which lets 'unsafe-eval' go. Every script is a static file; the one inline script
+# (the theme, in theme/templates/base.html) carries the request's nonce. Style attributes stay allowed (the help
+# popovers' anchor positioning, bar widths). Libraries are vendored, never loaded from a CDN.
+SECURE_CSP_REPORT_ONLY = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF, CSP.NONCE, CSP.UNSAFE_EVAL, CSP.REPORT_SAMPLE],
+    "style-src": [CSP.SELF, CSP.UNSAFE_INLINE],
+    "img-src": [CSP.SELF, "data:"],
+    "font-src": [CSP.SELF],
+    "connect-src": [CSP.SELF],
+    "object-src": [CSP.NONE],
+    "base-uri": [CSP.SELF],
+    "form-action": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+    "report-uri": ["/csp-report/"],
+}
 
 
 # Logging. Logfire is used in production only, and only sends data when a token is configured.

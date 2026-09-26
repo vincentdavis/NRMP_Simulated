@@ -1,6 +1,7 @@
-// Site-wide behaviour: toasts, the confirmation dialog, HTMX error reporting, sliders, the unsaved-changes guard and
-// the theme toggle.
-// Loaded on every page after htmx. Text is always inserted with textContent, never as HTML.
+// Site-wide behaviour: toasts, the confirmation dialog, HTMX error reporting, sliders, the unsaved-changes guard,
+// selects that submit their form, and the display settings (theme and chart patterns).
+// Loaded on every page after htmx. Text is always inserted with textContent, never as HTML. There are no inline
+// event handlers (onchange="..."): the Content Security Policy would block them, so behaviour lives here.
 (function () {
   "use strict";
 
@@ -140,6 +141,12 @@
     event.returnValue = "";
   });
 
+  // --- Selects that submit their form (rows per page) -------------------------------------------------------------
+  document.addEventListener("change", (event) => {
+    const select = event.target instanceof Element ? event.target.closest("select[data-autosubmit]") : null;
+    if (select && select.form) select.form.submit();
+  });
+
   // --- List editors (formsets) ---------------------------------------------------------------------------------
   // Alpine component for the parameter tables: "Add row" copies the formset's empty form, numbered with the next
   // index, and raises TOTAL_FORMS; the server validates everything, so this is only a convenience.
@@ -165,25 +172,56 @@
     };
   };
 
-  // --- Theme toggle ---------------------------------------------------------------------------------------------
-  // The saved choice is applied before first paint by a small script in <head>; without one, daisyUI follows the
-  // system preference.
-  function currentTheme() {
-    const explicit = document.documentElement.dataset.theme;
-    if (explicit) return explicit;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  // --- Display settings -----------------------------------------------------------------------------------------
+  // The theme: "system" (no data-theme; daisyUI follows the system), "light" or "dark". A saved theme is applied
+  // before first paint by a small script in <head>. "Patterns as well as colours" sets data-chart-patterns ("on" or
+  // "off"; without a choice, the system's "more contrast" preference decides), which static/js/nrmp-charts.js
+  // follows. Both are kept in localStorage; where storage is unavailable (private mode) they last for the page.
+  const root = document.documentElement;
+
+  function remember(key, value) {
+    try {
+      if (value === null) window.localStorage.removeItem(key);
+      else window.localStorage.setItem(key, value);
+    } catch (error) {
+      // Storage unavailable: the setting still applies to this page.
+    }
   }
 
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-theme-toggle]");
-    if (!button) return;
-    const next = currentTheme() === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
+  function recalled(key) {
     try {
-      window.localStorage.setItem("theme", next);
+      return window.localStorage.getItem(key);
     } catch (error) {
-      // Storage may be unavailable (private mode); the toggle still works for this page.
+      return null;
     }
-    button.setAttribute("aria-pressed", String(next === "dark"));
+  }
+
+  const savedPatterns = recalled("chart-patterns");
+  if (savedPatterns === "on" || savedPatterns === "off") root.dataset.chartPatterns = savedPatterns;
+
+  function showDisplaySettings() {
+    const theme = root.dataset.theme || "system";
+    document.querySelectorAll("input[data-display-theme]").forEach((input) => {
+      input.checked = input.value === theme;
+    });
+    const choice = root.dataset.chartPatterns;
+    const patterns = choice === "on" || (choice !== "off" && window.matchMedia("(prefers-contrast: more)").matches);
+    document.querySelectorAll("input[data-display-patterns]").forEach((input) => {
+      input.checked = patterns;
+    });
+  }
+  showDisplaySettings();
+
+  document.addEventListener("change", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (input.matches("[data-display-theme]")) {
+      if (input.value === "system") delete root.dataset.theme;
+      else root.dataset.theme = input.value;
+      remember("theme", input.value === "system" ? null : input.value);
+    } else if (input.matches("[data-display-patterns]")) {
+      root.dataset.chartPatterns = input.checked ? "on" : "off";
+      remember("chart-patterns", root.dataset.chartPatterns);
+    }
   });
 })();

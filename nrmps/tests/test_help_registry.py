@@ -5,6 +5,7 @@ import re
 import pytest
 from django.template import Context, Template
 from django.urls import reverse
+from django.utils.html import escape
 
 from nrmps import checks, help_registry
 from nrmps.params import SimulationParams, iter_fields
@@ -24,6 +25,31 @@ def test_the_checks_find_gaps(monkeypatch):
     monkeypatch.setitem(help_registry.ACTIONS, "lost", help_registry.HelpEntry("Lost", "x", "nowhere"))
     found = {message.id for message in checks.check_help()}
     assert found == {"nrmps.H002", "nrmps.H003"}
+
+
+def test_an_incomplete_chart_is_reported(monkeypatch):
+    """A chart needs its question, what it shows and how to read it, a known place and a known colour (H004)."""
+    monkeypatch.setitem(help_registry.CHARTS, "vague", help_registry.ChartHelp("Vague?", "", "x", tab="nowhere"))
+    monkeypatch.setitem(help_registry.CHARTS, "odd", help_registry.ChartHelp("Odd?", "x", "y", tab="agent", side="?"))
+    messages = [message for message in checks.check_help() if message.id == "nrmps.H004"]
+    assert len(messages) == 3
+
+
+def test_every_chart_is_described_and_linked_from_the_guide(client):
+    body = client.get(reverse("nrmps:help_page", kwargs={"slug": "results"})).content.decode()
+    for key, chart in help_registry.CHARTS.items():
+        assert str(chart.title).endswith("?"), key  # the caption states the question the chart answers
+        assert f'id="{help_registry.chart_anchor(key)}"' in body, key
+        assert escape(str(chart.title)) in body
+
+
+def test_chart_help_popovers_link_to_the_guide():
+    html = help_icon("chart", "funnel")
+    assert html["entry"].title == help_registry.CHARTS["funnel"].title
+    assert html["entry"].more == "results#chart-funnel"
+    assert "drop-offs" in html["entry"].text
+    with pytest.raises(KeyError):
+        help_icon("chart", "no_such_chart")
 
 
 def test_a_parameter_without_a_description_is_reported(monkeypatch):

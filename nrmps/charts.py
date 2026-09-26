@@ -13,6 +13,8 @@ observed utilities scatter around the identity line, and the funnel's counts add
 - RAT-3 `first_choice_demand`: how many applicants rank each program first before interviews, against its positions,
   with the Lorenz curve and the Gini coefficient.
 - INT-1 `funnel`: applications through invitations, interviews and rank order lists to matches, with the drop-offs.
+- MAT-7 (ego) `ego_network`: one applicant's or program's applications by how far each got, drawn as a network with
+  sigma.js on the agent's page (plan step 5.1).
 """
 
 import math
@@ -25,10 +27,20 @@ from scipy.special import ndtr
 from .engine.interviews import pair_views
 from .engine.persistence import StageRecord
 from .params import SimulationParams
-from .runs import RunData
+from .runs import RunData, StageRows
 
 SAMPLE = 1500  # points per series in the true-against-observed scatter plots
 DEMAND_TABLE_ROWS = 10
+EGO_MAX_NODES = 2000  # an agent's network draws at most this many applications, those that got furthest first
+# How far an application got, in order; each is exclusive (an interview that led nowhere is "Interviewed").
+EGO_STAGES = ("Applied", "Invited", "Interviewed", "Ranked", "Matched")
+EGO_KEY = (
+    ("Not invited", "viz-dot-neutral"),
+    ("Invited, no interview", "viz-dot-seq-2"),
+    ("Interviewed, not ranked", "viz-dot-seq-3"),
+    ("Ranked, not matched", "viz-dot-seq-4"),
+    ("Matched", "viz-dot-series-3"),
+)
 
 
 def _round(values: NDArray[Any] | list[float], digits: int = 4) -> list[float]:
@@ -166,6 +178,49 @@ def funnel(record: StageRecord | None) -> dict[str, Any] | None:
         "not_ranked": interviewed - ranked,
         "matched": matched,
         "not_matched": ranked - matched,
+    }
+
+
+def ego_network(stages: StageRows, names: list[str], name: str, *, applicant: bool) -> dict[str, Any] | None:
+    """Return MAT-7 for one agent: its applications by how far each got, with a summary and the key's counts.
+
+    Stages, from `stages` (the agent's view): 0 applied but not invited, 1 invited without an interview, 2 interviewed
+    but not on the agent's rank order list, 3 on the list but not matched, 4 matched. None without applications.
+    """
+    targets = np.flatnonzero(stages.applied)
+    if targets.size == 0:
+        return None
+    stage = np.zeros(targets.size, dtype=np.int64)
+    stage[stages.wave[targets] > 0] = 1
+    stage[stages.interviewed[targets]] = 2
+    stage[stages.list_rank[targets] > 0] = 3
+    stage[stages.matched[targets]] = 4
+    counts = np.bincount(stage, minlength=len(EGO_STAGES))
+    shown = np.lexsort((targets, -stage))[:EGO_MAX_NODES]  # the furthest first
+    total = int(targets.size)
+    furthest_first = zip(reversed(EGO_KEY), reversed(counts.tolist()), strict=True)
+    parts = "; ".join(f"{count:,} {label.lower()}" for (label, _dot), count in furthest_first)
+    who = f"{name}'s {total:,} applications" if applicant else f"The {total:,} applications to {name}"
+    summary = f"{who} by how far each got: {parts}."
+    if total > EGO_MAX_NODES:
+        summary += f" The network shows the {EGO_MAX_NODES:,} that got furthest."
+    return {
+        "payload": {
+            "center": name,
+            "side": "applicant" if applicant else "program",
+            "stages": list(EGO_STAGES),
+            "nodes": [[names[int(targets[k])], int(stage[k])] for k in shown],
+        },
+        "summary": summary,
+        "legend": [
+            {"label": "This applicant", "dot": "viz-dot-series-1"}
+            if applicant
+            else {"label": "This program", "dot": "viz-dot-series-2"},
+            *(
+                {"label": label, "dot": dot, "count": count}
+                for (label, dot), count in zip(EGO_KEY, counts.tolist(), strict=True)
+            ),
+        ],
     }
 
 

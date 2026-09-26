@@ -15,12 +15,19 @@ def _id(*parts: str) -> str:
 
 @register.inclusion_tag("nrmps/components/help_popover.html")
 def help_icon(kind: str, key: str, suffix: str = "") -> dict[str, Any]:
-    """Render the "?" button and popover of a column ("column", "table.column") or an action ("action", key).
+    """Render the "?" button and popover of a column, an action or a chart.
 
-    `suffix` keeps the ids unique when the same help appears more than once on a page. Raises KeyError for a key
-    the registry does not describe, so a page that uses one fails its tests.
+    `kind` is "column" ("table.column" keys), "action" or "chart" (keys of the chart catalog). `suffix` keeps the
+    ids unique when the same help appears more than once on a page. Raises KeyError for a key the registry does not
+    describe, so a page that uses one fails its tests.
     """
-    entry = help_registry.column(key) if kind == "column" else help_registry.action(key)
+    if kind == "chart":
+        chart = help_registry.chart(key)
+        entry = help_registry.HelpEntry(chart.title, chart.text, help_registry.chart_target(key))
+    elif kind == "column":
+        entry = help_registry.column(key)
+    else:
+        entry = help_registry.action(key)
     return {"entry": entry, "id": _id("help", kind, key, *([suffix] if suffix else []))}
 
 

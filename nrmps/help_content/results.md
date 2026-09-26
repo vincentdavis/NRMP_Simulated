@@ -88,6 +88,17 @@ sent, the invitation and its wave, whether they interviewed, both sides' views a
 put the other on its list, and the match. Its second tab shows how the applicant sees every program before
 interviews and how every program sees them. Program pages are the same from the program's side.
 
+## Charts
+
+Every chart answers one question, written as its caption, and its "?" button explains how to read it. Each has a
+summary sentence underneath, and most have a table of their numbers ("The numbers"), so nothing depends on seeing
+the drawing. The colours are the same everywhere: blue is applicants, orange is programs, green is a match and grey
+is everything else; shades of blue order the stages, darker (lighter in the dark theme) the further a stage.
+**Patterns as well as colours** in the display settings (the button beside the account menu) adds patterns to the
+bars and areas, for colour-blind readers and printing.
+
+[[chart_catalog]]
+
 ## Downloads
 
 Every run's parameters (with the seed) and diagnostics download as JSON, and its population as CSV in the upload

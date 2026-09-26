@@ -27,7 +27,7 @@
         </div>
       {% endif %}
       {% for table in section.tables %}
-        <h4 class="font-semibold mt-4">{{ table.title }}</h4>
+        <h4 id="{{ table.anchor }}" class="font-semibold mt-4 scroll-mt-4">{{ table.title }}</h4>
         <p class="text-sm mb-1">{{ table.description }}</p>
         <div class="overflow-x-auto">
           <table class="table table-sm">

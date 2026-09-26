@@ -3,6 +3,8 @@
 - nrmps.H001: a parameter of the schema (or a column of a list parameter) has no title or description.
 - nrmps.H002: a page's Help panel names an action or column the registry does not describe.
 - nrmps.H003: a help entry links to a guide page (or a section of one) that does not exist.
+- nrmps.H004: a chart of the catalog lacks its question, what it shows or how to read it, or names an unknown place
+  or colour.
 """
 
 from typing import Any
@@ -41,6 +43,19 @@ def _page_problems() -> list[CheckMessage]:
     return problems
 
 
+def _chart_problems() -> list[CheckMessage]:
+    problems: list[CheckMessage] = []
+    for key, chart in help_registry.CHARTS.items():
+        if not chart.title or not chart.what or not chart.how:
+            message = f"Chart {key!r} needs a question, what it shows and how to read it."
+            problems.append(Error(message, id="nrmps.H004"))
+        if chart.tab not in help_registry.CHART_PLACES:
+            problems.append(Error(f"Chart {key!r} names the unknown place {chart.tab!r}.", id="nrmps.H004"))
+        if chart.side not in {"applicant", "program"}:
+            problems.append(Error(f"Chart {key!r} names the unknown colour {chart.side!r}.", id="nrmps.H004"))
+    return problems
+
+
 def _target_exists(target: str) -> bool:
     slug, anchor = help_url_parts(target)
     try:
@@ -55,6 +70,7 @@ def _link_problems() -> list[CheckMessage]:
         *((key, entry.more) for key, entry in help_registry.ACTIONS.items()),
         *((key, entry.more) for key, entry in help_registry.COLUMNS.items()),
         *((key, page.more) for key, page in help_registry.PAGES.items()),
+        *((key, help_registry.chart_target(key)) for key in help_registry.CHARTS),
     ]
     return [
         Error(f"Help entry {key!r} links to the missing help target {target!r}.", id="nrmps.H003")
@@ -66,4 +82,4 @@ def _link_problems() -> list[CheckMessage]:
 @register("nrmps")
 def check_help(app_configs: Any = None, **kwargs: Any) -> list[CheckMessage]:
     """Return the help registry's problems (none when everything is described and every link resolves)."""
-    return _parameter_problems() + _page_problems() + _link_problems()
+    return _parameter_problems() + _page_problems() + _chart_problems() + _link_problems()

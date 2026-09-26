@@ -15,8 +15,68 @@
   outline-offset: 2px;
 }
 
-/* Help popovers (plan step 4.3) open below their "?" button where the browser supports anchor positioning, and flip
-   when there is no room; elsewhere they keep the browser's default place, the middle of the screen. */
+/* Chart tokens (plan step 5.1, VIZ-16): every chart takes its colours from here (static/js/nrmp-charts.js), so charts
+   agree with each other and follow the theme. Each colour has at least 3:1 contrast against the card background in
+   its theme; dark values are chosen separately rather than inverted. Fixed roles: series 1 is applicants (and the
+   first of two series), series 2 is programs (and the second), series 3 is a match; neutral is everything else
+   (drop-offs, reference lines); the blue ramp orders stages, from the first (seq-1) to the furthest (seq-5). */
+:root {
+  --viz-ink: var(--color-base-content);
+  --viz-surface: var(--color-base-100);
+  --viz-series-1: #2a78d6;
+  --viz-series-2: #d95c1f;
+  --viz-series-3: #148f63;
+  --viz-neutral: #8a8880;
+  --viz-seq-1: #4f93e2;
+  --viz-seq-2: #2a78d6;
+  --viz-seq-3: #1f63b8;
+  --viz-seq-4: #174d8f;
+  --viz-seq-5: #0d366b;
+}
+:root[data-theme="dark"] {
+  --viz-series-1: #3f8fe8;
+  --viz-series-2: #e0703a;
+  --viz-series-3: #23a877;
+  --viz-neutral: #7d7c76;
+  --viz-seq-1: #2f6fc0;
+  --viz-seq-2: #3f8fe8;
+  --viz-seq-3: #69a9ee;
+  --viz-seq-4: #97c3f3;
+  --viz-seq-5: #c6def9;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --viz-series-1: #3f8fe8;
+    --viz-series-2: #e0703a;
+    --viz-series-3: #23a877;
+    --viz-neutral: #7d7c76;
+    --viz-seq-1: #2f6fc0;
+    --viz-seq-2: #3f8fe8;
+    --viz-seq-3: #69a9ee;
+    --viz-seq-4: #97c3f3;
+    --viz-seq-5: #c6def9;
+  }
+}
+
+/* Keys (legends) drawn in HTML next to a chart, in the chart's colours. */
+.viz-dot {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+  vertical-align: -0.1em;
+}
+.viz-dot-series-1 { background: var(--viz-series-1); }
+.viz-dot-series-2 { background: var(--viz-series-2); }
+.viz-dot-series-3 { background: var(--viz-series-3); }
+.viz-dot-neutral { background: var(--viz-neutral); }
+.viz-dot-seq-2 { background: var(--viz-seq-2); }
+.viz-dot-seq-3 { background: var(--viz-seq-3); }
+.viz-dot-seq-4 { background: var(--viz-seq-4); }
+
+/* Help popovers (plan step 4.3) and the display settings open below their button where the browser supports anchor
+   positioning, and flip when there is no room; elsewhere they keep the browser's default place, the middle of the
+   screen. */
 @supports (position-area: bottom) {
   .help-popover {
     inset: auto;
