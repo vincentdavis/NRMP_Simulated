@@ -14,7 +14,7 @@ PUBLIC = [
     "/terms/",
     "/login/",
     "/signup/",
-    "/documentation/",
+    "/help/",
     "/account/password/reset/",
     "/account/password/reset/sent/",
 ]

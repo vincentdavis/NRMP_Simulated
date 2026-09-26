@@ -86,100 +86,53 @@ Deployment (Railway) is described in `docs/DEPLOY.md`.
 
 ## Architecture Overview
 
-This is a Django-based web application that simulates the National Resident Matching Program (NRMP). The application models a complex matching process between medical students (applicants) and residency programs (schools) through multiple stages: application, interview, ranking, and matching.
+A Django app that simulates the residency Match (NRMP) between applicants and residency programs. The interface says
+"applicant" and "program"; the code keeps the original model names `Student` and `School`.
 
-### Core Domain Models
+### Core Domain Models (`nrmps/models.py`)
 
-**Simulation**: The top-level container for a matching simulation
-- Owned by a User (custom auth model extending AbstractUser)
-- Contains configurations, populations of students/schools, interviews, and matches
-- Can generate populations programmatically or via CSV upload
+- **Simulation**: owned by a `User`; `Simulation.objects.owned_by(user)` for access, `.with_counts()` for sizes.
+  `status` is the pipeline stage (`setup` → `populations` → `initialized` → `pre_interview` → …); `set_stage()` moves
+  it exactly (re-running a step invalidates later stages). Population methods (`create_*`, `upload_*`, `delete_*`)
+  run in one transaction after `lock()` (a row lock) and reset the stage.
+- **SimulationConfig**: generation parameters; the latest one is used. `clean()` enforces Beta feasibility.
+- **Student / School** (applicant / program): base score, `score_meta` (attribute scores), `meta_preference`
+  (weights over the other side's attributes); programs have `capacity`.
+- **Interview**: one row per applicant-program pair with true utilities, pre/post-interview ratings and ranks.
+- **Match**: unused until the match stage exists.
+- **User**: custom user; email unique ignoring case, `email_verified_at` set by signed confirmation links.
 
-**SimulationConfig**: Configuration parameters for population generation
-- Defines population sizes, score distributions, meta-preference fields
-- Controls interview limits and rating error parameters
-- Multiple configs can exist per simulation (latest used for generation)
+### Modules
 
-**Student/School**: The two participant types in the matching
-- Both have base scores and meta-scores (JSON field for flexible attributes)
-- Both have meta-preferences (JSON field defining preference weights)
-- Students apply to schools; schools have capacity limits
-
-**Interview**: Represents the interview stage between student-school pairs
-- Tracks application, invitation, and interview completion status
-- Stores pre- and post-interview observed scores and rankings
-- Created as full cross-product of students × schools per simulation
-
-**Match**: Final matching results between students and schools
-- Contains final ranking preferences from both sides
-- Used for running the matching algorithm
-
-### Key Features
-
-**Population Management**:
-- Programmatic generation using Gaussian distributions for scores
-- CSV upload/download for custom populations
-- Bulk operations for performance
-
-**Multi-stage Simulation Process**:
-1. Population creation (students + schools) ✓
-2. Interview initialization (creates all possible pairings) ✓
-3. Pre-interview rating (students rate schools, schools rate students) ✓
-4. Pre-interview ranking computation ✓
-5. School invitation process (TODO)
-6. Interview phase and post-interview rating updates (TODO)
-7. Final ranking generation (TODO)
-8. NRMP matching algorithm execution (TODO)
-
-**Meta-preferences System**:
-- Flexible JSON-based system for modeling complex preferences
-- Students can weight factors like "program_size", "prestige"
-- Schools can weight factors like "board_scores", "research"
-- Configurable standard deviations for preference weights
+```
+nrmps/
+├── models.py             # domain models (above)
+├── simulation_engine.py  # legacy engine: interview rows, pre/post-interview ratings and ranks (numpy, bulk SQL)
+├── views.py              # simulation pages; HTMX steps through one dispatcher (STEPS) returning all stage cards
+├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
+├── help_views.py         # /help/ (generated parameter reference) and the staff-only developer reference
+├── accounts.py           # confirmation tokens and emails, the personal data export
+├── population_csv.py     # CSV format for population upload/download (one module for both directions)
+├── forms.py              # forms; ValidatorLimitsMixin puts model validator limits on the inputs
+├── limits.py             # NRMP_MAX_PAIRS size limit
+├── exceptions.py         # SimulationError and subclasses: problems shown to the user instead of a 500
+├── validators.py         # attribute-list validation
+├── security.py           # proxy-aware client IP (django-axes)
+├── admin.py              # admin registrations
+└── templatetags/         # form_tags (field_row), list_tags (sort_th), nav_tags (nav_link), simulation_tags
+templates/nrmps/          # pages; partials/ (stage cards), components/ (field, pagination, breadcrumbs ...), help/
+theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
+static/js/site.js         # toasts, confirmation dialog, HTMX error handling, theme toggle
+static/vendor/            # htmx and Alpine.js by version (`npm run vendor` in theme/static_src)
+docs/                     # review, plan, status, deployment, model spec
+```
 
 ### Technology Stack
 
-**Backend**:
-- Django 6+ with custom User model
-- SQLite for development, PostgreSQL for production
-- Django-HTMX for dynamic UI updates
-- LogFire for structured logging
-
-**Frontend**:
-- Tailwind CSS with DaisyUI components (via django-tailwind)
-- HTMX for dynamic content updates
-- Alpine.js for client-side interactivity
-
-**Development Tools**:
-- Ruff for linting and formatting (configured in ruff.toml)
-- mypy for type checking
-- pytest for testing
-- django-debug-toolbar for development debugging
-
-### File Structure
-
-```
-nrmps/                     # Main Django app
-├── models.py             # Core domain models
-├── views.py              # HTTP views and HTMX endpoints
-├── forms.py              # Django forms
-├── simulation_engine.py  # Simulation logic (partially implemented)
-├── urls.py               # URL routing
-└── templatetags/         # Custom template tags
-
-theme/                    # Tailwind CSS theme app
-├── templates/            # Base templates (base.html)
-├── static_src/          # Tailwind source files
-└── ...
-
-templates/nrmps/          # Application-specific HTML templates
-├── partials/             # HTMX partial templates
-└── ...
-
-static/                   # Static files (CSS, JS, images)
-NRMP_Simulated/          # Django project settings
-data/                    # CSV upload storage location
-```
+- Django 6.1 (LoginRequiredMiddleware, MAILERS email), SQLite for development, PostgreSQL in production (Railway)
+- HTMX + Alpine.js, Tailwind CSS 4 + daisyUI 5 (built by django-tailwind's npm project)
+- django-axes (login throttling), WhiteNoise (compressed, hashed static files), Logfire (only with a token)
+- Tests: pytest-django, hypothesis, Playwright + axe; ruff, mypy (django-stubs), codespell; GitHub Actions
 
 ### Development Guidelines
 
@@ -195,14 +148,14 @@ data/                    # CSV upload storage location
 - Docstrings required for all public functions/classes
 
 **Performance Considerations**:
-- Use `bulk_create()` for large population generation
-- Use `select_related()` for foreign key queries
-- Pagination implemented for large data sets (students, schools, interviews)
+- The engine computes with numpy and writes in bulk (INSERT … SELECT, executemany, COPY on PostgreSQL); never save
+  interview rows one by one.
+- Steps run inside the request until background jobs exist; keep them within `NRMP_MAX_PAIRS`.
 
 **Security**:
-- User ownership checks on all simulation operations
-- CSRF protection enabled
-- Debug mode should be False in production
+- Every page requires login unless marked `@login_not_required`; load simulations with `get_owned_simulation()`.
+- Never mark user content safe in templates (a test bans `|safe`); pass data to JavaScript with `json_script`.
+- Engine and log messages identify records by id, never by participant names.
 
 ### Current Implementation Status
 

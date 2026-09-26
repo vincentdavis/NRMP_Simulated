@@ -21,7 +21,7 @@ PUBLIC_PAGES = [
     "nrmps:contact",
     "nrmps:privacy",
     "nrmps:terms",
-    "nrmps:documentation",
+    "nrmps:help",
     "nrmps:login",
     "nrmps:signup",
 ]

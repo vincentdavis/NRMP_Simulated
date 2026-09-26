@@ -13,15 +13,16 @@ Live site: <https://nrmp-simulated.heteroskedastic.org>
 ## What works today
 
 1. Create a simulation; it starts with a working default configuration.
-2. Generate applicant (student) and program (school) populations, or upload them as CSV (a download uploads back
-   unchanged; sample files are linked in the app).
+2. Generate applicant and program populations, or upload them as CSV (a download uploads back unchanged; sample
+   files are linked in the app).
 3. Create one interview row per applicant-program pair.
 4. Compute true utilities, noisy pre-interview ratings and strict pre-interview ranks for both sides.
 5. Browse, sort and download the results.
 
 Applications, signals, invitations, interviews, rank order lists and the match itself are being built: see the
 [phased plan](docs/PROJECT_REVIEW.md#9-phased-implementation-plan) and
-[implementation status](docs/IMPLEMENTATION_STATUS.md).
+[implementation status](docs/IMPLEMENTATION_STATUS.md). The in-app help page (`/help/`) explains the model, every
+parameter and the CSV formats.
 
 ## Development
 

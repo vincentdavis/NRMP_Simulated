@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
-from . import account_views, views
+from . import account_views, help_views, views
 
 app_name = "nrmps"
 
@@ -64,7 +64,9 @@ urlpatterns = [
     path("contact/", views.contact, name="contact"),
     path("privacy/", views.privacy, name="privacy"),
     path("terms/", views.terms, name="terms"),
-    path("documentation/", views.documentation, name="documentation"),
+    path("help/", help_views.help_index, name="help"),
+    path("help/developer/", help_views.developer_reference, name="developer_reference"),
+    path("documentation/", help_views.documentation_redirect, name="documentation"),
     # Simulations CRUD & actions
     path("simulations/", views.simulation_list, name="simulation_list"),
     path("simulations/new/", views.simulation_create, name="simulation_create"),
