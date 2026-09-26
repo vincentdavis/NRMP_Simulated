@@ -572,3 +572,6 @@ cython_debug/
 
 # Django collected static files (production)
 staticfiles/
+
+# macOS Finder metadata
+.DS_Store

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Match Explorer prototype</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface-1: #fcfcfb; --text-primary: #0b0b0b; --text-secondary: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --neutral: #c3c2b7;
+    --seq-250: #86b6ef; --seq-350: #5598e7; --seq-450: #2a78d6; --seq-550: #1c5cab; --seq-700: #0d366b; --seq-100: #cde2fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface-1: #1a1a19; --text-primary: #ffffff; --text-secondary: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --neutral: #52514e;
+      --seq-250: #184f95; --seq-350: #1c5cab; --seq-450: #2a78d6; --seq-550: #5598e7; --seq-700: #b7d3f6; --seq-100: #104281;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19; --text-primary: #ffffff; --text-secondary: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --neutral: #52514e;
+    --seq-250: #184f95; --seq-350: #1c5cab; --seq-450: #2a78d6; --seq-550: #5598e7; --seq-700: #b7d3f6; --seq-100: #104281;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text-primary); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); margin: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; padding: 12px 16px; position: sticky; top: 0; z-index: 5;
+    background: var(--page); border-bottom: 1px solid var(--border); }
+  .ctl { display: flex; flex-direction: column; min-width: 150px; }
+  .ctl label { font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; gap: 8px; }
+  .ctl output { font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 600; }
+  .ctl input[type=range] { width: 100%; accent-color: var(--series-1); }
+  .help { cursor: help; border: 1px solid var(--axis); border-radius: 50%; width: 15px; height: 15px; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 10px; color: var(--text-secondary); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 16px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .tile .v { font-size: 26px; font-weight: 650; }
+  .tile .k { color: var(--text-secondary); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; padding: 0 16px 16px; }
+  @media (max-width: 480px) { .grid { grid-template-columns: 1fr; } .ctl { min-width: 130px; flex: 1 1 40%; } }
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
+  .card h2 { font-size: 14px; margin: 0; }
+  .card p { margin: 2px 0 8px; color: var(--text-secondary); font-size: 12px; }
+  .chart { width: 100%; height: 280px; transition: opacity .15s; }
+  .busy .chart { opacity: .55; }
+  #net { height: 420px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  button, select { font: inherit; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--axis); background: var(--surface-1); color: var(--text-primary); }
+  details { padding: 0 16px 24px; color: var(--text-secondary); }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td, th { padding: 2px 8px; border-bottom: 1px solid var(--grid); text-align: right; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Match Explorer (prototype)</h1>
+  <p class="sub">In-browser simulation (Web Worker) of applications, signals, invitations, interviews, rank lists and deferred acceptance. Drag a slider; every chart recomputes.</p>
+</header>
+<div class="controls" id="controls"></div>
+<div class="tiles" id="tiles"></div>
+<div class="grid" id="grid">
+  <div class="card"><h2>Funnel: applied to matched</h2><p>Applicant-program pairs surviving each stage.</p><div class="chart" id="c_sankey"></div></div>
+  <div class="card"><h2>Rank achieved</h2><p>Share of applicants matching to their k-th ranked program.</p><div class="chart" id="c_rank"></div></div>
+  <div class="card"><h2>Match rate by applicant score decile</h2><p>Decile 1 = lowest score.</p><div class="chart" id="c_decile"></div></div>
+  <div class="card"><h2>Program fill, sorted by prestige</h2><p>Filled vs unfilled positions per program.</p><div class="chart" id="c_fill"></div></div>
+  <div class="card"><h2>Who matches where</h2><p>Matched applicants: applicant score decile vs program prestige decile.</p><div class="chart" id="c_heat"></div></div>
+  <div class="card"><h2>True vs observed utility</h2><p id="rho_txt">Sampled applicant-program pairs.</p><div class="chart" id="c_scatter"></div></div>
+  <div class="card"><h2>Sweep: match rate vs applications per applicant</h2><p id="sweep_txt">Median and 10-90% band over Monte-Carlo seeds.</p>
+    <div class="row"><button id="sweep_btn">Run sweep (8 values x 10 seeds)</button></div><div class="chart" id="c_sweep"></div></div>
+  <div class="card" style="grid-column: 1 / -1"><h2>Bipartite network (first 300 applicants, all programs)</h2>
+    <p>Edge colour = furthest stage reached. Click a node for its ego network; click the background to reset.</p>
+    <div class="row"><label>Layout <select id="layout"><option value="cols">Two columns (sorted)</option><option value="fa2">ForceAtlas2</option></select></label>
+      <label>Edges <select id="edgeStage"><option value="1">applied+</option><option value="2">invited+</option><option value="3" selected>interviewed+</option><option value="4">matched</option></select></label>
+      <span id="net_txt"></span></div>
+    <div id="net"></div></div>
+</div>
+<details><summary>Timing log</summary><table id="timing"><thead><tr><th>size</th><th>worker total ms</th><th>DA ms</th><th>render ms</th></tr></thead><tbody></tbody></table></details>
+
+<!-- Pinned UMD builds (byte-identical to the npm tarballs used in the review). For offline use, download them into vendor/ and point these tags there. -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@6.1.0/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/graphology@0.26.0/dist/graphology.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/graphology-library@0.8.0/dist/graphology-library.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sigma@3.0.3/dist/sigma.min.js"></script>
+<script>
+"use strict";
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const SLIDERS = [
+  { key: "sigmaPreA", label: "Pre-interview rating error", min: 0, max: 2, step: 0.05, help: "Std. dev. of noise added to applicants' and programs' view before interviews." , also: "sigmaPreP"},
+  { key: "sigmaPostA", label: "Post-interview rating error", min: 0, max: 1, step: 0.05, help: "Noise remaining after the interview.", also: "sigmaPostP" },
+  { key: "applications", label: "Applications / applicant", min: 1, max: 60, step: 1, help: "How many programs each applicant applies to." },
+  { key: "signals", label: "Signals / applicant", min: 0, max: 10, step: 1, help: "Preference signals sent to the applicant's top applied programs." },
+  { key: "interviewsPerPosition", label: "Interview slots / position", min: 1, max: 20, step: 0.5, help: "Program interview capacity as a multiple of its positions." },
+  { key: "applicantInterviewLimit", label: "Max interviews / applicant", min: 1, max: 30, step: 1, help: "Interviews an applicant can attend." },
+  { key: "rhoApplicant", label: "Applicant preference correlation", min: 0, max: 1, step: 0.05, help: "0 = idiosyncratic tastes, 1 = everyone ranks programs identically." },
+  { key: "seed", label: "Seed", min: 1, max: 50, step: 1, help: "Random seed (common random numbers across slider changes)." },
+];
+const params = { nStudents: 1000, nPrograms: 100 };
+const ctl = document.getElementById("controls");
+const sizeSel = document.createElement("div");
+sizeSel.className = "ctl";
+sizeSel.innerHTML = '<label>Market size</label><select id="size"><option value="120x8">120 x 8</option><option value="1000x100" selected>1,000 x 100</option><option value="5000x500">5,000 x 500</option><option value="10000x1000">10,000 x 1,000</option></select>';
+ctl.appendChild(sizeSel);
+for (const s of SLIDERS) {
+  const d = document.createElement("div"); d.className = "ctl";
+  const lab = document.createElement("label");
+  const name = document.createElement("span"); name.textContent = s.label + " ";
+  const h = document.createElement("span"); h.className = "help"; h.textContent = "?"; h.title = s.help; h.setAttribute("aria-label", s.help);
+  name.appendChild(h);
+  const out = document.createElement("output");
+  lab.append(name, out);
+  const inp = document.createElement("input"); inp.type = "range"; Object.assign(inp, { min: s.min, max: s.max, step: s.step });
+  inp.id = "s_" + s.key; inp.setAttribute("aria-label", s.label);
+  const def = (window.NRMP_DEFAULTS || {})[s.key];
+  d.append(lab, inp); ctl.appendChild(d);
+  s.inp = inp; s.out = out;
+}
+document.getElementById("size").addEventListener("change", (e) => { const [n, m] = e.target.value.split("x").map(Number); params.nStudents = n; params.nPrograms = m; request(); });
+
+const charts = {};
+for (const id of ["c_sankey", "c_rank", "c_decile", "c_fill", "c_heat", "c_scatter", "c_sweep"]) charts[id] = echarts.init(document.getElementById(id), null, { renderer: "canvas" });
+addEventListener("resize", () => Object.values(charts).forEach((c) => c.resize()));
+
+function baseOpt() {
+  return {
+    textStyle: { color: css("--text-secondary"), fontFamily: "system-ui, sans-serif" },
+    grid: { left: 48, right: 16, top: 16, bottom: 40 },
+    tooltip: { trigger: "axis", backgroundColor: css("--surface-1"), borderColor: css("--border"), textStyle: { color: css("--text-primary") } },
+    animationDuration: 200, animationDurationUpdate: 200,
+  };
+}
+const axis = (o) => Object.assign({ axisLine: { lineStyle: { color: css("--axis") } }, splitLine: { lineStyle: { color: css("--grid") } }, axisLabel: { color: css("--muted") } }, o);
+
+// ---- worker plumbing: coalesce slider events; only the latest params are computed ----
+const worker = new Worker("worker.js");
+let busy = false, pending = false, reqId = 0, sentAt = 0;
+function request() {
+  for (const s of SLIDERS) { const v = Number(s.inp.value); params[s.key] = v; if (s.also) params[s.also] = v; s.out.textContent = v; }
+  if (busy) { pending = true; return; }
+  busy = true; pending = false; sentAt = performance.now();
+  document.getElementById("grid").classList.add("busy");
+  worker.postMessage({ id: ++reqId, kind: "run", params: Object.assign({}, params) });
+}
+worker.onmessage = (e) => {
+  const { kind, res } = e.data;
+  if (kind === "sweep") return drawSweep(res);
+  const r0 = performance.now();
+  render(res);
+  const rMs = performance.now() - r0;
+  const tr = document.createElement("tr");
+  for (const v of [`${res.params.nStudents}x${res.params.nPrograms}`, res.timing.totalMs.toFixed(0), res.timing.daMs.toFixed(1), rMs.toFixed(0)]) { const td = document.createElement("td"); td.textContent = v; tr.appendChild(td); }
+  document.querySelector("#timing tbody").prepend(tr);
+  window.__lastTiming = { worker: res.timing.totalMs, da: res.timing.daMs, render: rMs, roundTrip: performance.now() - sentAt, size: `${res.params.nStudents}x${res.params.nPrograms}` };
+  busy = false;
+  document.getElementById("grid").classList.remove("busy");
+  if (pending) request();
+};
+for (const s of SLIDERS) s.inp.addEventListener("input", request);
+
+function tile(k, v) { const d = document.createElement("div"); d.className = "tile"; const a = document.createElement("div"); a.className = "v"; a.textContent = v; const b = document.createElement("div"); b.className = "k"; b.textContent = k; d.append(a, b); return d; }
+const pct = (x) => (100 * x).toFixed(1) + "%";
+function spearman(a, b) {
+  const rk = (x) => { const o = x.map((v, i) => [v, i]).sort((p, q) => p[0] - q[0]); const r = new Array(x.length); o.forEach(([, i], k) => (r[i] = k)); return r; };
+  const ra = rk(a), rb = rk(b), n = a.length, ma = (n - 1) / 2;
+  let num = 0, da = 0, db = 0; for (let i = 0; i < n; i++) { num += (ra[i] - ma) * (rb[i] - ma); da += (ra[i] - ma) ** 2; db += (rb[i] - ma) ** 2; }
+  return num / Math.sqrt(da * db);
+}
+
+let lastRes = null;
+function render(res) {
+  lastRes = res;
+  const T = document.getElementById("tiles"); T.replaceChildren(
+    tile("Applicants matched", pct(res.matchRate)), tile("Positions filled", pct(res.fillRate)),
+    tile("Unfilled positions", res.unfilled.toLocaleString()), tile("Applicants in a true-preference blocking pair", pct(res.studentsInBlocking / res.params.nStudents)),
+    tile("DA time (worker)", res.timing.daMs.toFixed(1) + " ms"));
+  const f = res.funnel;
+  const seq = [css("--seq-250"), css("--seq-350"), css("--seq-450"), css("--seq-550"), css("--seq-700")];
+  charts.c_sankey.setOption(Object.assign(baseOpt(), { tooltip: { trigger: "item" },
+    series: [{ type: "sankey", left: 8, right: 90, nodeGap: 14, draggable: false, label: { color: css("--text-primary") },
+      lineStyle: { color: "source", opacity: 0.35 },
+      data: [{ name: "Applied", itemStyle: { color: seq[0] } }, { name: "Invited", itemStyle: { color: seq[1] } }, { name: "Interviewed", itemStyle: { color: seq[2] } },
+        { name: "Ranked", itemStyle: { color: seq[3] } }, { name: "Matched", itemStyle: { color: seq[4] } },
+        { name: "Not invited", itemStyle: { color: css("--neutral") } }, { name: "Declined/over limit", itemStyle: { color: css("--neutral") } }, { name: "Ranked, not matched", itemStyle: { color: css("--neutral") } }],
+      links: [{ source: "Applied", target: "Invited", value: f.invitations }, { source: "Applied", target: "Not invited", value: f.applications - f.invitations },
+        { source: "Invited", target: "Interviewed", value: f.interviews }, { source: "Invited", target: "Declined/over limit", value: f.invitations - f.interviews },
+        { source: "Interviewed", target: "Ranked", value: f.ranked }, { source: "Ranked", target: "Matched", value: f.matched },
+        { source: "Ranked", target: "Ranked, not matched", value: f.ranked - f.matched }] }] }), true);
+  const L = res.rankAchieved.length - 1, n = res.params.nStudents;
+  const rankCats = res.rankAchieved.map((_, k) => (k === L ? "Unmatched" : String(k + 1)));
+  charts.c_rank.setOption(Object.assign(baseOpt(), {
+    xAxis: axis({ type: "category", data: rankCats, name: "rank of matched program", nameLocation: "middle", nameGap: 26 }),
+    yAxis: axis({ type: "value", axisLabel: { color: css("--muted"), formatter: (v) => (100 * v).toFixed(0) + "%" } }),
+    series: [{ type: "bar", barMaxWidth: 28, itemStyle: { borderRadius: [4, 4, 0, 0] },
+      data: res.rankAchieved.map((c, k) => ({ value: c / n, itemStyle: { color: k === L ? css("--neutral") : css("--series-1") } })) }],
+    tooltip: Object.assign(baseOpt().tooltip, { valueFormatter: (v) => pct(v) }) }), true);
+  charts.c_decile.setOption(Object.assign(baseOpt(), {
+    xAxis: axis({ type: "category", data: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(String), name: "applicant score decile", nameLocation: "middle", nameGap: 26 }),
+    yAxis: axis({ type: "value", max: 1, axisLabel: { color: css("--muted"), formatter: (v) => (100 * v).toFixed(0) + "%" } }),
+    series: [{ type: "bar", barMaxWidth: 28, itemStyle: { color: css("--series-1"), borderRadius: [4, 4, 0, 0] }, data: res.decileMatchRate }],
+    tooltip: Object.assign(baseOpt().tooltip, { valueFormatter: (v) => pct(v) }) }), true);
+  const pf = res.programFill;
+  charts.c_fill.setOption(Object.assign(baseOpt(), { legend: { top: 0, textStyle: { color: css("--text-secondary") } }, grid: { left: 40, right: 16, top: 28, bottom: 40 },
+    xAxis: axis({ type: "category", data: pf.map((p, k) => k + 1), name: "program (prestige rank)", nameLocation: "middle", nameGap: 26, axisLabel: { color: css("--muted"), interval: Math.ceil(pf.length / 10) } }),
+    yAxis: axis({ type: "value", name: "positions" }),
+    dataZoom: pf.length > 60 ? [{ type: "inside" }, { type: "slider", height: 14, bottom: 4 }] : [],
+    series: [{ name: "Filled", type: "bar", stack: "c", large: pf.length > 400, itemStyle: { color: css("--series-1") }, data: pf.map((p) => p.filled) },
+      { name: "Unfilled", type: "bar", stack: "c", large: pf.length > 400, itemStyle: { color: css("--series-2") }, data: pf.map((p) => p.cap - p.filled) }] }), true);
+  const hmax = Math.max(1, ...res.heat.map((h) => h[2]));
+  charts.c_heat.setOption(Object.assign(baseOpt(), { tooltip: { trigger: "item", formatter: (p) => `${p.value[2]} matched<br>applicant decile ${p.value[1] + 1}, program decile ${p.value[0] + 1}` },
+    grid: { left: 56, right: 16, top: 10, bottom: 70 },
+    xAxis: axis({ type: "category", data: [...Array(10).keys()].map((k) => "P" + (k + 1)), name: "program prestige decile (P1 = top)", nameLocation: "middle", nameGap: 24 }),
+    yAxis: axis({ type: "category", data: [...Array(10).keys()].map((k) => "D" + (k + 1)), name: "applicant decile", nameLocation: "middle", nameGap: 36 }),
+    visualMap: { min: 0, max: hmax, orient: "horizontal", left: "center", bottom: 0, itemHeight: 120, calculable: true, textStyle: { color: css("--muted") },
+      inRange: { color: [css("--seq-100"), css("--seq-450"), css("--seq-700")] } },
+    series: [{ type: "heatmap", data: res.heat, itemStyle: { borderColor: css("--surface-1"), borderWidth: 2 } }] }), true);
+  const sc = res.scatter;
+  const rhoPre = spearman(sc.map((d) => d[0]), sc.map((d) => d[1])), rhoPost = spearman(sc.map((d) => d[0]), sc.map((d) => d[2]));
+  document.getElementById("rho_txt").textContent = `Spearman rho: pre-interview ${rhoPre.toFixed(3)}, post-interview ${rhoPost.toFixed(3)} (n=${sc.length} sampled pairs)`;
+  charts.c_scatter.setOption(Object.assign(baseOpt(), { legend: { top: 0, textStyle: { color: css("--text-secondary") } }, grid: { left: 48, right: 16, top: 28, bottom: 40 },
+    tooltip: { trigger: "item", formatter: (p) => `${p.seriesName}<br>true ${p.value[0].toFixed(2)} / observed ${p.value[1].toFixed(2)}` },
+    xAxis: axis({ type: "value", name: "true utility", nameLocation: "middle", nameGap: 26 }), yAxis: axis({ type: "value", name: "observed" }),
+    series: [{ name: "Pre-interview", type: "scatter", symbolSize: 6, itemStyle: { color: css("--series-2"), opacity: 0.6 }, data: sc.map((d) => [d[0], d[1]]) },
+      { name: "Post-interview", type: "scatter", symbolSize: 6, itemStyle: { color: css("--series-1"), opacity: 0.6 }, data: sc.map((d) => [d[0], d[2]]) }] }), true);
+  const tn = performance.now(); drawNet(res); window.__netMs = performance.now() - tn;
+}
+
+// ---- Monte-Carlo sweep ----
+document.getElementById("sweep_btn").addEventListener("click", () => {
+  document.getElementById("sweep_txt").textContent = "Running...";
+  worker.postMessage({ id: ++reqId, kind: "sweep", params: Object.assign({}, params, { sweepValues: [3, 5, 8, 12, 20, 30, 45, 60], reps: 10 }) });
+});
+function drawSweep(res) {
+  const pts = res.points;
+  document.getElementById("sweep_txt").textContent = `Median and 10-90% band over 10 seeds, ${pts.length * 10} runs in ${res.ms.toFixed(0)} ms (in worker).`;
+  window.__sweepMs = res.ms;
+  charts.c_sweep.setOption(Object.assign(baseOpt(), {
+    xAxis: axis({ type: "value", name: "applications per applicant", nameLocation: "middle", nameGap: 26 }),
+    yAxis: axis({ type: "value", min: 0, max: 1, axisLabel: { color: css("--muted"), formatter: (v) => (100 * v).toFixed(0) + "%" } }),
+    tooltip: Object.assign(baseOpt().tooltip, { valueFormatter: (v) => (v == null ? "" : pct(v)) }),
+    series: [
+      { name: "p10", type: "line", data: pts.map((p) => [p.A, p.lo]), lineStyle: { opacity: 0 }, symbol: "none", stack: "band", tooltip: { show: false } },
+      { name: "10-90% band", type: "line", data: pts.map((p) => [p.A, p.hi - p.lo]), lineStyle: { opacity: 0 }, symbol: "none", stack: "band", areaStyle: { color: css("--series-1"), opacity: 0.18 }, tooltip: { show: false } },
+      { name: "Median match rate", type: "line", data: pts.map((p) => [p.A, p.med]), lineStyle: { width: 2, color: css("--series-1") }, itemStyle: { color: css("--series-1") }, symbolSize: 8 },
+    ] }), true);
+}
+
+// ---- sigma.js bipartite network ----
+let sigma = null;
+function drawNet(res) {
+  const stageMin = Number(document.getElementById("edgeStage").value);
+  const layout = document.getElementById("layout").value;
+  const G = new graphology.Graph({ multi: false, type: "undirected" });
+  const k = Math.min(300, res.params.nStudents), m = res.params.nPrograms;
+  const sOrder = [...Array(k).keys()].sort((a, b) => res.score[b] - res.score[a]);
+  const pOrder = [...Array(m).keys()].sort((a, b) => res.prestige[b] - res.prestige[a]);
+  const C1 = css("--series-1"), C2 = css("--series-2"), CG = css("--grid");
+  sOrder.forEach((i, r) => G.addNode("s" + i, { x: 0, y: -r / k, size: 2.5, color: C1, label: `Applicant ${i + 1}`, kind: "s" }));
+  pOrder.forEach((j, r) => G.addNode("p" + j, { x: 1, y: -r / m, size: 3 + res.cap[j] / 3, color: C2, label: `Program ${j + 1}`, kind: "p" }));
+  const stageColor = { 1: css("--grid"), 2: css("--axis"), 3: css("--seq-250"), 4: css("--series-3") };
+  let ne = 0;
+  for (const [i, j, st] of res.edges) if (st >= stageMin) { G.addEdge("s" + i, "p" + j, { color: stageColor[st], size: st === 4 ? 1.6 : 0.5, stage: st }); ne++; }
+  if (layout === "fa2") {
+    G.forEachNode((n, a) => G.mergeNodeAttributes(n, { x: Math.cos(n.length * 7.1 + a.y * 50), y: Math.sin(n.length * 3.3 + a.y * 90) }));
+    graphologyLibrary.layoutForceAtlas2.assign(G, { iterations: 150, settings: Object.assign(graphologyLibrary.layoutForceAtlas2.inferSettings(G), { barnesHutOptimize: G.order > 500 }) });
+  }
+  document.getElementById("net_txt").textContent = `${G.order} nodes, ${ne} edges`;
+  if (sigma) sigma.kill();
+  sigma = new Sigma(G, document.getElementById("net"), { renderEdgeLabels: false, labelColor: { color: css("--text-primary") }, labelRenderedSizeThreshold: 8 });
+  let focus = null;
+  sigma.setSetting("nodeReducer", (n, a) => (focus && n !== focus && !G.areNeighbors(n, focus) ? Object.assign({}, a, { color: CG, label: "" }) : a));
+  sigma.setSetting("edgeReducer", (e, a) => (focus && !G.hasExtremity(e, focus) ? Object.assign({}, a, { hidden: true }) : a));
+  sigma.on("clickNode", ({ node }) => { focus = node; sigma.refresh(); document.getElementById("net_txt").textContent = `Ego network of ${G.getNodeAttribute(node, "label")}: ${G.degree(node)} edges`; });
+  sigma.on("clickStage", () => { focus = null; sigma.refresh(); document.getElementById("net_txt").textContent = `${G.order} nodes, ${ne} edges`; });
+}
+document.getElementById("layout").addEventListener("change", () => lastRes && drawNet(lastRes));
+document.getElementById("edgeStage").addEventListener("change", () => lastRes && drawNet(lastRes));
+
+// initial values
+const INIT = { sigmaPreA: 0.5, sigmaPostA: 0.15, applications: 20, signals: 0, interviewsPerPosition: 10, applicantInterviewLimit: 12, rhoApplicant: 0.6, seed: 1 };
+for (const s of SLIDERS) s.inp.value = INIT[s.key];
+request();
+</script>
+</body>
+</html>
