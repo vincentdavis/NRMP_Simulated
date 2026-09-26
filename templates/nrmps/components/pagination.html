@@ -6,7 +6,7 @@
     {% else %}
       <span class="join-item btn btn-disabled" aria-disabled="true">Previous</span>
     {% endif %}
-    <span class="join-item btn btn-disabled" aria-current="page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    <span class="join-item btn btn-active pointer-events-none" aria-current="page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
     {% if page_obj.has_next %}
       <a class="join-item btn" href="?page={{ page_obj.next_page_number }}&sort={{ sort }}&order={{ order }}&page_size={{ page_size }}">Next</a>
     {% else %}

@@ -28,6 +28,6 @@ def logged_in_page(page, live, user):
     page.goto(f"{live}/login/")
     page.fill("#id_username", user.username)
     page.fill("#id_password", PASSWORD)
-    page.click("button[type=submit]")
+    page.get_by_role("button", name="Log in", exact=True).click()
     page.wait_for_url(f"{live}/")
     return page
