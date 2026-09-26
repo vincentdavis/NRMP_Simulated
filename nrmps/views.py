@@ -253,6 +253,7 @@ def simulation_manage(request, pk: int):
         form = SimulationForm(instance=sim)
         config_form = SimulationConfigForm(instance=config_instance)
 
+    meta_lists = {side: _attribute_list(config_form, f"{side}_meta_preference") for side in ("applicant", "school")}
     context = {
         "simulation": sim,
         "form": form,
@@ -260,8 +261,23 @@ def simulation_manage(request, pk: int):
         "students_upload_form": StudentsUploadForm(),
         "schools_upload_form": SchoolsUploadForm(),
         "stages": sim.get_workflow_stages(),
+        # The attribute-list editors read their items from json_script elements; the hidden inputs' fallback values
+        # (used without JavaScript) are autoescaped JSON. Nothing user-supplied is marked safe.
+        "meta_lists": meta_lists,
+        "meta_json": {side: json.dumps(items) for side, items in meta_lists.items()},
     }
     return render(request, "nrmps/simulation_manage.html", context)
+
+
+def _attribute_list(form, name: str) -> list[str]:
+    """Return the attribute list a form field currently holds (submitted or initial) as a list of strings."""
+    value = form[name].value()
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return []
+    return [str(item) for item in value] if isinstance(value, list) else []
 
 
 @login_required

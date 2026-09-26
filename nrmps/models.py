@@ -10,6 +10,7 @@ from django.db import models, transaction
 from scipy.stats import beta
 
 from .exceptions import MissingConfigError
+from .validators import validate_attribute_list
 
 
 def default_school_meta_preference():
@@ -617,6 +618,7 @@ class SimulationConfig(models.Model):
     # gets a preference weight for each name.
     applicant_meta_preference = models.JSONField(
         default=default_applicant_meta_preference,
+        validators=[validate_attribute_list],
         help_text="Program attributes applicants care about, e.g. program_size, reputation, location.",
     )
     # SD of the raw preference weights each applicant gives the program attributes.
@@ -672,6 +674,7 @@ class SimulationConfig(models.Model):
     # gets a preference weight for each name.
     school_meta_preference = models.JSONField(
         default=default_school_meta_preference,
+        validators=[validate_attribute_list],
         help_text="Applicant attributes programs care about, e.g. board_scores, research, honors.",
     )
     # SD of the raw preference weights each program gives the applicant attributes.

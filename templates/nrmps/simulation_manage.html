@@ -172,8 +172,8 @@
                 {% endif %}
               </div>
             </div>
-            <div class="form-control mt-4"
-                 x-data="metaEditor($el, 'id_applicant_meta_preference', {{ config_form.instance.applicant_meta_preference|default:'[]'|safe }})">
+            {{ meta_lists.applicant|json_script:"applicant-meta-initial" }}
+            <div class="form-control mt-4" x-data="metaEditor('applicant-meta-initial')">
               <label class="label" for="id_applicant_meta_preference"><span class="label-text">Applicant Meta Preferences</span></label>
               <div class="flex flex-wrap gap-2 items-center">
                 <template x-if="!items.length"><span
@@ -194,9 +194,8 @@
                 <button type="button" class="btn btn-sm btn-primary btn-outline" @click="addItem()">Add</button>
               </div>
               <input type="hidden" name="applicant_meta_preference" id="id_applicant_meta_preference"
-                     :value="jsonValue()"
-                     value='{{ config_form.instance.applicant_meta_preference|default:"[]"|safe }}'>
-              <label class="label"><span class="label-text-alt">Enter as tags; press Enter to add. Items saved as a list.</span></label>
+                     :value="jsonValue()" value="{{ meta_json.applicant }}">
+              <label class="label"><span class="label-text-alt">Enter as tags; press Enter to add. Up to 10 names of lowercase letters, digits and underscores.</span></label>
               {% if config_form.applicant_meta_preference.errors %}
                 <label class="label"><span
                     class="label-text-alt text-error">{{ config_form.applicant_meta_preference.errors.0 }}</span></label>
@@ -283,8 +282,8 @@
                 {% endif %}
               </div>
             </div>
-            <div class="form-control mt-4"
-                 x-data="metaEditor($el, 'id_school_meta_preference', {{ config_form.instance.school_meta_preference|default:'[]'|safe }})">
+            {{ meta_lists.school|json_script:"school-meta-initial" }}
+            <div class="form-control mt-4" x-data="metaEditor('school-meta-initial')">
               <label class="label" for="id_school_meta_preference"><span
                   class="label-text">School Meta Preferences</span></label>
               <div class="flex flex-wrap gap-2 items-center">
@@ -305,9 +304,9 @@
                        @keydown.enter.prevent="addItem()" placeholder="Type a preference (Enter to add)">
                 <button type="button" class="btn btn-sm btn-primary btn-outline" @click="addItem()">Add</button>
               </div>
-              <input type="hidden" name="school_meta_preference" id="id_school_meta_preference" :value="jsonValue()"
-                     value='{{ config_form.instance.school_meta_preference|default:"[]"|safe }}'>
-              <label class="label"><span class="label-text-alt">Enter as tags; press Enter to add. Items saved as a list.</span></label>
+              <input type="hidden" name="school_meta_preference" id="id_school_meta_preference"
+                     :value="jsonValue()" value="{{ meta_json.school }}">
+              <label class="label"><span class="label-text-alt">Enter as tags; press Enter to add. Up to 10 names of lowercase letters, digits and underscores.</span></label>
               {% if config_form.school_meta_preference.errors %}
                 <label class="label"><span
                     class="label-text-alt text-error">{{ config_form.school_meta_preference.errors.0 }}</span></label>
@@ -330,31 +329,42 @@
 
 {% block extra_js %}
   <script>
-      window.metaEditor = function (rootEl, hiddenId, initial) {
+      // Tag editor for an attribute list. The initial items come from a json_script element (never from markup),
+      // and names follow the server's rule: 1-40 lowercase letters, digits or underscores, at most 10 items.
+      window.metaEditor = function (initialId) {
+          const MAX_ITEMS = 10;
+
           function normalize(val) {
-              return (val || "").toString().trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_\-]/g, "");
+              return (val || "").toString().trim().toLowerCase().replace(/[\s-]+/g, "_").replace(/[^a-z0-9_]/g, "").slice(0, 40);
           }
 
-          const initItems = Array.isArray(initial) ? initial : [];
+          function clean(items) {
+              return items.map(normalize).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, MAX_ITEMS);
+          }
+
+          let initial = [];
+          try {
+              initial = JSON.parse(document.getElementById(initialId).textContent);
+          } catch (e) {
+              initial = [];
+          }
           return {
-              items: initItems.map(normalize).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i),
+              items: clean(Array.isArray(initial) ? initial : []),
               newItem: "",
-              noop() {
-              },
               dedupeAndNormalize() {
-                  this.items = this.items.map(normalize).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+                  this.items = clean(this.items);
               },
               addItem() {
                   const v = normalize(this.newItem);
                   if (!v) return;
-                  if (!this.items.includes(v)) this.items.push(v);
+                  if (!this.items.includes(v) && this.items.length < MAX_ITEMS) this.items.push(v);
                   this.newItem = "";
               },
               remove(index) {
                   this.items.splice(index, 1);
               },
               jsonValue() {
-                  return JSON.stringify(this.items.map(normalize).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i));
+                  return JSON.stringify(clean(this.items));
               }
           }
       }

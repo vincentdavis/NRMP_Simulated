@@ -1,5 +1,3 @@
-import logging
-
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
@@ -9,8 +7,6 @@ from django.db import models as db_models
 
 from .limits import market_size_error
 from .models import Simulation, SimulationConfig
-
-logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -108,82 +104,10 @@ class SchoolsUploadForm(forms.Form):
 class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
     """Form for creating/updating a SimulationConfig associated with a Simulation.
 
-    The simulation FK is set in the view, not editable here.
-
-    Notes on JSON/list fields:
-    - For list fields, you can enter a JSON array (e.g., ["research", "leadership"]) or a comma-separated list.
-    - For dict fields, enter valid JSON (e.g., {"research": 0.2, "leadership": 0.1}).
+    The simulation FK is set in the view, not editable here. The two attribute lists are posted as JSON arrays by the
+    tag editor and validated by the model field validator (`validate_attribute_list`); invalid lists are rejected,
+    never silently replaced.
     """
-
-    # Optional helpers to accept comma-separated values for list JSONFields
-
-    def clean_applicant_meta_preference(self):
-        val = self.cleaned_data.get("applicant_meta_preference")
-        logger.debug(
-            "clean_applicant_meta_preference input", extra={"type": type(val).__name__, "value_preview": str(val)[:200]}
-        )
-        # Coerce empty/None to empty list for robustness
-        if val is None or val == "":
-            return []
-        if isinstance(val, str):
-            s = val.strip()
-            if s.startswith("[") or s.startswith("{"):
-                import json
-
-                try:
-                    parsed = json.loads(s)
-                    logger.debug(
-                        "clean_applicant_meta_preference parsed JSON",
-                        extra={
-                            "parsed_type": type(parsed).__name__,
-                            "len": len(parsed) if hasattr(parsed, "__len__") else None,
-                        },
-                    )
-                    return parsed
-                except Exception as e:
-                    logger.warning(
-                        "clean_applicant_meta_preference JSON parse failed; defaulting to []", extra={"error": str(e)}
-                    )
-                    return []
-            if "," in s or s:
-                out = [x.strip() for x in s.split(",") if x.strip()]
-                logger.debug("clean_applicant_meta_preference parsed CSV", extra={"count": len(out)})
-                return out
-        return val
-
-    def clean_school_meta_preference(self):
-        val = self.cleaned_data.get("school_meta_preference")
-        logger.debug(
-            "clean_school_meta_preference input", extra={"type": type(val).__name__, "value_preview": str(val)[:200]}
-        )
-        # Coerce empty/None to empty list for robustness
-        if val is None or val == "":
-            return []
-        if isinstance(val, str):
-            s = val.strip()
-            if s.startswith("[") or s.startswith("{"):
-                import json
-
-                try:
-                    parsed = json.loads(s)
-                    logger.debug(
-                        "clean_school_meta_preference parsed JSON",
-                        extra={
-                            "parsed_type": type(parsed).__name__,
-                            "len": len(parsed) if hasattr(parsed, "__len__") else None,
-                        },
-                    )
-                    return parsed
-                except Exception as e:
-                    logger.warning(
-                        "clean_school_meta_preference JSON parse failed; defaulting to []", extra={"error": str(e)}
-                    )
-                    return []
-            if "," in s or s:
-                out = [x.strip() for x in s.split(",") if x.strip()]
-                logger.debug("clean_school_meta_preference parsed CSV", extra={"count": len(out)})
-                return out
-        return val
 
     def clean(self):
         """Reject markets whose applicants x programs product is above the size limit (decision D4)."""
