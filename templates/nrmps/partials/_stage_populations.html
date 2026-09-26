@@ -1,4 +1,4 @@
-{% load simulation_tags %}
+{% load static simulation_tags %}
 <div id="stage-populations"
      class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'populations' or simulation|stage_active:'setup' %} border-2 border-accent{% endif %}">
   <div class="card-body">
@@ -56,7 +56,7 @@
         <input id="students-csv" type="file" name="file" accept=".csv,text/csv" class="file-input file-input-sm flex-1 min-w-0" required>
         <button type="submit" class="btn btn-sm btn-primary"><span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>Upload CSV</button>
       </form>
-      <p class="text-xs text-base-content/70 mt-1">CSV with a header row: <code>name,score</code>, optionally <code>score_meta</code> and <code>meta_preference</code> (JSON objects). The downloaded CSV can be uploaded again. The file is checked first; if it has problems, nothing changes.</p>
+      <p class="text-xs text-base-content/70 mt-1">CSV with a header row: <code>name,score</code>, optionally <code>score_meta</code> and <code>meta_preference</code> (JSON objects). The downloaded CSV can be uploaded again. The file is checked first; if it has problems, nothing changes. <a class="link" href="{% static 'samples/students_sample.csv' %}" download>Sample file</a>.</p>
     </div>
     <div class="divider my-1"></div>
     <div>
@@ -99,7 +99,7 @@
         <input id="schools-csv" type="file" name="file" accept=".csv,text/csv" class="file-input file-input-sm flex-1 min-w-0" required>
         <button type="submit" class="btn btn-sm btn-primary"><span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>Upload CSV</button>
       </form>
-      <p class="text-xs text-base-content/70 mt-1">CSV with a header row: <code>name,capacity,score</code>, optionally <code>score_meta</code> and <code>meta_preference</code> (JSON objects). The downloaded CSV can be uploaded again. The file is checked first; if it has problems, nothing changes.</p>
+      <p class="text-xs text-base-content/70 mt-1">CSV with a header row: <code>name,capacity,score</code>, optionally <code>score_meta</code> and <code>meta_preference</code> (JSON objects). The downloaded CSV can be uploaded again. The file is checked first; if it has problems, nothing changes. <a class="link" href="{% static 'samples/schools_sample.csv' %}" download>Sample file</a>.</p>
     </div>
   </div>
 </div>

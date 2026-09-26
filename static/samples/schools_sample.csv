@@ -1,0 +1,4 @@
+name,capacity,score,score_meta,meta_preference
+Sample Program A,4,0.425,"{""program_size"": 0.313, ""reputation"": 0.308, ""location"": 0.457}","{""board_scores"": 0.305, ""research"": 0.484, ""honors"": 0.211}"
+Sample Program B,4,0.381,"{""program_size"": 0.392, ""reputation"": 0.465, ""location"": 0.22}","{""board_scores"": 0.265, ""research"": 0.38, ""honors"": 0.355}"
+Sample Program C,4,0.409,"{""program_size"": 0.613, ""reputation"": 0.534, ""location"": 0.498}","{""board_scores"": 0.414, ""research"": 0.306, ""honors"": 0.281}"

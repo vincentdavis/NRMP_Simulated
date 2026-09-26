@@ -1,0 +1,13 @@
+name,score,score_meta,meta_preference
+Sample Student 01,0.787,"{""board_scores"": 0.867, ""research"": 0.589, ""honors"": 0.772}","{""program_size"": 0.21, ""reputation"": 0.282, ""location"": 0.507}"
+Sample Student 02,0.536,"{""board_scores"": 0.475, ""research"": 0.381, ""honors"": 0.488}","{""program_size"": 0.357, ""reputation"": 0.351, ""location"": 0.293}"
+Sample Student 03,0.709,"{""board_scores"": 0.847, ""research"": 0.85, ""honors"": 0.827}","{""program_size"": 0.259, ""reputation"": 0.394, ""location"": 0.346}"
+Sample Student 04,0.671,"{""board_scores"": 0.609, ""research"": 0.668, ""honors"": 0.951}","{""program_size"": 0.338, ""reputation"": 0.303, ""location"": 0.359}"
+Sample Student 05,0.66,"{""board_scores"": 0.657, ""research"": 0.591, ""honors"": 0.768}","{""program_size"": 0.228, ""reputation"": 0.298, ""location"": 0.474}"
+Sample Student 06,0.663,"{""board_scores"": 0.537, ""research"": 0.819, ""honors"": 0.687}","{""program_size"": 0.317, ""reputation"": 0.347, ""location"": 0.335}"
+Sample Student 07,0.599,"{""board_scores"": 0.539, ""research"": 0.687, ""honors"": 0.678}","{""program_size"": 0.386, ""reputation"": 0.328, ""location"": 0.286}"
+Sample Student 08,0.767,"{""board_scores"": 0.728, ""research"": 0.567, ""honors"": 0.877}","{""program_size"": 0.411, ""reputation"": 0.433, ""location"": 0.155}"
+Sample Student 09,0.708,"{""board_scores"": 0.76, ""research"": 0.857, ""honors"": 0.755}","{""program_size"": 0.481, ""reputation"": 0.149, ""location"": 0.369}"
+Sample Student 10,0.587,"{""board_scores"": 0.608, ""research"": 0.615, ""honors"": 0.794}","{""program_size"": 0.381, ""reputation"": 0.307, ""location"": 0.312}"
+Sample Student 11,0.967,"{""board_scores"": 0.84, ""research"": 0.844, ""honors"": 0.931}","{""program_size"": 0.364, ""reputation"": 0.221, ""location"": 0.415}"
+Sample Student 12,0.586,"{""board_scores"": 0.585, ""research"": 0.666, ""honors"": 0.515}","{""program_size"": 0.404, ""reputation"": 0.385, ""location"": 0.21}"

@@ -172,3 +172,27 @@ def test_only_the_first_problems_are_listed():
     assert info.value.total_errors == 30
     assert len(info.value.details) == 20
     assert "30 problems" in str(info.value)
+
+
+@pytest.mark.parametrize("kind", ["students", "schools"])
+def test_sample_files_are_valid(kind):
+    """The sample files linked beside the upload inputs parse without problems (HELP-15)."""
+    path = Path(django_settings.BASE_DIR) / "static" / "samples" / f"{kind}_sample.csv"
+    rows = parse_population_csv(SimpleUploadedFile(path.name, path.read_bytes()), kind)
+    assert rows
+
+
+def test_sample_files_work_together(auth_client, simulation):
+    """Uploading both samples gives a population the pre-interview stage can rate."""
+    for kind in ("students", "schools"):
+        path = Path(django_settings.BASE_DIR) / "static" / "samples" / f"{kind}_sample.csv"
+        response = _upload(auth_client, simulation, kind, path.read_bytes())
+        assert b"not loaded" not in response.content
+    se.initialize_interview(simulation)
+    assert se.compute_pre_interview_scores_and_rankings(simulation) == 12 * 3
+
+
+def test_upload_card_links_the_sample_files(auth_client, simulation):
+    body = auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})).content.decode()
+    assert "samples/students_sample.csv" in body
+    assert "samples/schools_sample.csv" in body
