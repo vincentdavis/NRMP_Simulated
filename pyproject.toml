@@ -58,6 +58,22 @@ warn_redundant_casts = true
 [tool.django-stubs]
 django_settings_module = "NRMP_Simulated.settings_test"
 
+# The engine and the parameter schema are pure Python + numpy: type-check them strictly (plan step 2.2).
+[[tool.mypy.overrides]]
+module = ["nrmps.engine.*", "nrmps.params"]
+# The per-module equivalent of --strict (mypy only accepts `strict` globally).
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+check_untyped_defs = true
+warn_return_any = true
+no_implicit_reexport = true
+strict_equality = true
+extra_checks = true
+
 [[tool.mypy.overrides]]
 module = ["scipy.*", "axes.*", "debug_toolbar.*", "django_browser_reload.*", "hypothesis.*", "axe_playwright_python.*"]
 ignore_missing_imports = true

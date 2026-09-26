@@ -37,6 +37,11 @@ COPY --from=css /src/theme/static/css/dist theme/static/css/dist
 RUN DEBUG=False SECRET_KEY=build-only-placeholder DATABASE_URL=sqlite:///:memory: LOGFIRE_SEND_TO_LOGFIRE=false \
     python manage.py collectstatic --noinput
 
+# The commit this image was built from, stored with every run (docs/model_spec.md §12.11). On Railway,
+# RAILWAY_GIT_COMMIT_SHA is used instead when this is empty.
+ARG GIT_SHA=""
+ENV GIT_SHA=$GIT_SHA
+
 # Run as an unprivileged user.
 RUN addgroup -S app && adduser -S -G app -H app
 USER app

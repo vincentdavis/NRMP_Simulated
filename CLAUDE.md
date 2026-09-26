@@ -107,6 +107,12 @@ A Django app that simulates the residency Match (NRMP) between applicants and re
 ```
 nrmps/
 ├── models.py             # domain models (above)
+├── engine/               # model 2.0 (docs/model_spec.md), pure numpy, no Django: rng (streams, Philox),
+│                         #   population, utility, rank, metrics, pipeline (run_pre_interview), persistence (npz)
+├── params.py             # SimulationParams: typed, versioned parameter schema (pydantic), the source of truth
+├── params_forms.py       # Django forms and formsets generated from the schema
+├── versions.py           # version stamps stored with runs (model, engine, schema, app, git SHA, numpy, Python)
+├── management/commands/  # nrmp_run: run the engine headless (--params, --seed, --out)
 ├── simulation_engine.py  # legacy engine: interview rows, pre/post-interview ratings and ranks (numpy, bulk SQL)
 ├── views.py              # simulation pages; HTMX steps through one dispatcher (STEPS) returning all stage cards
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
@@ -167,7 +173,9 @@ The project is being reworked according to a review and phased plan:
   `FINDINGS.md`, the register of every finding (IDs such as SIM-1 or ENG-3) with evidence and recommendations.
 - `docs/model_spec.md`: the normative model 2.0 specification that the Phase 2 engine implements.
 
-**Do not build `interview()`, `students_rank()`, `schools_rank()` or `match()` on the current per-row ORM engine in
-`simulation_engine.py`.** Phase 2 replaces it with a seeded, vectorised engine, and Phase 3 builds the remaining
-stages on that engine. `TODO.md` and `IDEAS.md` predate the plan; Appendix H of the review says what happens to each
+**Do not build `interview()`, `students_rank()`, `schools_rank()` or `match()` on the legacy engine in
+`simulation_engine.py`.** Phase 2 replaces it with the seeded, vectorised engine in `nrmps/engine/`, and Phase 3
+builds the remaining stages there. Engine rules: every random draw comes from its own stream (`engine/rng.py`,
+model_spec.md §12.1); pair-level values are computed block by block with the fixed-order arithmetic of §12.7, so any
+block equals the same entries of the full matrix; `nrmps/engine/` and `nrmps/params.py` are type-checked strictly. `TODO.md` and `IDEAS.md` predate the plan; Appendix H of the review says what happens to each
 item.

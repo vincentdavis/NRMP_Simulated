@@ -927,11 +927,14 @@ class SimulationParams(ParamGroup):
 
     def implemented_data(self) -> dict[str, Any]:
         """Return the JSON data without the parameters the engine does not use yet."""
-        return _implemented(type(self), self.to_json_data())
+        data: dict[str, Any] = _implemented(type(self), self.to_json_data())
+        return data
 
     def with_seed(self, seed: int | None) -> SimulationParams:
-        """Return a copy with `run.seed` replaced."""
-        return self.model_copy(update={"run": self.run.model_copy(update={"seed": seed})})
+        """Return a validated copy with `run.seed` replaced (raises ValidationError for a bad seed)."""
+        data = self.to_json_data()
+        data["run"]["seed"] = seed
+        return SimulationParams.model_validate(data)
 
 
 def canonical_json(data: Any) -> str:
