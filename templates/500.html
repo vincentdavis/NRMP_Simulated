@@ -1,0 +1,8 @@
+{% extends "error_base.html" %}
+{% block title %}Server error{% endblock %}
+{% block code %}500{% endblock %}
+{% block heading %}Something went wrong on our side{% endblock %}
+{% block message %}
+  <p>The error has been logged. Please try again in a moment. If it keeps happening, please
+    <a class="link" href="https://github.com/vincentdavis/NRMP_Simulated/issues">report it on the issue tracker</a>.</p>
+{% endblock %}

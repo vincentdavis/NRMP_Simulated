@@ -72,16 +72,23 @@
 
     <!-- Footer -->
     <footer class="footer footer-center bg-base-200 text-base-content p-4 mt-auto">
-        <div class="flex flex-col sm:flex-row justify-between items-center w-full max-w-6xl">
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-2 w-full max-w-6xl">
             <div class="text-sm">
                 &copy; {% now "Y" %} NRMP Simulations
             </div>
             <div class="flex gap-4 text-sm">
-                <a class="link link-hover" href="/privacy/">Privacy</a>
-                <a class="link link-hover" href="/terms/">Terms</a>
-                <a class="link link-hover" href="/contact/">Contact</a>
+                <a class="link link-hover" href="{% url 'nrmps:privacy' %}">Privacy</a>
+                <a class="link link-hover" href="{% url 'nrmps:terms' %}">Terms</a>
+                <a class="link link-hover" href="{% url 'nrmps:contact' %}">Contact</a>
+                <a class="link link-hover" href="{{ PROJECT_URL }}">Source</a>
             </div>
         </div>
+        <p class="text-xs text-base-content/70 max-w-4xl">
+            An independent educational and research simulator. Not affiliated with, sponsored or endorsed by the
+            National Resident Matching Program&reg; (NRMP&reg;). NRMP&reg;, National Resident Matching Program&reg;
+            and The Match&reg; are registered marks of their owner. Simulated outcomes are not predictions of any real
+            applicant's or program's match.
+        </p>
     </footer>
 
     <!-- Scripts -->

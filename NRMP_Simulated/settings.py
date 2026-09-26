@@ -93,6 +93,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
     #### Sub Apps
     "nrmps.apps.NrmpsConfig",
     #### Plugin and addons
@@ -141,6 +142,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "nrmps.context_processors.site",
             ],
         },
     },
@@ -222,6 +224,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # request until background jobs exist, so this keeps every step well within the gunicorn timeout.
 NRMP_MAX_PAIRS = int(os.environ.get("NRMP_MAX_PAIRS", "250000"))
 
+# Public contact details shown on the contact, privacy and terms pages. Without CONTACT_EMAIL only the issue tracker
+# is offered.
+CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "").strip()
+PROJECT_URL = "https://github.com/vincentdavis/NRMP_Simulated"
+
 # Authentication redirects
 LOGIN_REDIRECT_URL = "nrmps:index"
 LOGOUT_REDIRECT_URL = "nrmps:index"
@@ -274,8 +281,11 @@ if not DEBUG:
         console=False,
         service_name="nrmp-simulated",
         environment=os.environ.get("RAILWAY_ENVIRONMENT_NAME", "local"),
+        # Besides Logfire's default patterns (password, token, secret, ...), redact account details.
+        scrubbing=logfire.ScrubbingOptions(extra_patterns=["email", "full_name", "username"]),
     )
-    logfire.instrument_django()
+    # Static files and the health check are not worth a trace each.
+    logfire.instrument_django(excluded_urls="/static/.*,/healthz")
 
     LOGGING["handlers"]["logfire"] = {
         "class": "logfire.LogfireLoggingHandler",

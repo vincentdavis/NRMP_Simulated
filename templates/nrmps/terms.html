@@ -1,13 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Terms of Service - NRMP Simulations{% endblock %}
+{% load humanize %}
+{% block title %}Terms of use - NRMP Simulations{% endblock %}
 {% block content %}
-  <div class="py-8">
-    <h2 class="text-2xl font-bold mb-4">Terms of Service</h2>
-    <p class="text-base-content/70 mb-6">Please read these terms carefully.</p>
-    <ol class="list-decimal ml-6 space-y-2">
-      <li>This software is provided "as is" without warranty of any kind.</li>
-      <li>Use the application for research and educational purposes.</li>
-      <li>You are responsible for the data you upload and its compliance.</li>
+  <div class="py-8 max-w-3xl space-y-6">
+    <h1 class="text-2xl font-bold">Terms of use</h1>
+    <p class="text-base-content/80">By using NRMP Simulations you agree to these terms.</p>
+
+    <ol class="list-decimal ml-6 space-y-3">
+      <li>
+        <strong>Purpose.</strong> The site is for education and research. It simulates a residency matching market
+        from assumptions you choose. <strong>Simulated outcomes are not predictions</strong> of any real applicant's or
+        program's match and must not be relied on for real application, ranking or hiring decisions.
+      </li>
+      <li>
+        <strong>Not affiliated with the NRMP.</strong> This is an independent project. It is not affiliated with,
+        sponsored or endorsed by the National Resident Matching Program&reg; (NRMP&reg;). NRMP&reg;, National Resident
+        Matching Program&reg; and The Match&reg; are registered marks of their owner.
+      </li>
+      <li>
+        <strong>Acceptable use.</strong> Do not upload personal data about identifiable people, real applicant data, or
+        data from the NRMP, ERAS or similar systems that you are not permitted to share. Do not try to disrupt the
+        service or access other users' data. Simulation steps are limited in size (currently
+        {{ MAX_PAIRS|intcomma }} applicant &times; program pairs); accounts that abuse the service may be suspended.
+      </li>
+      <li>
+        <strong>Your account.</strong> You are responsible for keeping your password safe and for what is done with
+        your account.
+      </li>
+      <li>
+        <strong>No warranty.</strong> The service and its results are provided "as is", without warranty of any kind,
+        and may change or be interrupted. The source code is available under the
+        <a class="link" href="{{ PROJECT_URL }}/blob/main/LICENSE">MIT License</a>.
+      </li>
+      <li>
+        <strong>Privacy.</strong> How data is handled is described on the
+        <a class="link" href="{% url 'nrmps:privacy' %}">privacy page</a>.
+      </li>
+      <li>
+        <strong>Changes.</strong> These terms may be updated; the current version is always on this page.
+      </li>
     </ol>
   </div>
 {% endblock %}

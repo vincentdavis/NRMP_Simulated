@@ -1,14 +1,62 @@
 {% extends "base.html" %}
-{% block title %}Privacy Policy - NRMP Simulations{% endblock %}
+{% block title %}Privacy - NRMP Simulations{% endblock %}
 {% block content %}
-  <div class="py-8">
-    <h2 class="text-2xl font-bold mb-4">Privacy Policy</h2>
-    <p class="text-base-content/70 mb-6">Your privacy is important to us.</p>
-    <p class="mb-4">This project is intended for research and simulation purposes. We store minimal data required to run simulations and manage user accounts. Do not upload sensitive personally identifiable information (PII) unless necessary for your research and in compliance with your institution's policies.</p>
-    <ul class="list-disc ml-6 space-y-2">
-      <li>Accounts: basic authentication without email verification.</li>
-      <li>Data: uploaded datasets are kept in your environment.</li>
-      <li>Cookies: standard Django session cookies are used.</li>
-    </ul>
+  <div class="py-8 max-w-3xl space-y-6">
+    <h1 class="text-2xl font-bold">Privacy</h1>
+    <p class="text-base-content/80">
+      NRMP Simulations is a research and teaching tool. It keeps only what it needs to run your simulations and your
+      account. Please do not upload personal data about real people.
+    </p>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-2">What is stored</h2>
+      <ul class="list-disc ml-6 space-y-1">
+        <li><strong>Your account:</strong> username, password (stored only as a salted hash), and the optional full
+          name and email address you give. Email addresses are not verified yet.</li>
+        <li><strong>Your simulations:</strong> their names and descriptions, configurations, the applicant and program
+          populations you generate or upload, and the computed ratings and rankings.</li>
+        <li><strong>Uploads:</strong> CSV files are read in memory and not kept as files; only the rows they contain
+          are stored, as the simulation's population.</li>
+      </ul>
+      <p class="mt-2">Everything is stored in the site's database, hosted by the cloud provider
+        <a class="link" href="https://railway.com">Railway</a>. Only you can see your simulations.</p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-2">Logs and monitoring</h2>
+      <p>
+        To keep the site working, the server records technical information about requests: the page address, the time,
+        the response status and error details. When enabled, these records are sent to the monitoring service
+        <a class="link" href="https://pydantic.dev/logfire">Pydantic Logfire</a>, which processes them on our behalf and
+        keeps them according to its retention settings. Error messages identify records by number, not by the names
+        in your data, and account fields such as email addresses are redacted.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-2">Cookies</h2>
+      <p>
+        The site uses two cookies that it needs to work: a session cookie that keeps you signed in and a security
+        (CSRF) cookie that protects forms. There are no analytics or advertising cookies.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-2">How long data is kept, and deleting it</h2>
+      <p>
+        Your data is kept until you delete it. Deleting a simulation deletes its configuration, populations and results.
+        To delete your account and everything in it,
+        {% if CONTACT_EMAIL %}email <a class="link" href="mailto:{{ CONTACT_EMAIL }}">{{ CONTACT_EMAIL }}</a>{% else %}contact the site operator through the <a class="link" href="{{ ISSUES_URL }}">issue tracker</a>{% endif %};
+        self-service account deletion and data export are planned.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold mb-2">Your uploads</h2>
+      <p>
+        Use made-up or anonymised data. Do not upload information about real applicants or programs that identifies
+        people, and do not upload data from the NRMP, ERAS or similar systems that you are not allowed to share.
+      </p>
+    </section>
   </div>
 {% endblock %}

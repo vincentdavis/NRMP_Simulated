@@ -1,0 +1,9 @@
+{% extends "error_base.html" %}
+{% block title %}Form expired{% endblock %}
+{% block code %}403{% endblock %}
+{% block heading %}This form has expired{% endblock %}
+{% block message %}
+  <p>For your security, forms can only be sent from a page that is still valid. This usually happens after signing
+    in or out in another tab, or when a page was left open for a long time. Go back, reload the page and try again.</p>
+  <p class="mt-2">Your browser must accept cookies from this site.</p>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% load static tailwind_tags %}<!DOCTYPE html>
+{% comment %}
+  Layout for error pages. It uses no request, user or database, so it still renders when those are what failed
+  (the 500 page is rendered without any context).
+{% endcomment %}
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Error{% endblock %} - NRMP Simulations</title>
+  <link rel="icon" type="image/png" href="{% static 'NRMP_Simulations_favcon.png' %}">
+  {% tailwind_css %}
+</head>
+<body class="flex flex-col min-h-screen bg-base-100">
+  <main class="flex-1 flex items-center justify-center px-4 py-16">
+    <div class="max-w-lg text-center">
+      <p class="text-6xl font-bold text-base-content/40 mb-4">{% block code %}{% endblock %}</p>
+      <h1 class="text-2xl font-bold mb-4">{% block heading %}Something went wrong{% endblock %}</h1>
+      <div class="text-base-content/80 mb-8">{% block message %}{% endblock %}</div>
+      <a class="btn btn-primary" href="/">Go to the home page</a>
+    </div>
+  </main>
+</body>
+</html>

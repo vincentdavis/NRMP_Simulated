@@ -38,7 +38,8 @@ version refuses to start without real settings. In Railway, open **web → Varia
 2. **Check `DATABASE_URL`.** It must reference the Postgres service, for example `${{Postgres.DATABASE_URL}}`.
    Without it the app stops at startup instead of silently using a throwaway SQLite file.
 3. **Remove `DEBUG`**, or set it to `False`.
-4. Optional: set `LOGFIRE_TOKEN`. Without it, Logfire sends nothing.
+4. Optional: set `LOGFIRE_TOKEN` (without it, Logfire sends nothing) and `CONTACT_EMAIL`, the address the contact
+   and privacy pages give for account and data requests (without it they point to the issue tracker only).
 
 Then deploy. `ALLOWED_HOSTS` defaults to `localhost,127.0.0.1,nrmp-simulated.heteroskedastic.org`, and
 `RAILWAY_PUBLIC_DOMAIN` is always added. Set `ALLOWED_HOSTS` explicitly to serve other domains.

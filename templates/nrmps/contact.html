@@ -1,13 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Contact - NRMP Simulations{% endblock %}
 {% block content %}
-  <div class="py-8">
-    <h2 class="text-2xl font-bold mb-4">Contact</h2>
-    <p class="text-base-content/70 mb-6">Have questions or feedback? We'd love to hear from you.</p>
+  <div class="py-8 max-w-3xl">
+    <h1 class="text-2xl font-bold mb-4">Contact</h1>
+    <p class="text-base-content/70 mb-6">Questions, bug reports and ideas are welcome.</p>
     <div class="card bg-base-100 shadow-xl">
-      <div class="card-body">
-        <p class="mb-2">Email: <a href="mailto:support@example.com" class="link link-primary">support@example.com</a></p>
-        <p>GitHub Issues: <a href="https://github.com/" target="_blank" rel="noopener" class="link link-primary">Open an issue</a></p>
+      <div class="card-body space-y-2">
+        <p>
+          Report a bug or suggest a feature on the
+          <a href="{{ ISSUES_URL }}" class="link link-primary">project's issue tracker</a> (issues are public).
+        </p>
+        {% if CONTACT_EMAIL %}
+          <p>
+            For account or data requests, email
+            <a href="mailto:{{ CONTACT_EMAIL }}" class="link link-primary">{{ CONTACT_EMAIL }}</a>.
+          </p>
+        {% endif %}
+        <p>The source code is on <a href="{{ PROJECT_URL }}" class="link link-primary">GitHub</a>.</p>
       </div>
     </div>
   </div>
