@@ -18,17 +18,18 @@
     {% endif %}
     <div class="mb-4">
       <div class="flex flex-wrap gap-2 justify-between items-center mb-2">
-        <div><strong>Students:</strong> {{ simulation.students.count }}</div>
+        <div><strong>Students:</strong> {{ counts.n_students }}</div>
         <div class="flex gap-2 flex-wrap">
           <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_students' pk=simulation.pk %}">View</a>
           <a class="btn btn-sm" href="{% url 'nrmps:simulation_download_students' pk=simulation.pk %}">CSV</a>
-          <button class="btn btn-sm btn-primary btn-outline"
+          <button class="btn btn-sm btn-primary"
                   hx-post="{% url 'nrmps:simulation_create_students' pk=simulation.pk %}"
                   hx-target="#stage-cards"
                   hx-swap="outerHTML"
                   hx-disabled-elt="this"
                   hx-sync="#stage-cards:drop"
-                  hx-confirm="(Re)create students from the latest configuration? This will replace existing students.">
+                  hx-confirm="Create students from the configuration?{% if counts.n_students %} This replaces the {{ counts.n_students }} current students{% if counts.n_interviews %} and deletes all {{ counts.n_interviews }} interview rows with their ratings and ranks{% endif %}.{% endif %}">
+            <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
             (re)Create
           </button>
           <button class="btn btn-sm btn-error"
@@ -37,12 +38,14 @@
                   hx-swap="outerHTML"
                   hx-disabled-elt="this"
                   hx-sync="#stage-cards:drop"
-                  hx-confirm="Delete all students for this simulation?">
+                  hx-confirm="Delete all {{ counts.n_students }} students?{% if counts.n_interviews %} This also deletes all {{ counts.n_interviews }} interview rows with their ratings and ranks.{% endif %}">
+            <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
             Delete
           </button>
         </div>
       </div>
       <form hx-post="{% url 'nrmps:simulation_upload_students' pk=simulation.pk %}"
+            {% if counts.n_students %}hx-confirm="Replace the {{ counts.n_students }} current students with the rows in the file?{% if counts.n_interviews %} This also deletes all {{ counts.n_interviews }} interview rows.{% endif %} If the file has problems, nothing changes."{% endif %}
             hx-target="#stage-cards"
             hx-swap="outerHTML"
             hx-disabled-elt="find button"
@@ -51,24 +54,25 @@
             class="flex flex-wrap items-center gap-2">
         <label class="sr-only" for="students-csv">Students CSV file</label>
         <input id="students-csv" type="file" name="file" accept=".csv,text/csv" class="file-input file-input-sm flex-1 min-w-0" required>
-        <button type="submit" class="btn btn-sm btn-primary">Upload CSV</button>
+        <button type="submit" class="btn btn-sm btn-primary"><span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>Upload CSV</button>
       </form>
       <p class="text-xs text-base-content/70 mt-1">CSV with a header row: <code>name,score</code>, optionally <code>score_meta</code> and <code>meta_preference</code> (JSON objects). The downloaded CSV can be uploaded again. The file is checked first; if it has problems, nothing changes.</p>
     </div>
     <div class="divider my-1"></div>
     <div>
       <div class="flex flex-wrap gap-2 justify-between items-center mb-2">
-        <div><strong>Schools:</strong> {{ simulation.schools.count }}</div>
+        <div><strong>Schools:</strong> {{ counts.n_schools }}</div>
         <div class="flex gap-2 flex-wrap">
           <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_schools' pk=simulation.pk %}">View</a>
           <a class="btn btn-sm" href="{% url 'nrmps:simulation_download_schools' pk=simulation.pk %}">CSV</a>
-          <button class="btn btn-sm btn-primary btn-outline"
+          <button class="btn btn-sm btn-primary"
                   hx-post="{% url 'nrmps:simulation_create_schools' pk=simulation.pk %}"
                   hx-target="#stage-cards"
                   hx-swap="outerHTML"
                   hx-disabled-elt="this"
                   hx-sync="#stage-cards:drop"
-                  hx-confirm="(Re)create schools from the latest configuration? This will replace existing schools.">
+                  hx-confirm="Create schools from the configuration?{% if counts.n_schools %} This replaces the {{ counts.n_schools }} current schools{% if counts.n_interviews %} and deletes all {{ counts.n_interviews }} interview rows with their ratings and ranks{% endif %}.{% endif %}">
+            <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
             (re)Create
           </button>
           <button class="btn btn-sm btn-error"
@@ -77,12 +81,14 @@
                   hx-swap="outerHTML"
                   hx-disabled-elt="this"
                   hx-sync="#stage-cards:drop"
-                  hx-confirm="Delete all schools for this simulation?">
+                  hx-confirm="Delete all {{ counts.n_schools }} schools?{% if counts.n_interviews %} This also deletes all {{ counts.n_interviews }} interview rows with their ratings and ranks.{% endif %}">
+            <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
             Delete
           </button>
         </div>
       </div>
       <form hx-post="{% url 'nrmps:simulation_upload_schools' pk=simulation.pk %}"
+            {% if counts.n_schools %}hx-confirm="Replace the {{ counts.n_schools }} current schools with the rows in the file?{% if counts.n_interviews %} This also deletes all {{ counts.n_interviews }} interview rows.{% endif %} If the file has problems, nothing changes."{% endif %}
             hx-target="#stage-cards"
             hx-swap="outerHTML"
             hx-disabled-elt="find button"
@@ -91,7 +97,7 @@
             class="flex flex-wrap items-center gap-2">
         <label class="sr-only" for="schools-csv">Schools CSV file</label>
         <input id="schools-csv" type="file" name="file" accept=".csv,text/csv" class="file-input file-input-sm flex-1 min-w-0" required>
-        <button type="submit" class="btn btn-sm btn-primary">Upload CSV</button>
+        <button type="submit" class="btn btn-sm btn-primary"><span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>Upload CSV</button>
       </form>
       <p class="text-xs text-base-content/70 mt-1">CSV with a header row: <code>name,capacity,score</code>, optionally <code>score_meta</code> and <code>meta_preference</code> (JSON objects). The downloaded CSV can be uploaded again. The file is checked first; if it has problems, nothing changes.</p>
     </div>

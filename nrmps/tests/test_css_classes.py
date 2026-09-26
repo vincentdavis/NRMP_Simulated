@@ -17,8 +17,10 @@ CSS_FILE = Path(settings.BASE_DIR) / "theme" / "static" / "css" / "dist" / "styl
 TEMPLATE_DIRS = [Path(settings.BASE_DIR) / "templates", Path(settings.BASE_DIR) / "theme" / "templates"]
 PYTHON_DIRS = [Path(settings.BASE_DIR) / "nrmps"]
 
-# Classes that are hooks for scripts or tests rather than styling.
-UNSTYLED_HOOKS: set[str] = set()
+# Classes that are hooks for scripts or styled by a library's own CSS rather than the built stylesheet.
+UNSTYLED_HOOKS = {
+    "htmx-indicator",  # htmx injects the rule that shows it while a request runs
+}
 
 CLASS_ATTRIBUTE = re.compile(r"""(?<![:\w-])class\s*=\s*(["'])(.*?)\1""", re.S)
 PYTHON_CLASS = re.compile(r"""["']class["']\s*:\s*["']([^"']*)["']""")

@@ -5,10 +5,11 @@ FROM node:24-alpine AS css
 WORKDIR /src
 COPY theme/static_src/package.json theme/static_src/package-lock.json theme/static_src/
 RUN cd theme/static_src && npm ci --no-audit --no-fund
-# Tailwind reads the templates and app code for class names (see theme/static_src/src/styles.css).
+# Tailwind reads the templates, app code and site scripts for class names (see theme/static_src/src/styles.css).
 COPY templates templates
 COPY theme theme
 COPY nrmps nrmps
+COPY static/js static/js
 RUN cd theme/static_src && npm run build
 
 # --- Stage 2: the application ----------------------------------------------------------------------------------

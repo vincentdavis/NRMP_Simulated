@@ -78,3 +78,11 @@ def test_new_simulation_page_has_no_serious_accessibility_violations(logged_in_p
     assert _serious_violations(page) == []
     page.set_viewport_size(PHONE)
     assert _overflow(page) <= 0
+
+
+@pytest.mark.parametrize("path", ["/", "/login/", "/simulations/{pk}/", "/simulations/{pk}/interviews/"])
+def test_dark_theme_has_no_serious_accessibility_violations(logged_in_page, live, worked_simulation, path):
+    page = logged_in_page
+    page.emulate_media(color_scheme="dark")
+    page.goto(live + path.format(pk=worked_simulation.pk))
+    assert _serious_violations(page) == []

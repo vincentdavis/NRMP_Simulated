@@ -122,7 +122,7 @@ def _button_disabled(body: str, label: str) -> bool:
     """Return whether the step button with this label is rendered disabled."""
     import re
 
-    match = re.search(r"<button[^>]*>\s*" + re.escape(label) + r"\s*</button>", body, re.S)
+    match = re.search(r"<button[^>]*>\s*(?:<span[^>]*></span>\s*)?" + re.escape(label) + r"\s*</button>", body, re.S)
     assert match, label
     return re.search(r"\sdisabled[\s>]", match.group(0)) is not None
 

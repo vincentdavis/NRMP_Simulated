@@ -43,8 +43,8 @@
                 <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">
                   Manage
                 </a>
-                <form class="inline" method="post" action="{% url 'nrmps:simulation_delete' pk=sim.pk %}"
-                      x-data @submit.prevent="if (confirm('Delete this simulation and all its data?')) { $el.submit() }">
+                <form method="post" action="{% url 'nrmps:simulation_delete' pk=sim.pk %}"
+                      data-confirm="Delete the simulation “{{ sim.name }}” and everything in it? This cannot be undone.">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-sm btn-error">Delete</button>
                 </form>

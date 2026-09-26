@@ -1,0 +1,8 @@
+{% comment %}An attribute dict (name -> number) as small labelled chips, e.g. research 0.53.{% endcomment %}
+<div class="flex flex-wrap gap-1">
+  {% for key, value in values.items %}
+    <span class="badge badge-outline badge-sm whitespace-nowrap">{{ key }} <span class="tabular-nums">{{ value|floatformat:places }}</span></span>
+  {% empty %}
+    <span class="text-base-content/70">-</span>
+  {% endfor %}
+</div>

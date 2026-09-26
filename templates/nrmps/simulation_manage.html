@@ -3,12 +3,13 @@
 {% block title %}{{ simulation.name }} - NRMP Simulations{% endblock %}
 {% block content %}
   <div class="mt-4">
+    {% include "nrmps/components/breadcrumbs.html" %}
     <div class="flex flex-wrap gap-2 justify-between items-center mb-6">
       <h1 class="text-2xl font-bold min-w-0 break-words">{{ simulation.name }}</h1>
       <div class="flex flex-wrap gap-2">
         <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
-        <form method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}" x-data
-              @submit.prevent="if (confirm('Delete this simulation and all its data?')) { $el.submit() }">
+        <form method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}"
+              data-confirm="Delete the simulation “{{ simulation.name }}” with its configuration, {{ counts.n_students }} students, {{ counts.n_schools }} schools and {{ counts.n_interviews }} interview rows? This cannot be undone.">
           {% csrf_token %}
           <button type="submit" class="btn btn-error">Delete simulation</button>
         </form>

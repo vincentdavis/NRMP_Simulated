@@ -23,7 +23,7 @@
     <div class="flex gap-2 mt-2">
       <input type="text" class="input input-sm flex-1 min-w-0" x-model="newItem" @keydown.enter.prevent="addItem()"
              placeholder="Attribute name, then Enter" aria-label="New attribute for {{ label|lower }}">
-      <button type="button" class="btn btn-sm btn-primary btn-outline" @click="addItem()">Add</button>
+      <button type="button" class="btn btn-sm btn-primary" @click="addItem()">Add</button>
     </div>
     <input type="hidden" name="{{ side }}_meta_preference" id="id_{{ side }}_meta_preference"
            :value="jsonValue()" value="{{ json }}">

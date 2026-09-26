@@ -17,14 +17,15 @@
       <div class="text-sm">Compute pre-interview scores and rankings for all student-school pairs.</div>
       <div class="flex gap-2 flex-wrap">
         <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View Interviews</a>
-        <button class="btn btn-sm btn-primary btn-outline"
+        <button class="btn btn-sm btn-primary"
                 hx-post="{% url 'nrmps:simulation_compute_pre_interview_all' pk=simulation.pk %}"
                 hx-target="#stage-cards"
                 hx-swap="outerHTML"
                 hx-disabled-elt="this"
                 hx-sync="#stage-cards:drop"
-                hx-confirm="Compute pre-interview scores and rankings? This runs: 1) Students rate schools, 2) Schools rate students, 3) Compute all rankings."
+                hx-confirm="Compute true utilities, noisy pre-interview ratings and ranks for the {{ counts.n_interviews }} interview rows? Existing pre-interview values are replaced."
                 {% if not simulation|stage_reached:"initialized" %}disabled{% endif %}>
+          <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
           Compute Pre-Interview All
         </button>
       </div>

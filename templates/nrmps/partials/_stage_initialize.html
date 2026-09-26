@@ -14,18 +14,19 @@
     </h2>
     {% include "nrmps/partials/_stage_alert.html" with stage="initialized" %}
     <div class="flex flex-wrap gap-2 justify-between items-center">
-      <div><strong>Interviews:</strong> {{ simulation.interviews.count }}</div>
+      <div><strong>Interviews:</strong> {{ counts.n_interviews }}</div>
       <div class="flex gap-2 flex-wrap">
         <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View List</a>
         <a class="btn btn-sm" href="{% url 'nrmps:simulation_download_interviews' pk=simulation.pk %}">Download CSV</a>
-        <button class="btn btn-sm btn-primary btn-outline"
+        <button class="btn btn-sm btn-primary"
                 hx-post="{% url 'nrmps:simulation_initialize_interviews' pk=simulation.pk %}"
                 hx-target="#stage-cards"
                 hx-swap="outerHTML"
                 hx-disabled-elt="this"
                 hx-sync="#stage-cards:drop"
-                hx-confirm="(Re)initialize interview data? This will replace existing interviews."
+                hx-confirm="Create one interview row per student and school pair?{% if counts.n_interviews %} This replaces the {{ counts.n_interviews }} current rows and their ratings and ranks.{% endif %}"
                 {% if not simulation|stage_reached:"populations" %}disabled{% endif %}>
+          <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
           (re)Initialize Interviews
         </button>
       </div>

@@ -1,5 +1,5 @@
 <th scope="col"{% if align == "right" %} class="text-right"{% endif %}{% if aria_sort %} aria-sort="{{ aria_sort }}"{% endif %}>
-  <a class="link link-primary font-bold" href="?sort={{ key }}&order={{ next_order }}&page_size={{ page_size }}">
+  <a class="link font-bold" href="?sort={{ key }}&order={{ next_order }}&page_size={{ page_size }}">
     {{ label }}
     {% if active %}<span aria-hidden="true">{% if order == "asc" %}▲{% else %}▼{% endif %}</span>{% else %}<span class="text-base-content/50" aria-hidden="true">⇅</span>{% endif %}
   </a>

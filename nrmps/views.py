@@ -3,13 +3,15 @@ import inspect
 import json
 import logging
 
+from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import DatabaseError, connection, transaction
-from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
+from django_htmx.http import trigger_client_event
 
 from . import models
 from .exceptions import SimulationError
@@ -41,6 +43,7 @@ def _render_stage_cards(
     context = {
         "simulation": simulation,
         "stages": simulation.get_workflow_stages(),
+        "counts": _counts(simulation),
         "error": error,
         "error_stage": error_stage,
         "error_details": error_details or [],
@@ -50,20 +53,32 @@ def _render_stage_cards(
     return HttpResponse(cards + stepper)
 
 
-def _run_step(request, pk: int, stage: str, action):
+def _counts(simulation) -> dict[str, int]:
+    """Return the population and interview-row counts the stage cards show and quote in confirmations."""
+    return {
+        "n_students": simulation.students.count(),
+        "n_schools": simulation.schools.count(),
+        "n_interviews": simulation.interviews.count(),
+    }
+
+
+def _run_step(request, pk: int, stage: str, action, success: str):
     """Run a simulation step for the owner and re-render the stage cards.
 
-    `action(sim)` does the work. A SimulationError (a problem the user can fix) is shown in the card of `stage`;
-    any other exception is a bug and propagates.
+    `action(sim)` does the work and may return a count, which `success` can use as `{count:,}`; that message is shown
+    as a toast. A SimulationError (a problem the user can fix) is shown in the card of `stage` instead; any other
+    exception is a bug and propagates (the page's HTMX error handler then shows a generic error toast).
     """
     sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
     try:
-        action(sim)
+        result = action(sim)
     except SimulationError as exc:
         logger.info("Simulation step failed simulation_id=%s stage=%s: %s", sim.pk, stage, exc)
         details = getattr(exc, "details", None)
-        return _render_stage_cards(request, sim, error=str(exc), error_stage=stage, error_details=details)
-    return _render_stage_cards(request, sim)
+        response = _render_stage_cards(request, sim, error=str(exc), error_stage=stage, error_details=details)
+        return trigger_client_event(response, "toast", {"level": "error", "text": str(exc)})
+    response = _render_stage_cards(request, sim)
+    return trigger_client_event(response, "toast", {"level": "success", "text": success.format(count=result or 0)})
 
 
 def _page_size(request) -> int:
@@ -178,6 +193,7 @@ def simulation_create(request):
                 sim.owner = request.user
                 sim.save()
                 SimulationConfig.objects.create(simulation=sim)
+            messages.success(request, "Simulation created with a default configuration. Generate the populations next.")
             return redirect("nrmps:simulation_manage", pk=sim.pk)
     else:
         form = SimulationForm()
@@ -201,12 +217,14 @@ def simulation_manage(request, pk: int):
                 config = config_form.save(commit=False)
                 config.simulation = sim
                 config.save()
+                messages.success(request, "Configuration saved. Regenerate the populations to use it.")
                 return redirect("nrmps:simulation_manage", pk=sim.pk)
             logger.warning("Configuration form invalid simulation_id=%s fields=%s", sim.pk, sorted(config_form.errors))
         else:
             form = SimulationForm(request.POST, instance=sim)
             if form.is_valid():
                 form.save()
+                messages.success(request, "Simulation saved.")
                 return redirect("nrmps:simulation_manage", pk=sim.pk)
             logger.warning("Simulation form invalid simulation_id=%s fields=%s", sim.pk, sorted(form.errors))
 
@@ -218,6 +236,7 @@ def simulation_manage(request, pk: int):
         "students_upload_form": StudentsUploadForm(),
         "schools_upload_form": SchoolsUploadForm(),
         "stages": sim.get_workflow_stages(),
+        "counts": _counts(sim),
         # The attribute-list editors read their items from json_script elements; the hidden inputs' fallback values
         # (used without JavaScript) are autoescaped JSON. Nothing user-supplied is marked safe.
         "meta_lists": meta_lists,
@@ -240,11 +259,11 @@ def _attribute_list(form, name: str) -> list[str]:
 @login_required
 @require_http_methods(["POST"])
 def simulation_delete(request, pk: int):
-    """Delete a Simulation."""
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
+    """Delete a simulation with everything in it."""
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
+    name = sim.name
     sim.delete()
+    messages.success(request, f"Deleted the simulation “{name}”.")
     return redirect("nrmps:simulation_list")
 
 
@@ -257,28 +276,28 @@ def simulation_delete(request, pk: int):
 @require_http_methods(["POST"])
 def simulation_delete_students(request, pk: int):
     """Delete all applicants (and, by cascade, all interview rows)."""
-    return _run_step(request, pk, "populations", lambda sim: sim.delete_students())
+    return _run_step(request, pk, "populations", lambda sim: sim.delete_students(), "Deleted all students.")
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_delete_schools(request, pk: int):
     """Delete all programs (and, by cascade, all interview rows)."""
-    return _run_step(request, pk, "populations", lambda sim: sim.delete_schools())
+    return _run_step(request, pk, "populations", lambda sim: sim.delete_schools(), "Deleted all schools.")
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_create_students(request, pk: int):
     """(Re)create the applicant population from the latest configuration."""
-    return _run_step(request, pk, "populations", lambda sim: sim.create_students())
+    return _run_step(request, pk, "populations", lambda sim: sim.create_students(), "Created {count:,} students.")
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_create_schools(request, pk: int):
     """(Re)create the program population from the latest configuration."""
-    return _run_step(request, pk, "populations", lambda sim: sim.create_schools())
+    return _run_step(request, pk, "populations", lambda sim: sim.create_schools(), "Created {count:,} schools.")
 
 
 def _upload(request, pk: int, form_class, kind: str):
@@ -290,11 +309,10 @@ def _upload(request, pk: int, form_class, kind: str):
             raise SimulationError("Choose a CSV file to upload.")
         rows = parse_population_csv(form.cleaned_data["file"], kind)
         if kind == "students":
-            sim.upload_students(rows)
-        else:
-            sim.upload_schools(rows)
+            return sim.upload_students(rows)
+        return sim.upload_schools(rows)
 
-    return _run_step(request, pk, "populations", action)
+    return _run_step(request, pk, "populations", action, f"Loaded {{count:,}} {kind} from the file.")
 
 
 @login_required
@@ -345,14 +363,14 @@ def simulation_students(request, pk: int):
     sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
 
     # Sorting
-    sort = request.GET.get("sort", "name").lower()
+    sort = request.GET.get("sort", "id").lower()
     order = request.GET.get("order", "asc").lower()
     allowed = {
         "id": "id",
         "name": "name",
         "score": "score",
     }
-    sort_field = allowed.get(sort, "name")
+    sort_field = allowed.get(sort, "id")
     ordering = [sort_field if order != "desc" else f"-{sort_field}", "id"]
 
     page_size = _page_size(request)
@@ -378,7 +396,7 @@ def simulation_schools(request, pk: int):
     """List schools for a simulation with sorting and pagination (default 100)."""
     sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
 
-    sort = request.GET.get("sort", "name").lower()
+    sort = request.GET.get("sort", "id").lower()
     order = request.GET.get("order", "asc").lower()
     allowed = {
         "id": "id",
@@ -386,7 +404,7 @@ def simulation_schools(request, pk: int):
         "capacity": "capacity",
         "score": "score",
     }
-    sort_field = allowed.get(sort, "name")
+    sort_field = allowed.get(sort, "id")
     ordering = [sort_field if order != "desc" else f"-{sort_field}", "id"]
 
     page_size = _page_size(request)
@@ -415,7 +433,7 @@ def simulation_initialize_interviews(request, pk: int):
     """(Re)create the interview rows: one per applicant x program pair."""
     from .simulation_engine import initialize_interview
 
-    return _run_step(request, pk, "initialized", initialize_interview)
+    return _run_step(request, pk, "initialized", initialize_interview, "Created {count:,} interview rows.")
 
 
 @login_required
@@ -424,7 +442,13 @@ def simulation_compute_pre_interview_all(request, pk: int):
     """Compute true utilities, noisy pre-interview ratings and strict ranks for every interview row."""
     from .simulation_engine import compute_pre_interview_scores_and_rankings
 
-    return _run_step(request, pk, "pre_interview", compute_pre_interview_scores_and_rankings)
+    return _run_step(
+        request,
+        pk,
+        "pre_interview",
+        compute_pre_interview_scores_and_rankings,
+        "Computed pre-interview ratings and ranks for {count:,} pairs.",
+    )
 
 
 @login_required
@@ -433,7 +457,13 @@ def simulation_compute_post_interview_all(request, pk: int):
     """Compute post-interview ratings and ranks for the pairs that interviewed (none until Phase 3)."""
     from .simulation_engine import compute_post_interview_scores_and_rankings
 
-    return _run_step(request, pk, "post_interview", compute_post_interview_scores_and_rankings)
+    return _run_step(
+        request,
+        pk,
+        "post_interview",
+        compute_post_interview_scores_and_rankings,
+        "Computed post-interview ratings and ranks for {count:,} pairs.",
+    )
 
 
 @login_required
@@ -452,6 +482,8 @@ def simulation_interviews(request, pk: int):
         "status": "status",
         "student_pre_score": "student_pre_observed_score_of_school",
         "school_pre_score": "school_pre_observed_score_of_student",
+        "student_true": "student_true_score_of_school",
+        "school_true": "school_true_score_of_student",
         "student_pre_rank": "students_pre_rank_of_school",
         "school_pre_rank": "schools_pre_rank_of_student",
     }

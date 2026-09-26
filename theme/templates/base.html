@@ -1,19 +1,20 @@
 {% load static tailwind_tags %}
-{% load django_htmx %}
+{% load django_htmx nav_tags %}
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}NRMP Simulations{% endblock %}</title>
     <link rel="icon" type="image/png" href="{% static 'NRMP_Simulations_favcon.png' %}">
-    <link rel="shortcut icon" type="image/png" href="{% static 'NRMP_Simulations_favcon.png' %}">
+    {# Apply a saved light/dark choice before first paint; without one, daisyUI follows the system setting. #}
+    <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
     {% tailwind_css %}
     {% block extra_head %}{% endblock %}
 </head>
 
 <body class="flex flex-col min-h-screen bg-base-100" hx-headers='{"x-csrftoken": "{{ csrf_token }}"}'>
-    <!-- Navigation -->
+    <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 btn btn-sm">Skip to content</a>
     <header class="navbar bg-base-300 shadow-lg">
         <div class="navbar-start">
             <div class="dropdown">
@@ -23,12 +24,13 @@
                               d="M4 6h16M4 12h8m-8 6h16"></path>
                     </svg>
                 </div>
-                <ul tabindex="0"
-                    class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
-                    <li><a href="{% url 'nrmps:account' %}">Account</a></li>
-                    <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
-                    <li><a href="{% url 'nrmps:documentation' %}">Documentation</a></li>
-                    <li><a href="{% url 'nrmps:contact' %}">Contact</a></li>
+                <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-10 mt-3 w-52 p-2 shadow">
+                    {% if request.user.is_authenticated %}
+                        {% nav_link "nrmps:simulation_list" "Simulations" "simulation" %}
+                        {% nav_link "nrmps:account" "Account" "account" %}
+                    {% endif %}
+                    {% nav_link "nrmps:documentation" "Documentation" %}
+                    {% nav_link "nrmps:contact" "Contact" %}
                 </ul>
             </div>
             <a class="btn btn-ghost text-xl px-2" href="{% url 'nrmps:index' %}">
@@ -38,35 +40,62 @@
             </a>
         </div>
 
-        <div class="navbar-center hidden lg:flex">
+        <nav class="navbar-center hidden lg:flex" aria-label="Main">
             <ul class="menu menu-horizontal px-1">
-                <li><a href="{% url 'nrmps:account' %}">Account</a></li>
-                <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
-                <li><a href="{% url 'nrmps:documentation' %}">Documentation</a></li>
-                <li><a href="{% url 'nrmps:contact' %}">Contact</a></li>
+                {% if request.user.is_authenticated %}
+                    {% nav_link "nrmps:simulation_list" "Simulations" "simulation" %}
+                    {% nav_link "nrmps:account" "Account" "account" %}
+                {% endif %}
+                {% nav_link "nrmps:documentation" "Documentation" %}
+                {% nav_link "nrmps:contact" "Contact" %}
             </ul>
-        </div>
+        </nav>
 
-        <div class="navbar-end">
+        <div class="navbar-end gap-2">
+            <button type="button" class="btn btn-ghost btn-sm" data-theme-toggle aria-pressed="false"
+                    aria-label="Toggle dark mode" title="Toggle dark mode">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
+                </svg>
+            </button>
             {% if request.user.is_authenticated %}
-                <div class="flex items-center gap-2">
-                    <span class="text-sm hidden sm:inline">Hello, {{ request.user.get_username }}</span>
-                    <form method="post" action="{% url 'nrmps:logout' %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline">Logout</button>
-                    </form>
-                </div>
+                <span class="text-sm hidden sm:inline">{{ request.user.get_username }}</span>
+                <form method="post" action="{% url 'nrmps:logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline">Log out</button>
+                </form>
             {% else %}
-                <div class="flex gap-2">
-                    <a class="btn btn-sm btn-primary" href="{% url 'nrmps:login' %}">Log in</a>
-                    <a class="btn btn-sm btn-outline" href="{% url 'nrmps:signup' %}">Sign up</a>
-                </div>
+                <a class="btn btn-sm btn-primary" href="{% url 'nrmps:login' %}">Log in</a>
+                <a class="btn btn-sm btn-outline" href="{% url 'nrmps:signup' %}">Sign up</a>
             {% endif %}
         </div>
     </header>
 
+    {# Notifications: server messages on page load, plus "toast" events from HTMX responses (static/js/site.js). #}
+    <div id="toasts" class="toast toast-top toast-end z-50" aria-live="polite">
+        {% for message in messages %}
+            <div class="alert {% if message.level_tag == 'error' %}alert-error{% elif message.level_tag == 'warning' %}alert-warning{% elif message.level_tag == 'success' %}alert-success{% else %}alert-info{% endif %} shadow"
+                 role="{% if message.level_tag == 'error' %}alert{% else %}status{% endif %}">
+                <span>{{ message }}</span>
+            </div>
+        {% endfor %}
+    </div>
+
+    {# One confirmation dialog for every destructive action (hx-confirm and forms with data-confirm). #}
+    <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-dialog-title">
+        <div class="modal-box">
+            <h2 id="confirm-dialog-title" class="font-bold text-lg">Please confirm</h2>
+            <p class="py-4 whitespace-pre-line" data-confirm-message></p>
+            <div class="modal-action">
+                <button type="button" class="btn" data-confirm-cancel>Cancel</button>
+                <button type="button" class="btn btn-error" data-confirm-ok>Continue</button>
+            </div>
+        </div>
+    </dialog>
+
     <!-- Main content -->
-    <main class="flex-1 container mx-auto px-4 py-8">
+    <main id="main" class="flex-1 container mx-auto px-4 py-8" tabindex="-1">
         {% block content %}
         {% endblock %}
     </main>
@@ -94,6 +123,7 @@
 
     <!-- Scripts -->
     <script src="{% static 'vendor/htmx/2.0.11/htmx.min.js' %}"></script>
+    <script src="{% static 'js/site.js' %}"></script>
     <script src="{% static 'vendor/alpinejs/3.17.4/alpine.min.js' %}" defer></script>
     {% block extra_js %}{% endblock %}
 </body>

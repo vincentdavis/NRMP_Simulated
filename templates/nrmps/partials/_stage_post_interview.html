@@ -17,7 +17,7 @@
         stages, which are not implemented yet.
       </div>
       <div class="flex gap-2">
-        <button class="btn btn-sm btn-primary btn-outline"
+        <button class="btn btn-sm btn-primary"
                 hx-post="{% url 'nrmps:simulation_compute_post_interview_all' pk=simulation.pk %}"
                 hx-target="#stage-cards"
                 hx-swap="outerHTML"
@@ -25,6 +25,7 @@
                 hx-sync="#stage-cards:drop"
                 hx-confirm="Compute post-interview scores and rankings?"
                 {% if not simulation|stage_reached:"invitations" %}disabled{% endif %}>
+          <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
           Compute Post-Interview All
         </button>
       </div>

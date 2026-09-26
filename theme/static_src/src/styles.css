@@ -1,4 +1,4 @@
-/* Scan only the project's own templates and Python code for class names (source(none) turns off automatic
+/* Scan only the project's own templates, Python code and scripts for class names (source(none) turns off automatic
    detection, which would also read vendored JavaScript, the virtualenv and docs/). */
 @import "tailwindcss" source(none);
 @plugin "daisyui";
@@ -6,6 +6,7 @@
 @source "../../../templates";
 @source "../../../theme/templates";
 @source "../../../nrmps";
+@source "../../../static/js";
 
 /* A visible keyboard focus ring everywhere (some daisyUI components remove the outline). Unlayered, so it wins over
    the component layer. */
