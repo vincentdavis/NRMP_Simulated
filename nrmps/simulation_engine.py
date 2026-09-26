@@ -182,9 +182,7 @@ def students_rate_schools_post_interview(simulation: Simulation):
     from .models import Interview as InterviewModel
 
     # Only update interviews that have been conducted
-    qs = InterviewModel.objects.select_related("student", "school").filter(
-        simulation=simulation, status="interviewed"
-    )
+    qs = InterviewModel.objects.select_related("student", "school").filter(simulation=simulation, status="interviewed")
     for inter in qs:
         try:
             val = _score(
@@ -216,9 +214,7 @@ def schools_rate_students_post_interview(simulation: Simulation):
     from .models import Interview as InterviewModel
 
     # Only update interviews that have been conducted
-    qs = InterviewModel.objects.select_related("student", "school").filter(
-        simulation=simulation, status="interviewed"
-    )
+    qs = InterviewModel.objects.select_related("student", "school").filter(simulation=simulation, status="interviewed")
     for inter in qs:
         try:
             val = _score(

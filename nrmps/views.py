@@ -129,15 +129,20 @@ def simulation_manage(request, pk: int):
                 form_id = "config"
             else:
                 form_id = "simulation"
-        logger.info("simulation_manage POST", extra={
-            "user_id": getattr(request.user, "id", None),
-            "simulation_id": sim.id,
-            "form_id": form_id,
-        })
+        logger.info(
+            "simulation_manage POST",
+            extra={
+                "user_id": getattr(request.user, "id", None),
+                "simulation_id": sim.id,
+                "form_id": form_id,
+            },
+        )
         if form_id == "config":
             # Handle SimulationConfig form
             if config_instance is not None:
-                logger.debug("Binding SimulationConfigForm with existing instance", extra={"config_id": config_instance.id})
+                logger.debug(
+                    "Binding SimulationConfigForm with existing instance", extra={"config_id": config_instance.id}
+                )
                 config_form = SimulationConfigForm(request.POST, instance=config_instance)
             else:
                 logger.debug("Binding SimulationConfigForm for create")
@@ -219,6 +224,7 @@ def simulation_delete(request, pk: int):
 
 
 # --- HTMX population actions ---
+
 
 @login_required
 @require_http_methods(["POST"])
@@ -318,6 +324,7 @@ def simulation_upload_schools(request, pk: int):
 
 # --- CSV downloads ---
 
+
 @login_required
 @require_GET
 def simulation_download_students(request, pk: int):
@@ -348,7 +355,6 @@ def simulation_download_schools(request, pk: int):
         score_meta_str = json.dumps(s.score_meta or {}, ensure_ascii=False)
         writer.writerow([s.name, s.capacity, s.score, score_meta_str])
     return resp
-
 
 
 @login_required
@@ -581,29 +587,33 @@ def simulation_download_interviews(request, pk: int):
     resp = HttpResponse(content_type="text/csv; charset=utf-8")
     resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_interviews.csv"
     writer = csv.writer(resp)
-    writer.writerow([
-        "student",
-        "school",
-        "status",
-        "student_pre_observed_score_of_school",
-        "school_pre_observed_score_of_student",
-        "students_pre_rank_of_school",
-        "schools_pre_rank_of_student",
-        "student_post_observed_score_of_school",
-        "school_post_observed_score_of_student",
-    ])
+    writer.writerow(
+        [
+            "student",
+            "school",
+            "status",
+            "student_pre_observed_score_of_school",
+            "school_pre_observed_score_of_student",
+            "students_pre_rank_of_school",
+            "schools_pre_rank_of_student",
+            "student_post_observed_score_of_school",
+            "school_post_observed_score_of_student",
+        ]
+    )
     for inter in Interview.objects.filter(simulation=sim).select_related("student", "school"):
-        writer.writerow([
-            inter.student.name,
-            inter.school.name,
-            inter.status,
-            inter.student_pre_observed_score_of_school,
-            inter.school_pre_observed_score_of_student,
-            inter.students_pre_rank_of_school,
-            inter.schools_pre_rank_of_student,
-            inter.student_post_observed_score_of_school,
-            inter.school_post_observed_score_of_student,
-        ])
+        writer.writerow(
+            [
+                inter.student.name,
+                inter.school.name,
+                inter.status,
+                inter.student_pre_observed_score_of_school,
+                inter.school_pre_observed_score_of_student,
+                inter.students_pre_rank_of_school,
+                inter.schools_pre_rank_of_student,
+                inter.student_post_observed_score_of_school,
+                inter.school_post_observed_score_of_student,
+            ]
+        )
     return resp
 
 
@@ -614,45 +624,55 @@ def documentation(request):
     # Configuration for what to include/exclude
     DOC_CONFIG = {
         # Models to exclude completely
-        'excluded_models': [
-            'AbstractUser',  # Hide Django's AbstractUser
+        "excluded_models": [
+            "AbstractUser",  # Hide Django's AbstractUser
             # 'SimulationConfig',  # Example: uncomment to hide
         ],
-
         # Models to include (if empty, includes all except excluded)
-        'included_models': [
+        "included_models": [
             # 'Simulation', 'Student', 'School',  # Example: only show these
         ],
-
         # Methods to exclude from all models
-        'excluded_methods': [
-            'save', 'delete', 'clean', 'full_clean', 'validate_unique',
-            'get_absolute_url', 'get_deferred_fields', 'refresh_from_db',
-            'adelete', 'arefresh_from_db', 'asave', 'clean_fields',
-            'date_error_message', 'get_constraints', 'prepare_database_save',
-            'save_base', 'serializable_value', 'unique_error_message', 'validate_constraints'
+        "excluded_methods": [
+            "save",
+            "delete",
+            "clean",
+            "full_clean",
+            "validate_unique",
+            "get_absolute_url",
+            "get_deferred_fields",
+            "refresh_from_db",
+            "adelete",
+            "arefresh_from_db",
+            "asave",
+            "clean_fields",
+            "date_error_message",
+            "get_constraints",
+            "prepare_database_save",
+            "save_base",
+            "serializable_value",
+            "unique_error_message",
+            "validate_constraints",
         ],
-
         # Functions to exclude
-        'excluded_functions': [
-            'generate_meta_scores',  # Example: hide this function
+        "excluded_functions": [
+            "generate_meta_scores",  # Example: hide this function
         ],
-
         # Check for special attributes to control documentation
-        'respect_doc_attributes': True,  # Use __doc_include__ and __doc_exclude__
+        "respect_doc_attributes": True,  # Use __doc_include__ and __doc_exclude__
     }
 
     def is_documented(obj, name):
         """Check if an object should be documented based on special attributes."""
-        if not DOC_CONFIG['respect_doc_attributes']:
+        if not DOC_CONFIG["respect_doc_attributes"]:
             return True
 
         # Check for explicit inclusion/exclusion attributes
-        if hasattr(obj, '__doc_exclude__') and obj.__doc_exclude__:
+        if hasattr(obj, "__doc_exclude__") and obj.__doc_exclude__:
             return False
-        if hasattr(obj, '__doc_include__') and obj.__doc_include__:
+        if hasattr(obj, "__doc_include__") and obj.__doc_include__:
             return True
-        if hasattr(obj, '__doc_private__') and obj.__doc_private__:
+        if hasattr(obj, "__doc_private__") and obj.__doc_private__:
             return False
 
         return True
@@ -669,34 +689,36 @@ def documentation(request):
         methods = []
         for name, method in inspect.getmembers(cls, inspect.isfunction):
             # Skip private methods
-            if name.startswith('_'):
+            if name.startswith("_"):
                 continue
 
             # Skip excluded methods
-            if name in DOC_CONFIG['excluded_methods']:
+            if name in DOC_CONFIG["excluded_methods"]:
                 continue
 
             # Check for documentation attributes
             if not is_documented(method, name):
                 continue
 
-            methods.append({
-                'name': name,
-                'docstring': extract_docstring_info(method),
-                'signature': str(inspect.signature(method)) if hasattr(inspect, 'signature') else '',
-            })
+            methods.append(
+                {
+                    "name": name,
+                    "docstring": extract_docstring_info(method),
+                    "signature": str(inspect.signature(method)) if hasattr(inspect, "signature") else "",
+                }
+            )
         return methods
 
     # Extract model information
     model_classes = []
     for name, obj in inspect.getmembers(models, inspect.isclass):
-        if not (hasattr(obj, '_meta') and hasattr(obj._meta, 'app_label')):
+        if not (hasattr(obj, "_meta") and hasattr(obj._meta, "app_label")):
             continue  # Not a Django model
 
         # Check inclusion/exclusion lists
-        if DOC_CONFIG['excluded_models'] and name in DOC_CONFIG['excluded_models']:
+        if DOC_CONFIG["excluded_models"] and name in DOC_CONFIG["excluded_models"]:
             continue
-        if DOC_CONFIG['included_models'] and name not in DOC_CONFIG['included_models']:
+        if DOC_CONFIG["included_models"] and name not in DOC_CONFIG["included_models"]:
             continue
 
         # Check for documentation attributes
@@ -704,27 +726,27 @@ def documentation(request):
             continue
 
         model_info = {
-            'name': name,
-            'docstring': extract_docstring_info(obj),
-            'methods': get_method_info(obj),
-            'fields': []
+            "name": name,
+            "docstring": extract_docstring_info(obj),
+            "methods": get_method_info(obj),
+            "fields": [],
         }
 
         # Get model fields
         try:
             for field in obj._meta.get_fields():
                 # Skip reverse relations and some internal fields
-                if hasattr(field, 'related_model') and field.many_to_one:
+                if hasattr(field, "related_model") and field.many_to_one:
                     continue
-                if field.name.endswith('_ptr'):  # Skip OneToOne parent links
+                if field.name.endswith("_ptr"):  # Skip OneToOne parent links
                     continue
 
                 field_info = {
-                    'name': field.name,
-                    'type': field.__class__.__name__,
-                    'help_text': getattr(field, 'help_text', ''),
+                    "name": field.name,
+                    "type": field.__class__.__name__,
+                    "help_text": getattr(field, "help_text", ""),
                 }
-                model_info['fields'].append(field_info)
+                model_info["fields"].append(field_info)
         except Exception:
             pass  # Skip if field extraction fails
 
@@ -734,25 +756,27 @@ def documentation(request):
     functions = []
     for name, obj in inspect.getmembers(models, inspect.isfunction):
         # Skip private functions
-        if name.startswith('_'):
+        if name.startswith("_"):
             continue
 
         # Skip excluded functions
-        if name in DOC_CONFIG['excluded_functions']:
+        if name in DOC_CONFIG["excluded_functions"]:
             continue
 
         # Check for documentation attributes
         if not is_documented(obj, name):
             continue
 
-        functions.append({
-            'name': name,
-            'docstring': extract_docstring_info(obj),
-            'signature': str(inspect.signature(obj)) if hasattr(inspect, 'signature') else '',
-        })
+        functions.append(
+            {
+                "name": name,
+                "docstring": extract_docstring_info(obj),
+                "signature": str(inspect.signature(obj)) if hasattr(inspect, "signature") else "",
+            }
+        )
 
     context = {
-        'models': model_classes,
-        'functions': functions,
+        "models": model_classes,
+        "functions": functions,
     }
     return render(request, "nrmps/documentation.html", context)

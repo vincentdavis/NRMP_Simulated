@@ -1,6 +1,8 @@
 # Ruff configuration file
 target-version = "py313"
 line-length = 120
+# Generated migrations are not hand-edited; docs/ holds the review as written (its prototypes have their own config).
+extend-exclude = ["nrmps/migrations", "docs"]
 
 [lint]
 select = [

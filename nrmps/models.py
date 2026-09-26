@@ -39,7 +39,7 @@ def get_beta_parameters(mean: float, desired_stddev: float) -> tuple[float, floa
         desired_stddev = max_stddev * 0.9  # Use 90% of max to be safe
 
     # Calculate beta parameters from mean and variance
-    variance = desired_stddev ** 2
+    variance = desired_stddev**2
 
     # For beta distribution: mean = a/(a+b), var = ab/((a+b)^2 * (a+b+1))
     # Solving: a = mean * ((mean*(1-mean)/variance) - 1)
@@ -168,13 +168,15 @@ class Simulation(models.Model):
         current_idx = self.stage_index()
         stages = []
         for idx, (key, label) in enumerate(SIMULATION_STAGES):
-            stages.append({
-                "key": key,
-                "label": label,
-                "complete": idx < current_idx,
-                "active": idx == current_idx,
-                "locked": idx > current_idx,
-            })
+            stages.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "complete": idx < current_idx,
+                    "active": idx == current_idx,
+                    "locked": idx > current_idx,
+                }
+            )
         return stages
 
     def create_students(self) -> int:
@@ -702,6 +704,7 @@ def generate_meta_scores(self, score: float, meta_scores: list[str], meta_stddev
     for meta in meta_scores:
         self.score_meta[meta] = score + random.gauss(0, meta_stddev)
 
+
 # Example: This function will be hidden from documentation
 generate_meta_scores.__doc_exclude__ = True
 
@@ -804,9 +807,7 @@ class Interview(models.Model):
     )
 
     # Student steps
-    student_applied = models.BooleanField(
-        default=False, help_text="True if the applicant applied to this program."
-    )
+    student_applied = models.BooleanField(default=False, help_text="True if the applicant applied to this program.")
     student_signal = models.IntegerField(
         default=0, help_text="Preference signal the applicant sent this program (0 = none). Not used yet."
     )

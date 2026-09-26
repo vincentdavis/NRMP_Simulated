@@ -86,7 +86,7 @@ class StudentsUploadForm(forms.Form):
     file = forms.FileField(
         label="Students CSV",
         help_text="CSV: name, score, [score_meta]",
-        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"})
+        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
     )
 
 
@@ -100,7 +100,7 @@ class SchoolsUploadForm(forms.Form):
     file = forms.FileField(
         label="Schools CSV",
         help_text="CSV: name, capacity, score, [score_meta]",
-        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"})
+        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
     )
 
 
@@ -118,7 +118,9 @@ class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
 
     def clean_applicant_meta_preference(self):
         val = self.cleaned_data.get("applicant_meta_preference")
-        logger.debug("clean_applicant_meta_preference input", extra={"type": type(val).__name__, "value_preview": str(val)[:200]})
+        logger.debug(
+            "clean_applicant_meta_preference input", extra={"type": type(val).__name__, "value_preview": str(val)[:200]}
+        )
         # Coerce empty/None to empty list for robustness
         if val is None or val == "":
             return []
@@ -126,12 +128,21 @@ class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
             s = val.strip()
             if s.startswith("[") or s.startswith("{"):
                 import json
+
                 try:
                     parsed = json.loads(s)
-                    logger.debug("clean_applicant_meta_preference parsed JSON", extra={"parsed_type": type(parsed).__name__, "len": len(parsed) if hasattr(parsed, "__len__") else None})
+                    logger.debug(
+                        "clean_applicant_meta_preference parsed JSON",
+                        extra={
+                            "parsed_type": type(parsed).__name__,
+                            "len": len(parsed) if hasattr(parsed, "__len__") else None,
+                        },
+                    )
                     return parsed
                 except Exception as e:
-                    logger.warning("clean_applicant_meta_preference JSON parse failed; defaulting to []", extra={"error": str(e)})
+                    logger.warning(
+                        "clean_applicant_meta_preference JSON parse failed; defaulting to []", extra={"error": str(e)}
+                    )
                     return []
             if "," in s or s:
                 out = [x.strip() for x in s.split(",") if x.strip()]
@@ -139,10 +150,11 @@ class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
                 return out
         return val
 
-
     def clean_school_meta_preference(self):
         val = self.cleaned_data.get("school_meta_preference")
-        logger.debug("clean_school_meta_preference input", extra={"type": type(val).__name__, "value_preview": str(val)[:200]})
+        logger.debug(
+            "clean_school_meta_preference input", extra={"type": type(val).__name__, "value_preview": str(val)[:200]}
+        )
         # Coerce empty/None to empty list for robustness
         if val is None or val == "":
             return []
@@ -150,12 +162,21 @@ class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
             s = val.strip()
             if s.startswith("[") or s.startswith("{"):
                 import json
+
                 try:
                     parsed = json.loads(s)
-                    logger.debug("clean_school_meta_preference parsed JSON", extra={"parsed_type": type(parsed).__name__, "len": len(parsed) if hasattr(parsed, "__len__") else None})
+                    logger.debug(
+                        "clean_school_meta_preference parsed JSON",
+                        extra={
+                            "parsed_type": type(parsed).__name__,
+                            "len": len(parsed) if hasattr(parsed, "__len__") else None,
+                        },
+                    )
                     return parsed
                 except Exception as e:
-                    logger.warning("clean_school_meta_preference JSON parse failed; defaulting to []", extra={"error": str(e)})
+                    logger.warning(
+                        "clean_school_meta_preference JSON parse failed; defaulting to []", extra={"error": str(e)}
+                    )
                     return []
             if "," in s or s:
                 out = [x.strip() for x in s.split(",") if x.strip()]
