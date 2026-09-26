@@ -63,11 +63,16 @@
       <section class="card bg-base-100 shadow-xl mb-4" aria-labelledby="ego-title">
         <div class="card-body">
           <h2 id="ego-title" class="card-title">Applications by how far they got</h2>
-          {% if applicant %}
-            {% chart_figure ego "ego_applicant" "ego" height="h-96" %}
-          {% else %}
-            {% chart_figure ego "ego_program" "ego" height="h-96" %}
-          {% endif %}
+          {# The same counts twice: each application as a point (the network), and the flow between stages (the funnel). #}
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {% if applicant %}
+              {% chart_figure ego "ego_applicant" "ego" height="h-96" %}
+              {% chart_figure funnel "funnel_applicant" "funnel" table="funnel" height="h-96" %}
+            {% else %}
+              {% chart_figure ego "ego_program" "ego" height="h-96" %}
+              {% chart_figure funnel "funnel_program" "funnel" table="funnel" height="h-96" %}
+            {% endif %}
+          </div>
         </div>
       </section>
     {% endif %}
@@ -189,6 +194,7 @@
 {% endblock %}
 {% block extra_js %}
   {% if ego %}
+    <script src="{% static 'vendor/echarts/6.1.0/echarts.min.js' %}"></script>
     <script src="{% static 'vendor/graphology/0.26.0/graphology.umd.min.js' %}"></script>
     <script src="{% static 'vendor/sigma/3.0.3/sigma.min.js' %}"></script>
     <script src="{% static 'js/nrmp-charts.js' %}"></script>

@@ -14,7 +14,7 @@ observed utilities scatter around the identity line, and the funnel's counts add
   with the Lorenz curve and the Gini coefficient.
 - INT-1 `funnel`: applications through invitations, interviews and rank order lists to matches, with the drop-offs.
 - MAT-7 (ego) `ego_network`: one applicant's or program's applications by how far each got, drawn as a network with
-  sigma.js on the agent's page (plan step 5.1).
+  sigma.js on the agent's page (plan step 5.1), next to `agent_funnel`, the same funnel for that agent alone.
 """
 
 import math
@@ -159,15 +159,8 @@ def first_choice_demand(data: RunData) -> dict[str, Any] | None:
     }
 
 
-def funnel(record: StageRecord | None) -> dict[str, Any] | None:
-    """Return INT-1: applications through invitations, interviews and rank order lists to matches, with drop-offs."""
-    if record is None:
-        return None
-    applied = int(record.i.shape[0])
-    invited = int(np.count_nonzero(record.invite_wave > 0))
-    interviewed = int(np.count_nonzero(record.accepted))
-    ranked = int(np.count_nonzero(record.applicant_rank > 0))
-    matched = int(np.count_nonzero(record.match_program[record.i] == record.j))
+def funnel_counts(applied: int, invited: int, interviewed: int, ranked: int, matched: int) -> dict[str, int]:
+    """Return a funnel's stages and the drop-off between each and the next (each stage holds the next one)."""
     return {
         "applied": applied,
         "invited": invited,
@@ -179,6 +172,68 @@ def funnel(record: StageRecord | None) -> dict[str, Any] | None:
         "matched": matched,
         "not_matched": ranked - matched,
     }
+
+
+def funnel(record: StageRecord | None) -> dict[str, Any] | None:
+    """Return INT-1: applications through invitations, interviews and rank order lists to matches, with drop-offs."""
+    if record is None:
+        return None
+    return funnel_counts(
+        int(record.i.shape[0]),
+        int(np.count_nonzero(record.invite_wave > 0)),
+        int(np.count_nonzero(record.accepted)),
+        int(np.count_nonzero(record.applicant_rank > 0)),
+        int(np.count_nonzero(record.match_program[record.i] == record.j)),
+    )
+
+
+def funnel_chart(counts: dict[str, int], *, of: str, whose: str) -> dict[str, Any]:
+    """Return a funnel chart: the payload, a summary sentence and the rows of its table.
+
+    `of` names the applications ("474 applications"); `whose` is whose rank order list "Ranked" means
+    ("applicant's" or "program's").
+    """
+    applied = counts["applied"] or 1
+    return {
+        "payload": counts,
+        "summary": (
+            f"Of {of}, {counts['invited']:,} led to an interview invitation, {counts['interviewed']:,} to an "
+            f"interview, {counts['ranked']:,} to a place on the {whose} rank order list and {counts['matched']:,} to "
+            "a match."
+        ),
+        "rows": [
+            {"stage": label, "count": counts[key], "share": counts[key] / applied}
+            for key, label in (
+                ("applied", "Applied"),
+                ("invited", "Invited"),
+                ("interviewed", "Interviewed"),
+                ("ranked", f"On the {whose} list"),
+                ("matched", "Matched"),
+            )
+        ],
+    }
+
+
+def agent_funnel(stages: StageRows, name: str, *, applicant: bool) -> dict[str, Any] | None:
+    """Return INT-1 for one applicant or program: its applications through the stages, or None without any.
+
+    "Ranked" is the agent's own rank order list: the applicant's on an applicant's page, the program's on a program's
+    (an applicant it ranked may still have matched elsewhere).
+    """
+    applied = stages.applied
+    if not applied.any():
+        return None
+    counts = funnel_counts(
+        int(applied.sum()),
+        int((applied & (stages.wave > 0)).sum()),
+        int((applied & stages.interviewed).sum()),
+        int((applied & (stages.list_rank > 0)).sum()),
+        int((applied & stages.matched).sum()),
+    )
+    total = f"{counts['applied']:,}"
+    if applicant:
+        return funnel_chart(counts, of=f"{name}'s {total} applications", whose="applicant's")
+    return funnel_chart(counts, of=f"the {total} applications to {name}", whose="program's")
 
 
 def ego_network(stages: StageRows, names: list[str], name: str, *, applicant: bool) -> dict[str, Any] | None:
@@ -345,27 +400,7 @@ def _funnel_chart(record: StageRecord | None) -> dict[str, Any]:
     counts = funnel(record)
     if counts is None:
         return {}
-    applied = counts["applied"] or 1
-    return {
-        "funnel": {
-            "payload": counts,
-            "summary": (
-                f"Of {counts['applied']:,} applications, {counts['invited']:,} led to an interview invitation, "
-                f"{counts['interviewed']:,} to an interview, {counts['ranked']:,} to a place on the applicant's "
-                f"rank order list and {counts['matched']:,} to a match."
-            ),
-            "rows": [
-                {"stage": label, "count": counts[key], "share": counts[key] / applied}
-                for key, label in (
-                    ("applied", "Applied"),
-                    ("invited", "Invited"),
-                    ("interviewed", "Interviewed"),
-                    ("ranked", "On the applicant's list"),
-                    ("matched", "Matched"),
-                )
-            ],
-        }
-    }
+    return {"funnel": funnel_chart(counts, of=f"{counts['applied']:,} applications", whose="applicant's")}
 
 
 def run_charts(data: RunData, names: tuple[str, ...] | None = None) -> dict[str, Any]:

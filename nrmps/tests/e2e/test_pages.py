@@ -152,12 +152,13 @@ def test_dark_theme_has_no_serious_accessibility_violations(logged_in_page, live
 
 @pytest.mark.parametrize("side", ["applicants", "programs"])
 def test_an_agents_page_draws_its_applications_as_a_network(logged_in_page, live, worked_simulation, side):
-    """sigma.js draws one agent's applications by stage (plan step 5.1), again after the theme changes."""
+    """sigma.js draws one agent's applications by stage (plan step 5.1) and ECharts their funnel, again after the theme
+    changes."""
     page = logged_in_page
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/{side}/1/")
-    _draw_every_chart(page, 1)
+    _draw_every_chart(page, 2)
     network = page.locator('[data-chart="ego"]')
     assert network.get_attribute("aria-label", timeout=1000).endswith("?")
     assert page.get_by_role("list", name="Key").get_by_role("listitem").count() == 6

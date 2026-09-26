@@ -83,10 +83,12 @@ decile (1 is the weakest tenth of applicants, 10 the strongest).
 ## Applicants, programs and one agent's page
 
 The lists show every applicant or program with its attributes, weights, pre-interview results and outcome, and sort
-by any column. An applicant's page follows them through the stages: every program they applied to, the signal they
-sent, the invitation and its wave, whether they interviewed, both sides' views after the interview, where each side
-put the other on its list, and the match. Its second tab shows how the applicant sees every program before
-interviews and how every program sees them. Program pages are the same from the program's side.
+by any column. An applicant's page shows how far each of their applications got, as a network (one point per
+program) and as a funnel like the one on the Applications and interviews tab, then follows them through the stages
+in a table: every program they applied to, the signal they sent, the invitation and its wave, whether they
+interviewed, both sides' views after the interview, where each side put the other on its list, and the match. Its
+second tab shows how the applicant sees every program before interviews and how every program sees them. Program
+pages are the same from the program's side.
 
 ## Charts
 

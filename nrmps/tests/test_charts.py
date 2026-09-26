@@ -10,6 +10,7 @@ from django.utils.html import escape
 from nrmps import help_registry
 from nrmps.charts import (
     EGO_MAX_NODES,
+    agent_funnel,
     digits,
     ego_network,
     fit_check,
@@ -242,7 +243,45 @@ def test_the_agent_pages_embed_the_network_and_load_its_libraries(auth_client, f
         assert escape(str(help_registry.CHARTS[key].title)) in body
         assert "vendor/sigma/3.0.3/sigma.min.js" in body
         assert "vendor/graphology/0.26.0/graphology.umd.min.js" in body
-        assert "vendor/echarts" not in body  # a network page needs no chart library
+        assert "vendor/echarts/6.1.0/echarts.min.js" in body  # for the funnel beside the network
         side = key.removeprefix("ego_")
         script = body.split(f'id="chart-ego-{side}" type="application/json">')[1].split("</script>")[0]
         assert json.loads(script)["side"] == side
+
+
+def test_an_agents_funnel_matches_its_network(finished_run):
+    """The funnel on an agent's page counts the same applications as its network, stage by stage."""
+    data = RunData(finished_run)
+    population = data.population
+    for applicant in (True, False):
+        others = population.programs if applicant else population.applicants
+        names = [others.name(k) for k in range(others.size)]
+        stages = data.stage_rows(0, applicant=applicant)
+        funnel_chart = agent_funnel(stages, "Agent", applicant=applicant)
+        network = ego_network(stages, names, "Agent", applicant=applicant)
+        counts = funnel_chart["payload"]
+        exclusive = [item["count"] for item in network["legend"][1:]]  # not invited ... matched
+        assert exclusive == [
+            counts["not_invited"],
+            counts["declined"],
+            counts["not_ranked"],
+            counts["not_matched"],
+            counts["matched"],
+        ]
+        assert counts["applied"] == sum(exclusive)
+        whose = "applicant's" if applicant else "program's"
+        assert f"to a place on the {whose} rank order list" in funnel_chart["summary"]
+        assert funnel_chart["rows"][3]["stage"] == f"On the {whose} list"
+
+
+def test_an_agent_without_applications_has_no_funnel():
+    assert agent_funnel(StageRows.empty(5), "Nobody", applicant=True) is None
+
+
+def test_the_agent_pages_show_the_funnel_with_its_numbers(auth_client, finished_run):
+    kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number, "index": 1}
+    for view, key in (("nrmps:run_applicant", "funnel_applicant"), ("nrmps:run_program", "funnel_program")):
+        body = auth_client.get(reverse(view, kwargs=kwargs)).content.decode()
+        assert 'data-chart="funnel"' in body
+        assert escape(str(help_registry.CHARTS[key].title)) in body
+        assert "The numbers" in body

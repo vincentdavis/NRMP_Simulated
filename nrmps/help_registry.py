@@ -551,6 +551,29 @@ CHARTS: dict[str, ChartHelp] = {
         tab="agent",
         side="program",
     ),
+    "funnel_applicant": ChartHelp(
+        _("Where did this applicant's applications drop out?"),
+        _(
+            "The applicant's applications through the stages: invited to interview or not, interviewed or not "
+            "(declined, or over the applicant's interview cap), on the applicant's rank order list or not, matched or "
+            "not."
+        ),
+        _("Each band's width is a number of applications; hover a band for its count and share. Grey marks drop-offs."),
+        _("Ranked means the applicant ranked the program."),
+        tab="agent",
+    ),
+    "funnel_program": ChartHelp(
+        _("Where did the applications to this program drop out?"),
+        _(
+            "The applications the program received, through the stages: invited to interview or not, interviewed or "
+            "not (the applicant declined, or was over their interview cap), on the program's rank order list or not, "
+            "matched or not."
+        ),
+        _("Each band's width is a number of applications; hover a band for its count and share. Grey marks drop-offs."),
+        _("Ranked means the program ranked the applicant; an applicant it ranked may have matched elsewhere."),
+        tab="agent",
+        side="program",
+    ),
 }
 
 

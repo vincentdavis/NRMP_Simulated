@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_POST
 
-from .charts import TAB_CHARTS, ego_network, run_charts
+from .charts import TAB_CHARTS, agent_funnel, ego_network, run_charts
 from .engine.numeric import quantiles
 from .engine.persistence import StageRecord
 from .engine.pipeline import SideResult
@@ -717,6 +717,7 @@ def _agent_page(request: HttpRequest, pk: int, number: int, index: int, *, appli
             "positions": None if applicant else int(population.programs.capacity[agent]),
         }
         context["ego"] = ego_network(stages, names, me_side.name(agent), applicant=applicant)
+        context["funnel"] = agent_funnel(stages, me_side.name(agent), applicant=applicant)
     if view == "stages" and stages is not None:
         context |= _stage_table(request, data, rows, stages, names)
     else:
