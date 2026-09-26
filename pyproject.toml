@@ -67,6 +67,6 @@ default-groups = ["dev", "prod"]
 
 [tool.codespell]
 # Vendored, minified or generated files, binaries and local caches.
-skip = "*.lock,package-lock.json,./static/js,./theme/static,./theme/static_src/node_modules,./staticfiles,./.venv,./.git,*.png,*.jpg,*.sqlite3,*.sqlite,./.ruff_cache,./.pytest_cache,./.mypy_cache,./.hypothesis,./.idea"
+skip = "*.lock,package-lock.json,./static/vendor,./theme/static,./theme/static_src/node_modules,./staticfiles,./.venv,./.git,*.png,*.jpg,*.sqlite3,*.sqlite,./.ruff_cache,./.pytest_cache,./.mypy_cache,./.hypothesis,./.idea"
 # AER: American Economic Review (a citation in the review).
 ignore-words-list = "aer"

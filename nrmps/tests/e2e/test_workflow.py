@@ -49,5 +49,5 @@ def test_attribute_editor_adds_and_saves_items(logged_in_page, live, simulation)
     expect(editor.locator("input[aria-label='Attribute 4']")).to_have_value("class_size")  # normalised
     page.get_by_role("button", name="Save configuration").click()
     page.wait_for_load_state()
-    simulation.configs.get().refresh_from_db()
-    assert simulation.configs.get().applicant_meta_preference == ["program_size", "reputation", "location", "class_size"]
+    saved = simulation.configs.get().applicant_meta_preference
+    assert saved == ["program_size", "reputation", "location", "class_size"]
