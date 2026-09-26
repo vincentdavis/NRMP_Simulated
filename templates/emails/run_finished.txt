@@ -1,0 +1,8 @@
+{% autoescape off %}Hello {{ run.created_by.full_name|default:run.created_by.username }},
+
+Run {{ run.number }} of your simulation “{{ simulation.name }}” {% if run.status == "succeeded" %}finished in {{ run.duration_ms }} ms{% else %}failed: {{ run.error }}{% endif %}.
+
+{{ link }}
+
+You receive this email because you asked to be told when the run finished.
+{% endautoescape %}

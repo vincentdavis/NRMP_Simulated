@@ -116,13 +116,17 @@ nrmps/
 ├── params_forms.py       # Django forms and formsets generated from the schema (the parameter editor)
 ├── engine/               # model 2.0, pure numpy, no Django: rng (streams, Philox), population, utility, rank,
 │                         #   metrics, pipeline (run_pre_interview), persistence (npz, digest)
-├── runs.py               # start_run / execute_run / run_now, fingerprints, RunData (recomputed pair values)
+├── runs.py               # start_run / dispatch_run / execute_run, fingerprints, RunData (recomputed pair values)
+├── tasks.py              # django.tasks task that executes a run (immediate backend or django-tasks-db worker)
 ├── pipeline.py           # stage state machine for the stepper: done, stale (with the reason), running, planned ...
+├── quotas.py             # per-account quotas (simulations, runs and pairs per day, verified email)
+├── ratelimit.py          # rate limits counted in the database (sign-ups per IP, runs and uploads per account)
 ├── population_csv.py     # CSV format for population upload/download (one module for both directions)
 ├── views.py              # public pages, simulation list, the simulation page, runs and uploads (HTMX)
 ├── run_views.py          # run page, applicants/programs lists, one agent's view, downloads
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
 ├── help_views.py         # /help/ (reference generated from the schema) and the staff-only developer reference
+├── ops_views.py          # staff-only /ops/: runs per day, failures, durations, queue, workers, quota use
 ├── accounts.py           # confirmation tokens and emails, the personal data export
 ├── versions.py           # version stamps stored with runs
 ├── forms.py              # account and simulation forms, the upload form
@@ -130,7 +134,7 @@ nrmps/
 ├── exceptions.py         # SimulationError and subclasses: problems shown to the user instead of a 500
 ├── security.py           # proxy-aware client IP (django-axes)
 ├── admin.py              # admin registrations (runs and artifacts read-only)
-├── management/commands/  # nrmp_run (the engine headless), seed_demo
+├── management/commands/  # nrmp_run (the engine headless), seed_demo, nrmp_worker (queued runs), nrmp_cleanup
 └── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link)
 templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/, help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
@@ -163,7 +167,9 @@ docs/                     # review, plan, status, deployment, model spec
 - The engine walks pairs in blocks of `NRMP_BLOCK_PAIRS` with fixed-order arithmetic (model_spec.md §12.7), so a
   block equals the same entries of the full matrix and memory stays bounded; never materialise all pairs in the
   database.
-- Runs execute inside the request until background jobs exist (plan step 2.5); keep them within `NRMP_MAX_PAIRS`.
+- Runs execute inside the request with `TASK_BACKEND=immediate` (default; limit `NRMP_MAX_PAIRS`) or in a worker
+  with `TASK_BACKEND=database` (`manage.py nrmp_worker`; limit `NRMP_MAX_PAIRS_WORKER`). Start runs with
+  `runs.start_run` + `runs.dispatch_run` so both work; `run_now` always executes in-process (commands, tests).
 - Changing a formula, stream ID or draw recipe changes results: it needs a new `MODEL_VERSION` (model_spec.md §12).
 
 **Security**:

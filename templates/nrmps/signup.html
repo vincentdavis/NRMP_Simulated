@@ -19,6 +19,14 @@
           {% field_row form.email %}
           {% field_row form.password1 %}
           {% field_row form.password2 %}
+          {# Honeypot: hidden from people and screen readers; bots that fill every field reveal themselves. #}
+          <div class="absolute -left-[10000px] w-px h-px overflow-hidden" aria-hidden="true">
+            <label for="{{ form.website.id_for_label }}">{{ form.website.label }}</label>
+            <input type="text" name="{{ form.website.html_name }}" id="{{ form.website.id_for_label }}" value="" autocomplete="off" tabindex="-1">
+          </div>
+          {% if form.website.errors %}
+            <div role="alert" class="alert alert-error mt-2">{% for error in form.website.errors %}<span>{{ error }}</span>{% endfor %}</div>
+          {% endif %}
           <button type="submit" class="btn btn-primary w-full mt-4">Create account</button>
         </form>
         <div class="divider"></div>

@@ -12,6 +12,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from .accounts import export_user_data, send_verification_email, verify_token
 from .forms import DeleteAccountForm, ProfileForm, SignupForm
+from .ratelimit import rate_limit
 
 # Minimum seconds between two confirmation emails requested from the account page.
 RESEND_INTERVAL = 60
@@ -19,6 +20,7 @@ RESEND_INTERVAL = 60
 
 @login_not_required
 @require_http_methods(["GET", "POST"])
+@rate_limit("signup", by="ip")
 def signup(request):
     """Create an account, sign the user in and send the email confirmation link."""
     if request.method == "POST":

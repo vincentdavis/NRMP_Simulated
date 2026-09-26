@@ -14,6 +14,7 @@ from django.views.decorators.http import require_GET
 from . import models, params, pipeline, runs
 from .engine import MODEL_VERSION, persistence, population, rank, rng, utility
 from .engine import pipeline as engine_pipeline
+from .limits import max_pairs
 from .params import ParamField, SimulationParams, iter_fields, list_fields
 from .params_forms import IMPLEMENTED_SECTIONS, SECTIONS, choice_label
 from .population_csv import MAX_UPLOAD_BYTES, MAX_UPLOAD_ROWS, columns
@@ -94,7 +95,8 @@ def help_index(request):
         "csv_columns": {side: columns(defaults, side) for side in ("applicants", "programs")},
         "max_upload_mb": MAX_UPLOAD_BYTES // (1024 * 1024),
         "max_upload_rows": MAX_UPLOAD_ROWS,
-        "max_pairs": settings.NRMP_MAX_PAIRS,
+        "max_pairs": max_pairs(),
+        "background": settings.TASK_BACKEND == "database",
         "model_version": MODEL_VERSION,
         "default_market": {
             "applicants": defaults.market.n_applicants,

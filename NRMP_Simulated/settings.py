@@ -106,6 +106,7 @@ INSTALLED_APPS = [
     "theme",
     "django_htmx",
     "axes",
+    "django_tasks_db",
 ]
 
 # Development-only apps (installed with the dev dependency group)
@@ -260,15 +261,45 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Largest applicants x programs product one run may have (decision D4). Runs execute inside the web request until
-# background jobs exist (plan step 2.5), so this keeps every run well within the gunicorn timeout.
-NRMP_MAX_PAIRS = int(os.environ.get("NRMP_MAX_PAIRS", "250000"))
+# Background runs (plan step 2.5, decision D5): django.tasks. With TASK_BACKEND=immediate (the default) a run executes
+# inside the web request that starts it; with TASK_BACKEND=database runs are queued in the database and a worker
+# service executes them (`manage.py nrmp_worker`).
+TASK_BACKEND = os.environ.get("TASK_BACKEND", "immediate").strip().lower()
+if TASK_BACKEND == "database":
+    TASKS = {"default": {"BACKEND": "django_tasks_db.DatabaseBackend", "QUEUES": ["default"]}}
+elif TASK_BACKEND == "immediate":
+    TASKS = {"default": {"BACKEND": "django.tasks.backends.immediate.ImmediateBackend"}}
+else:
+    raise ImproperlyConfigured("TASK_BACKEND must be 'immediate' or 'database'.")
+
+# Largest applicants x programs product of one run (decision D4): NRMP_MAX_PAIRS when runs execute in the request,
+# NRMP_MAX_PAIRS_WORKER when a worker executes them. The engine takes about 0.35 s per million pairs.
+NRMP_MAX_PAIRS = int(os.environ.get("NRMP_MAX_PAIRS", "1000000"))
+NRMP_MAX_PAIRS_WORKER = int(os.environ.get("NRMP_MAX_PAIRS_WORKER", "10000000"))
 # Pairs the engine computes at a time: its memory use is about 100 bytes per block pair (docs/model_spec.md §12.7).
 # Results do not depend on it.
 NRMP_BLOCK_PAIRS = int(os.environ.get("NRMP_BLOCK_PAIRS", "250000"))
 # Largest market for which the detail pages compute the other side's ranks and the pairs CSV is offered: both need
 # every pair of the market to be recomputed during the request.
 NRMP_DRILLDOWN_MAX_PAIRS = int(os.environ.get("NRMP_DRILLDOWN_MAX_PAIRS", "2000000"))
+
+# Quotas per account (staff are exempt). With NRMP_REQUIRE_VERIFIED_EMAIL, accounts must confirm their email address
+# before they can run simulations; turn it on once outgoing email works.
+NRMP_REQUIRE_VERIFIED_EMAIL = env_bool("NRMP_REQUIRE_VERIFIED_EMAIL", default=False)
+NRMP_MAX_SIMULATIONS = int(os.environ.get("NRMP_MAX_SIMULATIONS", "50"))
+NRMP_RUNS_PER_DAY = int(os.environ.get("NRMP_RUNS_PER_DAY", "200"))
+NRMP_PAIRS_PER_DAY = int(os.environ.get("NRMP_PAIRS_PER_DAY", "200000000"))
+# Rate limits ("count/period" with period s, m, h or d), counted in the database: sign-ups per client address, and
+# runs and uploads per account.
+NRMP_RATE_LIMITS = {
+    "signup": os.environ.get("NRMP_RATE_SIGNUP", "10/h"),
+    "run": os.environ.get("NRMP_RATE_RUN", "60/h"),
+    "upload": os.environ.get("NRMP_RATE_UPLOAD", "60/h"),
+}
+# Housekeeping (`manage.py nrmp_cleanup`): runs kept per simulation, and how long a run may stay queued or running
+# before it counts as interrupted.
+NRMP_RUNS_KEPT = int(os.environ.get("NRMP_RUNS_KEPT", "50"))
+NRMP_STALE_RUN_MINUTES = int(os.environ.get("NRMP_STALE_RUN_MINUTES", "60"))
 
 # Email (Django 6.1 MAILERS): SMTP when EMAIL_HOST is set (any provider: Postmark, SendGrid, Mailgun, SES ...);
 # otherwise messages are written to the log, which is enough for development.
@@ -300,6 +331,10 @@ PASSWORD_RESET_TIMEOUT = 3 * 24 * 60 * 60
 # is offered.
 CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "").strip()
 PROJECT_URL = "https://github.com/vincentdavis/NRMP_Simulated"
+# Absolute address of the site, for links in emails sent outside a request (for example "run finished").
+SITE_URL = os.environ.get("SITE_URL", "").strip().rstrip("/") or (
+    f"https://{railway_domain}" if railway_domain else "https://nrmp-simulated.heteroskedastic.org"
+)
 
 # Authentication redirects
 LOGIN_REDIRECT_URL = "nrmps:index"

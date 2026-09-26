@@ -64,7 +64,9 @@ checks before each commit.
 ## Deployment
 
 Railway, from the `Dockerfile` (see [docs/DEPLOY.md](docs/DEPLOY.md)). `railway.json` runs migrations before each
-deploy and health-checks `/healthz`. `docker compose up --build` runs the production image locally with PostgreSQL.
+deploy and health-checks `/healthz`; `railway.worker.json` adds an optional worker for background runs and
+`railway.cron.json` a daily clean-up. `docker compose up --build` runs the production image locally with PostgreSQL
+and a worker.
 
 ## Documentation
 

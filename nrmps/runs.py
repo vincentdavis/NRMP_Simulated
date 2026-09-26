@@ -12,13 +12,18 @@ import secrets
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import timedelta
 from functools import cached_property
 from typing import Any
 
+import logfire
 import numpy as np
 from django.conf import settings
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Max
+from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
 from numpy.typing import NDArray
 from pydantic import ValidationError
@@ -39,6 +44,7 @@ from .limits import check_market_size
 from .models import IMPLEMENTED_STAGES, PopulationUpload, RunArtifact, Simulation, SimulationRun, Stage, StageRun
 from .params import SimulationParams, canonical_json, stage_inputs
 from .population_csv import UploadedSide, applicant_side, program_side
+from .quotas import check_run_quota
 from .versions import stamps
 
 logger = logging.getLogger(__name__)
@@ -106,11 +112,12 @@ def _save_artifact(run: SimulationRun, kind: str, data: bytes) -> None:
     RunArtifact.objects.create(run=run, kind=kind, data=data, size=len(data), sha256=hashlib.sha256(data).hexdigest())
 
 
-def start_run(simulation: Simulation, user: Any = None) -> SimulationRun:
+def start_run(simulation: Simulation, user: Any = None, *, notify: bool = False) -> SimulationRun:
     """Create a queued run of the simulation's current parameters and store its population.
 
     Raises SimulationError (with a message for the user) if the parameters or an uploaded population do not work,
-    if the market is above the size limit, or if another run is queued or running.
+    if the market is above the size limit, if the account has reached a quota, or if another run is queued or
+    running. `notify` asks for an email when the run finishes.
     """
     try:
         with transaction.atomic():
@@ -127,10 +134,12 @@ def start_run(simulation: Simulation, user: Any = None) -> SimulationRun:
             uploads = {upload.side: upload for upload in simulation.uploads.all()}
             started = time.perf_counter()
             try:
-                population, labels = build_population(params, seed, uploads)
+                with logfire.span("population stage", simulation_id=simulation.pk, seed=seed):
+                    population, labels = build_population(params, seed, uploads)
             except PopulationError as exc:
                 raise SimulationError(str(exc)) from exc
             check_market_size(population.n_applicants, population.n_programs)
+            check_run_quota(user, population.n_applicants * population.n_programs)
             data = population_to_npz(population)
             population_ms = _milliseconds(started)
             number = (simulation.runs.aggregate(Max("number"))["number__max"] or 0) + 1
@@ -151,6 +160,7 @@ def start_run(simulation: Simulation, user: Any = None) -> SimulationRun:
                 n_programs=population.n_programs,
                 n_positions=population.n_positions,
                 progress_total=2 * pairs,
+                notify_email=notify,
                 **stamps(),
             )
             _save_artifact(run, RunArtifact.Kind.POPULATION, data)
@@ -200,15 +210,22 @@ def execute_run(run_id: int) -> SimulationRun:
         population_data = run.artifact(RunArtifact.Kind.POPULATION)
         if population_data is None:
             raise PopulationError("The run has no stored population.")
-        result = run_pre_interview(
-            params,
-            run.seed,
-            replicate=run.replicate,
-            population=population_from_npz(population_data),
-            block_pairs=settings.NRMP_BLOCK_PAIRS,
-            progress=progress,
-        )
-        results = results_to_npz(result.applicants, result.programs)
+        with logfire.span(
+            "pre-interview stage",
+            run_id=run_id,
+            n_applicants=run.n_applicants,
+            n_programs=run.n_programs,
+            n_pairs=run.n_pairs,
+        ):
+            result = run_pre_interview(
+                params,
+                run.seed,
+                replicate=run.replicate,
+                population=population_from_npz(population_data),
+                block_pairs=settings.NRMP_BLOCK_PAIRS,
+                progress=progress,
+            )
+            results = results_to_npz(result.applicants, result.programs)
     except Exception as exc:  # recorded on the run; the page shows it
         if isinstance(exc, ValueError):
             message = str(exc)
@@ -217,9 +234,29 @@ def execute_run(run_id: int) -> SimulationRun:
             message = "The run failed unexpectedly. The error has been logged; please try again or report it."
             logger.exception("Run failed unexpectedly run_id=%s", run_id)
         _finish(run, Status.FAILED, started, error=message)
-        return SimulationRun.objects.get(pk=run_id)
+        return _notify(SimulationRun.objects.get(pk=run_id))
     _finish(run, Status.SUCCEEDED, started, metrics=result.metrics, results=results)
-    return SimulationRun.objects.get(pk=run_id)
+    return _notify(SimulationRun.objects.get(pk=run_id))
+
+
+def _notify(run: SimulationRun) -> SimulationRun:
+    """Email the run's owner that it finished, if they asked and their address is confirmed."""
+    user = run.created_by
+    if not run.notify_email or user is None or not user.email or not user.email_verified:
+        return run
+    path = reverse("nrmps:run_detail", kwargs={"pk": run.simulation_id, "number": run.number})
+    context = {"run": run, "simulation": run.simulation, "link": f"{settings.SITE_URL}{path}"}
+    outcome = "finished" if run.status == Status.SUCCEEDED else "failed"
+    try:
+        send_mail(
+            subject=f"Run {run.number} of “{run.simulation.name}” {outcome}",
+            message=render_to_string("emails/run_finished.txt", context),
+            from_email=None,
+            recipient_list=[user.email],
+        )
+    except OSError:
+        logger.exception("Could not send the run-finished email run_id=%s", run.pk)
+    return run
 
 
 def _finish(
@@ -260,10 +297,33 @@ def _finish(
         SimulationRun.objects.filter(pk=run.pk).update(**updates)
 
 
+def dispatch_run(run: SimulationRun) -> SimulationRun:
+    """Hand a queued run to the task backend and return it refreshed.
+
+    The immediate backend executes it before returning; the database backend queues it for the worker.
+    """
+    from .tasks import execute_run_task
+
+    execute_run_task.enqueue(run.pk)
+    run.refresh_from_db()
+    return run
+
+
 def run_now(simulation: Simulation, user: Any = None) -> SimulationRun:
-    """Start a run and execute it in this process (until background jobs exist)."""
+    """Start a run and execute it in this process, whatever the task backend (commands and tests)."""
     run = start_run(simulation, user)
     return execute_run(run.pk)
+
+
+def interrupt_stale_runs(older_than: timedelta) -> int:
+    """Mark runs queued or running for longer than `older_than` as failed (their worker stopped); return how many."""
+    cutoff = timezone.now() - older_than
+    stale = SimulationRun.objects.filter(status__in=SimulationRun.ACTIVE, created_at__lt=cutoff)
+    return stale.update(
+        status=Status.FAILED,
+        finished_at=timezone.now(),
+        error="The run was interrupted before it finished (the worker stopped). Please run it again.",
+    )
 
 
 # --- Results ----------------------------------------------------------------------------------------------------------

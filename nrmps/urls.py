@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
-from . import account_views, help_views, run_views, views
+from . import account_views, help_views, ops_views, run_views, views
 
 app_name = "nrmps"
 
@@ -66,6 +66,7 @@ urlpatterns = [
     path("terms/", views.terms, name="terms"),
     path("help/", help_views.help_index, name="help"),
     path("help/developer/", help_views.developer_reference, name="developer_reference"),
+    path("ops/", ops_views.ops, name="ops"),
     path("documentation/", help_views.documentation_redirect, name="documentation"),
     # Simulations
     path("simulations/", views.simulation_list, name="simulation_list"),
@@ -80,8 +81,10 @@ urlpatterns = [
     ),
     # Runs
     path("simulations/<int:pk>/runs/", views.run_start, name="run_start"),
+    path("simulations/<int:pk>/runs/status/", views.run_status, name="run_status"),
     path("simulations/<int:pk>/runs/<int:number>/", run_views.run_detail, name="run_detail"),
     path("simulations/<int:pk>/runs/<int:number>/delete/", run_views.run_delete, name="run_delete"),
+    path("simulations/<int:pk>/runs/<int:number>/progress/", run_views.run_progress, name="run_progress"),
     path("simulations/<int:pk>/runs/<int:number>/applicants/", run_views.run_applicants, name="run_applicants"),
     path(
         "simulations/<int:pk>/runs/<int:number>/applicants/<int:index>/",

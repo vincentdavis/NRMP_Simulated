@@ -38,6 +38,17 @@
     <a class="btn btn-outline" href="{% url 'nrmps:account_export' %}">Download my data</a>
   </div>
 
+  {% if user.is_staff %}
+    <section class="bg-base-200 rounded-box p-4">
+      <h2 class="font-semibold mb-2">Staff</h2>
+      <div class="flex flex-wrap gap-2">
+        <a class="btn btn-sm btn-outline" href="{% url 'nrmps:ops' %}">Operations</a>
+        <a class="btn btn-sm btn-outline" href="{% url 'nrmps:developer_reference' %}">Developer reference</a>
+        <a class="btn btn-sm btn-outline" href="{% url 'admin:index' %}">Admin</a>
+      </div>
+    </section>
+  {% endif %}
+
   <section class="border border-error rounded-box p-4">
     <h2 class="font-semibold mb-2">Delete account</h2>
     <p class="text-sm mb-3">Deletes your account and all your simulations. This cannot be undone; download your data first

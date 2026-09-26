@@ -11,10 +11,18 @@
             hx-post="{% url 'nrmps:run_start' pk=simulation.pk %}" hx-target="#run-panel" hx-swap="outerHTML"
             hx-disabled-elt="find button" hx-sync="this:drop">
         {% csrf_token %}
-        <button type="submit" class="btn btn-primary"{% if active_run %} disabled{% endif %}>
-          <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
-          {% if latest_run and not needs_run %}Run again{% else %}Run{% endif %}
-        </button>
+        <div class="flex flex-wrap items-center gap-3">
+          {% if background %}
+            <label class="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" name="notify" class="checkbox checkbox-sm"{% if not request.user.email_verified %} disabled{% endif %}>
+              Email me when it finishes{% if not request.user.email_verified %} (confirm your email first){% endif %}
+            </label>
+          {% endif %}
+          <button type="submit" class="btn btn-primary"{% if active_run %} disabled{% endif %}>
+            <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
+            {% if latest_run and not needs_run %}Run again{% else %}Run{% endif %}
+          </button>
+        </div>
       </form>
     </div>
     <p class="text-sm text-base-content/70">
@@ -26,8 +34,14 @@
       <div role="alert" class="alert alert-error"><span>{{ run_error }}</span></div>
     {% endif %}
     {% if active_run %}
-      <div role="status" class="alert alert-info">
-        <span>Run {{ active_run.number }} is {{ active_run.get_status_display|lower }} ({{ active_run.progress_percent }}%).</span>
+      {# Polls every second; the panel that comes back without a running run stops the polling. #}
+      <div role="status" class="rounded-box border border-base-300 p-4"
+           hx-get="{% url 'nrmps:run_status' pk=simulation.pk %}?run={{ active_run.number }}" hx-trigger="every 1s"
+           hx-target="#run-panel" hx-swap="outerHTML">
+        <div class="w-full">
+          <p>Run {{ active_run.number }} is {{ active_run.get_status_display|lower }}: {{ active_run.progress_percent }}%.</p>
+          <progress class="progress progress-primary w-full" value="{{ active_run.progress_percent }}" max="100" aria-label="Progress of run {{ active_run.number }}"></progress>
+        </div>
       </div>
     {% endif %}
 

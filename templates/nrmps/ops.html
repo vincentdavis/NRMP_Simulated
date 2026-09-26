@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Operations - NRMP Simulations{% endblock %}
+{% block content %}
+<div class="py-4">
+  <h1 class="text-3xl font-bold mb-2">Operations</h1>
+  <p class="text-base-content/70 mb-6">Staff only. Runs of the last {{ days }} days, the queue, workers and quota use.</p>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <section class="card bg-base-100 shadow-xl" aria-labelledby="queue-title">
+      <div class="card-body">
+        <h2 id="queue-title" class="card-title">Queue and workers</h2>
+        <p>Backend: <strong>{{ tasks.backend }}</strong>. Queued: {{ tasks.queued }}, running: {{ tasks.running }}.
+          {% if tasks.worker %}Worker: <strong>{{ tasks.worker }}</strong>{% if tasks.worker_last_seen_seconds is not None %}, last seen {{ tasks.worker_last_seen_seconds }} s ago{% endif %}.{% endif %}</p>
+        {% if workers %}
+          <ul class="list-disc ml-5 text-sm">
+            {% for worker in workers %}<li>{{ worker.hostname|default:"worker" }} ({{ worker.worker_id|slice:":8" }}): started {{ worker.started_at|naturaltime }}, last seen {{ worker.last_seen|naturaltime }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+        {% if active %}
+          <h3 class="font-semibold mt-2">In progress</h3>
+          <ul class="list-disc ml-5 text-sm">
+            {% for run in active %}<li>{{ run }}: {{ run.get_status_display|lower }}, {{ run.progress_percent }}%, since {{ run.created_at|naturaltime }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-xl" aria-labelledby="speed-title">
+      <div class="card-body">
+        <h2 id="speed-title" class="card-title">Durations</h2>
+        <p>{{ finished|intcomma }} finished runs: median {{ median_ms|default:"-" }} ms, 95th percentile {{ p95_ms|default:"-" }} ms.</p>
+        <p class="text-sm text-base-content/70">Quotas: {{ quotas.runs_per_day|intcomma }} runs and {{ quotas.pairs_per_day|intcomma }} pairs per account per 24 hours; verified email required: {{ quotas.require_verified_email|yesno:"yes,no" }}.</p>
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-xl" aria-labelledby="days-title">
+      <div class="card-body overflow-x-auto">
+        <h2 id="days-title" class="card-title">Runs per day</h2>
+        <table class="table table-sm">
+          <thead><tr><th scope="col">Day</th><th scope="col" class="text-right">Runs</th><th scope="col" class="text-right">Failed</th><th scope="col" class="text-right">Pairs</th></tr></thead>
+          <tbody>
+            {% for day in per_day %}
+              <tr><td>{{ day.day|date:"Y-m-d" }}</td><td class="text-right tabular-nums">{{ day.runs|intcomma }}</td><td class="text-right tabular-nums">{{ day.failed|intcomma }}</td><td class="text-right tabular-nums">{{ day.pairs|default:0|intcomma }}</td></tr>
+            {% empty %}
+              <tr><td colspan="4" class="text-base-content/70">No runs.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-xl" aria-labelledby="users-title">
+      <div class="card-body overflow-x-auto">
+        <h2 id="users-title" class="card-title">Quota use, last 24 hours</h2>
+        <table class="table table-sm">
+          <thead><tr><th scope="col">Account</th><th scope="col" class="text-right">Runs</th><th scope="col" class="text-right">Pairs</th></tr></thead>
+          <tbody>
+            {% for row in top_users %}
+              <tr><td>{{ row.created_by__username|default:"(commands)" }}</td><td class="text-right tabular-nums">{{ row.runs|intcomma }}</td><td class="text-right tabular-nums">{{ row.pairs|default:0|intcomma }}</td></tr>
+            {% empty %}
+              <tr><td colspan="3" class="text-base-content/70">No runs.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-xl" aria-labelledby="largest-title">
+      <div class="card-body overflow-x-auto">
+        <h2 id="largest-title" class="card-title">Largest runs</h2>
+        <table class="table table-sm">
+          <thead><tr><th scope="col">Run</th><th scope="col">Owner</th><th scope="col" class="text-right">Pairs</th><th scope="col" class="text-right">Time</th></tr></thead>
+          <tbody>
+            {% for run in largest %}
+              <tr><td>{{ run }}</td><td>{{ run.simulation.owner }}</td><td class="text-right tabular-nums">{{ run.pairs|intcomma }}</td><td class="text-right tabular-nums">{{ run.duration_ms|default:"-" }}</td></tr>
+            {% empty %}
+              <tr><td colspan="4" class="text-base-content/70">No runs.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-xl" aria-labelledby="failures-title">
+      <div class="card-body">
+        <h2 id="failures-title" class="card-title">Recent failures</h2>
+        <ul class="list-disc ml-5 text-sm space-y-1">
+          {% for run in failures %}<li>{{ run }} ({{ run.created_at|date:"Y-m-d H:i" }}): {{ run.error }}</li>{% empty %}<li>None.</li>{% endfor %}
+        </ul>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

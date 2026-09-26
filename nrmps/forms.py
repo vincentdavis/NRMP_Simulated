@@ -18,9 +18,17 @@ def _check_email_available(email: str, exclude_user=None) -> str:
 
 
 class SignupForm(UserCreationForm):
-    """Sign-up form: username, a required email address (unique, ignoring case), optional full name, password."""
+    """Sign-up form: username, a required email address (unique, ignoring case), optional full name, password.
+
+    `website` is a honeypot: people never see it (the template hides it), so a value means a bot filled in the form.
+    """
 
     full_name = forms.CharField(max_length=255, required=False, label="Full name")
+    website = forms.CharField(
+        required=False,
+        label="Leave this field empty",
+        widget=forms.TextInput(attrs={"autocomplete": "off", "tabindex": "-1"}),
+    )
     email = forms.EmailField(
         label="Email",
         help_text="Used to confirm your account and to reset your password. Never shown to other users.",
@@ -33,6 +41,12 @@ class SignupForm(UserCreationForm):
     def clean_email(self) -> str:
         """Reject an address another account already uses."""
         return _check_email_available(self.cleaned_data["email"])
+
+    def clean_website(self) -> str:
+        """Reject the form if the honeypot field was filled in (without saying why)."""
+        if self.cleaned_data.get("website"):
+            raise forms.ValidationError("The account could not be created.", code="honeypot")
+        return ""
 
     def save(self, commit: bool = True):
         """Save the user, including the optional full name and email."""

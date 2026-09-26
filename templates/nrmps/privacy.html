@@ -12,7 +12,8 @@
       <h2 class="text-lg font-semibold mb-2">What is stored</h2>
       <ul class="list-disc ml-6 space-y-1">
         <li><strong>Your account:</strong> username, password (stored only as a salted hash), email address (used only
-          to confirm your account and to reset your password; never shown to other users) and the optional full
+          to confirm your account, to reset your password and, if you ask, to tell you that a run finished; never
+          shown to other users) and the optional full
           name.</li>
         <li><strong>Your simulations:</strong> their names, descriptions and parameters, and for each run the
           parameters and seed it used, the applicants and programs, and the computed diagnostics.</li>
@@ -21,6 +22,8 @@
         <li><strong>Failed sign-ins:</strong> to block password guessing, a failed sign-in records the username tried,
           the IP address and the browser identification. The record is cleared when that username signs in
           successfully. Successful sign-ins are not recorded.</li>
+        <li><strong>Rate limits:</strong> to stop automated abuse, the number of sign-ups from each IP address, and of
+          runs and uploads from each account, is counted per hour. The counters are deleted after two days.</li>
       </ul>
       <p class="mt-2">Everything is stored in the site's database, hosted by the cloud provider
         <a class="link" href="https://railway.com">Railway</a>. Only you can see your simulations.</p>

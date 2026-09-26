@@ -143,6 +143,17 @@ def run_detail(request, pk: int, number: int):
     return render(request, "nrmps/runs/run_detail.html", context)
 
 
+@require_GET
+def run_progress(request, pk: int, number: int):
+    """The progress block of a queued or running run (polled); once the run has finished, reload the page."""
+    run = get_run(request, pk, number)
+    if run.is_active:
+        return render(request, "nrmps/runs/_progress.html", {"simulation": run.simulation, "run": run})
+    response = HttpResponse("")
+    response["HX-Refresh"] = "true"
+    return response
+
+
 @require_POST
 def run_delete(request, pk: int, number: int):
     """Delete a run and its results."""

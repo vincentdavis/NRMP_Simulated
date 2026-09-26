@@ -1,4 +1,5 @@
-# Production-like local stack: PostgreSQL and the app image (DEBUG off, gunicorn), at http://localhost:8000.
+# Production-like local stack: PostgreSQL, the app image (DEBUG off, gunicorn) at http://localhost:8000, and a worker
+# that executes queued runs.
 # Day-to-day development uses `manage.py runserver` with DEBUG=True instead (see .env.example).
 services:
   db:
@@ -24,11 +25,25 @@ services:
       SECURE_COOKIES: "False"
       TRUSTED_PROXY_COUNT: "0"
       MIGRATE_ON_START: "1"
+      TASK_BACKEND: database
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+
+  # Executes queued runs (TASK_BACKEND=database), as the worker service does on Railway.
+  worker:
+    build: .
+    command: ["python", "manage.py", "nrmp_worker", "--no-reload"]
+    restart: unless-stopped  # until the web service has migrated the database
+    environment:
+      SECRET_KEY: local-compose-only-secret-key-not-for-production-0123456789
+      DATABASE_URL: postgres://postgres:postgres@db:5432/nrmp
+      TASK_BACKEND: database
+    depends_on:
+      web:
+        condition: service_started
 
 volumes:
   pgdata:

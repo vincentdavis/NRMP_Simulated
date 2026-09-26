@@ -231,6 +231,7 @@ class SimulationRun(models.Model):
     error = models.TextField(blank=True, default="")
     progress_done = models.PositiveBigIntegerField(default=0)
     progress_total = models.PositiveBigIntegerField(default=0)
+    notify_email = models.BooleanField(default=False, help_text="Email the owner when the run finishes.")
 
     class Meta:
         ordering = ["-number"]
@@ -327,3 +328,30 @@ class RunArtifact(models.Model):
 
     def __str__(self):
         return f"{self.run} {self.kind}"
+
+
+class WorkerHeartbeat(models.Model):
+    """A background worker's sign of life, updated every half minute by `manage.py nrmp_worker`."""
+
+    worker_id = models.CharField(max_length=64, unique=True)
+    hostname = models.CharField(max_length=255, blank=True, default="")
+    started_at = models.DateTimeField()
+    last_seen = models.DateTimeField()
+
+    def __str__(self):
+        return f"{self.hostname or 'worker'} {self.worker_id[:8]}"
+
+
+class RateLimitCounter(models.Model):
+    """How many times a key (for example "run:user:42") was used in one fixed time window (nrmps.ratelimit)."""
+
+    key = models.CharField(max_length=200)
+    window_start = models.DateTimeField()
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["key", "window_start"], name="unique_rate_limit_window")]
+        indexes = [models.Index(fields=["window_start"], name="rate_limit_window")]
+
+    def __str__(self):
+        return f"{self.key} @ {self.window_start:%Y-%m-%d %H:%M}: {self.count}"

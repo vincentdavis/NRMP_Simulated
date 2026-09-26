@@ -10,22 +10,28 @@ from django.db import DatabaseError, connection, transaction
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django_htmx.http import trigger_client_event
 
 from .exceptions import SimulationError
 from .forms import PopulationUploadForm, SimulationForm
-from .limits import market_size_error
+from .limits import market_size_error, max_pairs
 from .models import PopulationUpload, Side, Simulation
 from .params import SimulationParams
 from .params_forms import IMPLEMENTED_SECTIONS, ParamsForm
 from .pipeline import get_pipeline, needs_run
 from .population_csv import MAX_UPLOAD_BYTES, MAX_UPLOAD_ROWS, columns, digest, parse_population_csv
-from .runs import run_now
+from .quotas import QuotaError, check_simulation_quota
+from .ratelimit import MESSAGE as RATE_MESSAGE
+from .ratelimit import over_limit, rate_limit
+from .runs import dispatch_run, start_run
 
 logger = logging.getLogger(__name__)
 
 RECENT_RUNS = 10
+# A worker whose heartbeat is older than this counts as missing in /healthz and on the ops page.
+WORKER_STALE_SECONDS = 120
 
 
 def get_owned_simulation(request: HttpRequest, pk: int) -> Simulation:
@@ -52,7 +58,24 @@ def healthz(request):
     except DatabaseError:
         logger.exception("Health check failed: the database is unavailable")
         return JsonResponse({"status": "error", "database": "unavailable"}, status=503)
-    return JsonResponse({"status": "ok"})
+    return JsonResponse({"status": "ok", "tasks": task_health()})
+
+
+def task_health() -> dict[str, Any]:
+    """Describe the background runs: backend, queue and, with a worker, how long ago it was last seen."""
+    from .models import SimulationRun, WorkerHeartbeat
+
+    health: dict[str, Any] = {
+        "backend": settings.TASK_BACKEND,
+        "queued": SimulationRun.objects.filter(status=SimulationRun.Status.QUEUED).count(),
+        "running": SimulationRun.objects.filter(status=SimulationRun.Status.RUNNING).count(),
+    }
+    if settings.TASK_BACKEND == "database":
+        last = WorkerHeartbeat.objects.order_by("-last_seen").values_list("last_seen", flat=True).first()
+        seconds = None if last is None else round((timezone.now() - last).total_seconds())
+        health["worker_last_seen_seconds"] = seconds
+        health["worker"] = "ok" if seconds is not None and seconds <= WORKER_STALE_SECONDS else "missing"
+    return health
 
 
 @login_not_required
@@ -98,6 +121,10 @@ def simulation_create(request):
     """Create a simulation for the current user; it starts with the default parameters and a fresh seed."""
     if request.method == "POST":
         form = SimulationForm(request.POST)
+        try:
+            check_simulation_quota(request.user)
+        except QuotaError as exc:
+            form.add_error(None, str(exc))
         if form.is_valid():
             sim = form.save(commit=False)
             sim.owner = request.user
@@ -143,7 +170,8 @@ def manage_context(request: HttpRequest, sim: Simulation, **overrides) -> dict:
             for side in Side
         ],
         "market": {"applicants": n, "programs": m, "pairs": n * m},
-        "max_pairs": settings.NRMP_MAX_PAIRS,
+        "max_pairs": max_pairs(),
+        "background": settings.TASK_BACKEND == "database",
         "active_run": sim.active_run(),
         "latest_run": sim.latest_run(),
         "recent_runs": sim.runs.defer("params", "metrics", "fingerprints")[:RECENT_RUNS],
@@ -182,6 +210,9 @@ def simulation_manage(request, pk: int):
                     sim.set_params(params_form.params)
                     sim.save(update_fields=["params", "updated_at"])
                     if "run" in request.POST:
+                        if over_limit(request, "run", by="user"):
+                            messages.error(request, f"Parameters saved, but not run: {RATE_MESSAGE}")
+                            return redirect(reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk}) + "#run")
                         return _run_and_redirect(request, sim)
                     messages.success(request, "Parameters saved.")
                     return redirect(reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk}) + "#run")
@@ -205,14 +236,16 @@ def simulation_manage(request, pk: int):
 def _run_and_redirect(request: HttpRequest, sim: Simulation) -> HttpResponse:
     """Run the simulation (no JavaScript, or "Save and run") and redirect to the result."""
     try:
-        run = run_now(sim, request.user)
+        run = dispatch_run(start_run(sim, request.user, notify=request.POST.get("notify") == "on"))
     except SimulationError as exc:
         messages.error(request, str(exc))
         return redirect(reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk}) + "#run")
     if run.status == run.Status.SUCCEEDED:
         messages.success(request, f"Run {run.number} finished.")
-    else:
+    elif run.status == run.Status.FAILED:
         messages.error(request, f"Run {run.number} failed: {run.error}")
+    else:
+        messages.info(request, f"Run {run.number} is queued; this page shows its progress.")
     return redirect("nrmps:run_detail", pk=sim.pk, number=run.number)
 
 
@@ -237,19 +270,39 @@ def _run_panel(request: HttpRequest, sim: Simulation, **overrides) -> HttpRespon
     return HttpResponse(panel + stepper)
 
 
+def _finished_toast(response: HttpResponse, run) -> HttpResponse:
+    if run.status == run.Status.SUCCEEDED:
+        return _toast(response, "success", f"Run {run.number} finished.")
+    return _toast(response, "error", f"Run {run.number} failed: {run.error}")
+
+
 @require_POST
+@rate_limit("run", by="user")
 def run_start(request, pk: int):
-    """Run the simulation with its saved parameters (in this request until background jobs exist)."""
+    """Run the simulation with its saved parameters: now, or in the background when a worker executes runs."""
     sim = get_owned_simulation(request, pk)
     if not request.htmx:
         return _run_and_redirect(request, sim)
     try:
-        run = run_now(sim, request.user)
+        run = dispatch_run(start_run(sim, request.user, notify=request.POST.get("notify") == "on"))
     except SimulationError as exc:
         return _toast(_run_panel(request, sim, run_error=str(exc)), "error", str(exc))
-    if run.status == run.Status.SUCCEEDED:
-        return _toast(_run_panel(request, sim), "success", f"Run {run.number} finished.")
-    return _toast(_run_panel(request, sim), "error", f"Run {run.number} failed: {run.error}")
+    if run.is_active:
+        return _toast(_run_panel(request, sim), "info", f"Run {run.number} is queued.")
+    return _finished_toast(_run_panel(request, sim), run)
+
+
+@require_GET
+def run_status(request, pk: int):
+    """The run panel again, for polling while a run is queued or running; says so when the awaited run finished."""
+    sim = get_owned_simulation(request, pk)
+    response = _run_panel(request, sim)
+    awaited = request.GET.get("run", "")
+    if awaited.isdigit():
+        run = sim.runs.filter(number=int(awaited)).first()
+        if run is not None and not run.is_active:
+            return _finished_toast(response, run)
+    return response
 
 
 # --- Uploads (HTMX from the simulation page) --------------------------------------------------------------------------
@@ -271,6 +324,7 @@ def _side(side: str) -> str:
 
 
 @require_POST
+@rate_limit("upload", by="user")
 def population_upload(request, pk: int, side: str):
     """Replace one side's population with an uploaded CSV, validated in memory before anything is stored."""
     sim = get_owned_simulation(request, pk)

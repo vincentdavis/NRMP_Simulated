@@ -75,6 +75,10 @@
     // HTMX does not swap error responses; say something instead of failing silently.
     body.addEventListener("htmx:responseError", (event) => {
       const status = event.detail.xhr ? event.detail.xhr.status : "";
+      if (status === 429) {
+        showToast("error", "Too many requests. Please wait a little and try again.");
+        return;
+      }
       showToast("error", `The server could not complete that action (error ${status}). It has been logged; please try again.`);
     });
     body.addEventListener("htmx:sendError", () => {

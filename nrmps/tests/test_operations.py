@@ -14,7 +14,7 @@ pytestmark = pytest.mark.django_db
 def test_health_check_reports_ok_without_login(client):
     response = client.get(reverse("nrmps:healthz"))
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["status"] == "ok"
 
 
 def test_health_check_fails_when_the_database_is_down(client):

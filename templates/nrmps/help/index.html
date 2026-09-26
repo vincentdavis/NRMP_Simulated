@@ -198,8 +198,8 @@
       <li>Only the stages up to the pre-interview rankings run. Applications, preference signals, interview
         invitations, interviews, rank order lists and the match are being built; their parameters are already in the
         form, marked "Not used yet".</li>
-      <li>Runs execute while you wait, so markets are limited to {{ max_pairs|intcomma }} applicant × program pairs.
-        Background runs with larger limits are next.</li>
+      <li>Markets are limited to {{ max_pairs|intcomma }} applicant × program pairs per run{% if background %}, and
+        runs wait in a queue when others are running{% endif %}. Accounts also have daily limits on runs and pairs.</li>
       <li>Results are simulations under the assumptions you set. They are not predictions of any real applicant's or
         program's match.</li>
     </ul>

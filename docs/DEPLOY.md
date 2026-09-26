@@ -12,6 +12,8 @@ the `Dockerfile` in this repository. Environment variables are listed in [`.env.
 | Service | Source | Config | Start command |
 |---|---|---|---|
 | **web** | this repo (Dockerfile) | `railway.json` | `entrypoint.sh`: gunicorn |
+| **worker** (optional) | this repo (Dockerfile) | `railway.worker.json` | `manage.py nrmp_worker` |
+| **cleanup** (cron) | this repo (Dockerfile) | `railway.cron.json` | `manage.py nrmp_cleanup`, daily at 03:17 UTC |
 | **Postgres** | Railway PostgreSQL | – | – |
 
 `railway.json` (Railway reads it from the repository root) sets:
@@ -21,7 +23,8 @@ the `Dockerfile` in this repository. Environment variables are listed in [`.env.
   becomes healthy, Railway keeps the previous one running;
 - restart on failure (up to 5 times).
 
-*Planned (step 2.5):* an optional worker service for background jobs.
+The worker and cron services use the same image; in each service's settings, point **Config-as-code** at its file.
+Give them the same variables as the web service (at least `SECRET_KEY`, `DATABASE_URL` and `TASK_BACKEND`).
 
 ## The image
 
@@ -77,7 +80,8 @@ Take a backup first if you want to keep the old rows (see [Backups and restore](
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `NRMP_MAX_PAIRS` | 250000 | Largest applicants × programs of one run. Runs execute inside the web request until step 2.5, so keep this well within the gunicorn timeout (the engine takes about 0.1 s at 250k pairs). |
+| `NRMP_MAX_PAIRS` | 1000000 | Largest applicants × programs of one run executed inside the web request (`TASK_BACKEND=immediate`); keep it well within the gunicorn timeout. |
+| `NRMP_MAX_PAIRS_WORKER` | 10000000 | The same limit when a worker executes runs (`TASK_BACKEND=database`). |
 | `NRMP_BLOCK_PAIRS` | 250000 | Pairs the engine computes at a time: about 100 bytes each, so 25 MB by default. Results do not depend on it. |
 | `NRMP_DRILLDOWN_MAX_PAIRS` | 2000000 | Largest market for which one agent's page shows the other side's ranks and the pairs CSV is offered (both recompute every pair). |
 
@@ -104,10 +108,34 @@ Without `EMAIL_HOST`, emails are written to the log instead: fine for developmen
 confirmation or password-reset links, and Django 6.1's `check --deploy` reports it as an error (mail.E001; CI sets a
 placeholder host for that check). Check delivery with `python manage.py sendtestemail you@example.com`.
 
-## Background jobs, clean-up and operations (*Planned*, step 2.5)
+## Background runs, clean-up and operations
 
-Long simulation steps will run as `django.tasks` jobs, optionally in a worker service (`manage.py db_worker`), with a
-periodic clean-up command and a staff operations page.
+**Runs in the request (default).** With `TASK_BACKEND=immediate` a run executes inside the web request that starts it,
+limited to `NRMP_MAX_PAIRS` applicant × program pairs (default 1,000,000; the engine takes about 0.35 s per million
+pairs). No worker is needed.
+
+**Runs in a worker.** To take larger runs off the web process:
+1. create the **worker** service from this repository with the config file `railway.worker.json`;
+2. set `TASK_BACKEND=database` on **both** the web and the worker service, and optionally
+   `NRMP_MAX_PAIRS_WORKER` (default 10,000,000; about 3.5 s and 100–250 MB per run at that size);
+3. redeploy both. Runs are then queued in the database (django-tasks-db); the page shows their progress and offers
+   an email when they finish (to confirmed addresses).
+
+`/healthz` reports the queue and, with a worker, how long ago it was last seen (`"worker": "missing"` after two
+minutes without a heartbeat). The health check still returns 200, so a stopped worker never takes the site down;
+runs just stay queued, and the clean-up job marks runs queued or running for over an hour as interrupted.
+
+**Clean-up.** The **cleanup** cron service (`railway.cron.json`) runs `manage.py nrmp_cleanup` daily: it marks
+interrupted runs as failed, keeps the newest `NRMP_RUNS_KEPT` (50) runs per simulation, and deletes old rate-limit
+counters, worker heartbeats and task records. Run it by hand the same way.
+
+**Quotas and rate limits** (per account; staff are exempt): `NRMP_MAX_SIMULATIONS` (50), `NRMP_RUNS_PER_DAY` (200)
+and `NRMP_PAIRS_PER_DAY` (200,000,000) in any 24 hours; sign-ups (10 per hour per client address), runs and uploads
+(60 per hour per account) are rate-limited, counted in the database. Once outgoing email works, set
+`NRMP_REQUIRE_VERIFIED_EMAIL=True` so that only accounts with a confirmed address can run simulations.
+
+**Operations page.** Staff see `/ops/` (linked from their account page): runs per day, failures, median and 95th
+percentile durations, the largest runs, the queue and workers, and quota use.
 
 ## Backups and restore
 

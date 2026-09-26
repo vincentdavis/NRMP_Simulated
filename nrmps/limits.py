@@ -1,8 +1,8 @@
 """Size limits for runs (decision D4 in docs/PROJECT_REVIEW.md).
 
-Until runs execute as background jobs (plan step 2.5), every run executes inside a web request and must finish well
-within the gunicorn timeout. The engine's cost grows with the number of applicant x program pairs, so the limit is on
-that product. `NRMP_MAX_PAIRS` overrides the default.
+The engine's cost grows with the number of applicant x program pairs, so the limit is on that product. When runs
+execute inside the web request (TASK_BACKEND=immediate) they must finish well within the gunicorn timeout
+(`NRMP_MAX_PAIRS`); a worker can take larger ones (`NRMP_MAX_PAIRS_WORKER`).
 """
 
 from django.conf import settings
@@ -11,7 +11,9 @@ from .exceptions import SizeLimitError
 
 
 def max_pairs() -> int:
-    """Return the largest applicants x programs product one request may process."""
+    """Return the largest applicants x programs product of one run: larger when a worker executes runs."""
+    if settings.TASK_BACKEND == "database":
+        return int(settings.NRMP_MAX_PAIRS_WORKER)
     return int(settings.NRMP_MAX_PAIRS)
 
 
