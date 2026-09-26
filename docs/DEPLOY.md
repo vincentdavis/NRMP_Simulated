@@ -1,5 +1,11 @@
 # Deploying NRMP Simulated
 
+> **Status: target state, not yet true.** This guide was written for the lost implementation (see
+> [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)). It describes where Phases 0.1, 1.2, 1.9 and 2.5 end up.
+> Until those steps land in this repository, `railway.json`, `railway.worker.json`, `.env.example`, `/healthz`, the
+> `predeploy`, `nrmp_cleanup` and `db_worker` commands, `/ops/` and docker-compose do not exist. Each step updates
+> this file as it lands.
+
 Production runs on [Railway](https://railway.com) at **https://nrmp-simulated.heteroskedastic.org**, built from
 the `Dockerfile` in this repository. Every environment variable is listed in [`.env.example`](../.env.example).
 

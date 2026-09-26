@@ -127,7 +127,7 @@ This is a Django-based web application that simulates the National Resident Matc
 ### Technology Stack
 
 **Backend**:
-- Django 5.2+ with custom User model
+- Django 6+ with custom User model
 - SQLite for development, PostgreSQL for production
 - Django-HTMX for dynamic UI updates
 - LogFire for structured logging
@@ -188,30 +188,15 @@ data/                    # CSV upload storage location
 
 ### Current Implementation Status
 
-**Completed (simulation_engine.py)**:
-- Interview object initialization (full cross-product) - `initialize_interview()`
-- Student pre-interview rating of schools - `students_rate_schools_pre_interview()`
-- School pre-interview rating of students - `schools_rate_students_pre_interview()`
-- Pre-interview ranking computation - `compute_students_pre_rankings()`, `compute_schools_pre_rankings()`
-- Complete pre-interview workflow - `compute_pre_interview_scores_and_rankings()`
-- HTMX-based UI for interview management
+The project is being reworked according to a review and phased plan:
 
-**UI Templates Available**:
-- Population management (students_list.html, schools_list.html)
-- Interview workflow (interviews_list.html)
-- Simulation management (simulation_form.html, simulation_manage.html, simulations_list.html)
-- User account system (account.html, signup.html)
-- Documentation page (documentation.html)
+- `docs/PROJECT_REVIEW.md`: findings and the phased plan (Phases 0–8). §0 reconciles the review with this repository.
+- `docs/IMPLEMENTATION_STATUS.md`: what has been done so far, step by step, and open owner decisions.
+- `docs/review/`: appendices (model spec draft, stage spec, parameters, UX, visualization, help, engineering) and
+  `FINDINGS.md`, the register of every finding (IDs such as SIM-1 or ENG-3) with evidence and recommendations.
+- `docs/model_spec.md`: the proposed model 2.0 for the Phase 2 engine (not implemented yet).
 
-**TODO/Placeholders**:
-- Post-interview rating updates - `interview()` function (line 167)
-- Final ranking generation - `students_rank()`, `schools_rank()` functions (lines 175, 183)
-- NRMP matching algorithm - `match()` function (line 188)
-- School invitation and interview scheduling logic
-- Match result visualization and analysis
-
-**New Project Files**:
-- `TODO.md` - Comprehensive task list with priorities
-- `IDEAS.md` - Research ideas and feature enhancements
-- `Dockerfile` - Container deployment setup
-- `Procfile.tailwind` - Tailwind CSS process management
+**Do not build `interview()`, `students_rank()`, `schools_rank()` or `match()` on the current per-row ORM engine in
+`simulation_engine.py`.** Phase 2 replaces it with a seeded, vectorised engine, and Phase 3 builds the remaining
+stages on that engine. `TODO.md` and `IDEAS.md` predate the plan; Appendix H of the review says what happens to each
+item.

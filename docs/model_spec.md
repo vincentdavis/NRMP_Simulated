@@ -1,5 +1,10 @@
 # NRMP Simulated: model specification 2.0
 
+> **Status in this repository: proposed, not implemented.** This spec was written alongside the lost Phase 2
+> implementation (see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)); `nrmps/params.py` and `nrmps/engine/`
+> do not exist yet. It becomes normative when decision D1 adopts it at the start of Phase 2. The paragraph below
+> states its intended status.
+
 **Status: normative for `model_version = "2.0"`** (engine `2.0.x`, parameter schema v1 in `nrmps/params.py`).
 The Python engine (`nrmps/engine/`), the help formulas, presets and any browser port implement this document.
 Every run stores the `model_version` it used; any change to a formula, a stream ID or a draw recipe needs a new

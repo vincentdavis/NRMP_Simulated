@@ -2,8 +2,13 @@
 
 *Review date: 2026-09-24. Branch: `claude/project-review-plan-ce86lz`. Codebase reviewed at commit `01b1eb5` (after the dependency bump).*
 
-> **Implementation status.** Phases 0–2 have since been implemented; see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)
-> for what was built, deviations from this plan and the remaining owner actions. The review below is kept as written.
+> **Status (2026-09-25).** The review was written in a cloud session against GitHub `main` (`64ba63c`) plus a
+> dependency bump (`01b1eb5`). That session then implemented Phases 0–2 on `claude/project-review-plan-ce86lz`, but
+> it could not push, and neither that branch nor `01b1eb5` can be recovered. Only this `docs/` folder survived. The
+> plan is being **re-implemented on the branch `implement-review-plan`**, starting from local `main`;
+> [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) tracks progress. [§0](#0-reconciliation-with-this-repository)
+> lists what differs between the reviewed code and this repository. The rest of the review is kept as written, so its
+> file:line citations refer to the reviewed commit, not to this repository.
 
 This document reviews the project against seven goals:
 
@@ -31,6 +36,50 @@ It ends with a phased plan that covers every finding.
 | [review/H-todo-ideas-disposition.md](review/H-todo-ideas-disposition.md) | What happens to every item in `TODO.md` and `IDEAS.md` |
 | [review/viz-prototype/](review/viz-prototype/) | Working **Match Explorer** prototype: 7 charts, a network, 8 sliders, in-browser DA |
 | [review/prototypes/](review/prototypes/) | Reference Python prototypes: the full stage pipeline with DA/SOAP, and a starter test suite |
+
+---
+
+## 0. Reconciliation with this repository
+
+*Added 2026-09-25, when the rebuild started.*
+
+Local `main` has one commit the review never saw: `91fb381`, "Add simulation workflow stages with post-interview
+scoring and stage-based UI" (2026-03-21). The rebuild branch also starts with a baseline commit, `8f7bf45`, holding
+changes that were uncommitted at the time: static assets built at image build time, `django-storages[s3]`, dependency
+bumps and a typo fix. Neither was on GitHub when the review ran.
+
+How these commits change the review's findings:
+
+| Finding | The review says | In this repository | Consequence for the plan |
+|---|---|---|---|
+| ENG-25 | Migration `0006_alter_student_score` is pending | Committed as `0006_alter_simulation_status_alter_student_score`, followed by the data migration `0007_convert_pending_status`. `makemigrations --check` is clean. | Closed. Step 0.2's migration becomes `0008` and has nothing to absorb. |
+| SIM-20, STG-7, UX-6 | `status` never changes; no visible stage | `Simulation.status` has eight stage choices (`setup` … `matched`). Views advance and regress it, and a daisyUI `steps` bar plus one card per stage show it. | Partly closed. Still open: the server does not enforce stage order (only buttons are disabled), status goes stale after cascades (L-2), and steps are not atomic. Steps 0.4 and 2.4 still apply. |
+| STG-13 | `interview()` is a stub; post-interview fields are unused | `compute_post_interview_scores_and_rankings()` and four helpers exist, built on the per-row ORM engine | This is the work §9 warns against. The helpers repeat SIM-1 and SIM-7 and never run (L-1). Step 0.3 guards them; step 3.4 replaces them. |
+| UX-5 | Population actions refresh only `#population-counts` | Each action re-renders its own stage card, plus the stepper through an out-of-band swap | Partly closed. Other cards, such as the interview count, still go stale after a cascade. |
+| ENG-9 | whitenoise and dj-database-url sit in the `prod` group; honcho is a runtime dependency | Both are main dependencies; honcho was removed (dev still gets it through `django-tailwind[honcho]`) | Mostly closed. The image still installs the dev group, and `uv run` in the entrypoint re-syncs at start-up. Step 0.1. |
+| ENG-10 | The entrypoint installs and builds at every boot | The Tailwind build and `collectstatic` run at image build time | Partly closed. Still one stage, root user, Node in the final image, no `.dockerignore`. Step 1.2. |
+| §2 (Goal 1) | Dependencies bumped in `01b1eb5` (Django 6.1.1 …) | Not present. Locked: Django 6.0.3, logfire 4.31, gunicorn 25.3, django-debug-toolbar 6.2, numpy 2.4.4 | Redo as step 0.0. |
+| – | – | `django-storages[s3]` is a dependency but not configured | Keep; nothing in the plan uses it yet. |
+| – | `_interview_counts.html` and `_population_counts.html` are the manage-page panels | No page includes them. Four endpoints (`students-rate-pre-interview`, `schools-rate-pre-interview`, `compute-students-rankings`, `compute-schools-rankings`) still render `_interview_counts.html`, but no button calls them. | Dead code (L-3). |
+
+New findings from the reconciliation:
+
+- **L-1 (medium, defect).** "Compute Post-Interview All" only processes interviews with `status="interviewed"`, which
+  nothing sets. It writes nothing, yet the view still advances `Simulation.status` to `post_interview`, so the stepper
+  shows a finished stage with no data. The helpers also multiply by the rating error (SIM-1). → Step 0.3.
+- **L-2 (medium, defect).** Recreating or uploading students or schools cascade-deletes every interview, but
+  `advance_status("populations")` never moves backwards. A simulation at `pre_interview` keeps that status with
+  0 interviews. → Step 0.4 (regress on every destructive action), then 2.4.
+- **L-3 (low, hygiene).** The dead partials and endpoints above. → Steps 1.6 and 1.8.
+
+Changes to the plan for the rebuild:
+
+1. **Step 0.0 (new):** redo the dependency upgrade (`uv lock --upgrade`, then verify) before Phase 0.
+2. **Step 0.3** also covers the post-interview helpers (L-1), and **step 0.4** also fixes L-2.
+3. The Phase 0 smoke test is written for pytest-django straight away rather than Django's `TestCase`, so step 1.1 does
+   not have to port it.
+
+Deviations made during the rebuild are recorded per step in [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
 ---
 
