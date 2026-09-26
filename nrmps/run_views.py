@@ -14,8 +14,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_POST
 
+from .charts import run_charts
 from .engine.numeric import quantiles
 from .engine.pipeline import SideResult
+from .engine.population import PopulationError
 from .engine.validate import COUNT_CHECKS, FLAG_CHECKS
 from .models import SimulationRun
 from .params_forms import ParamsForm
@@ -113,32 +115,6 @@ def _param_groups(run: SimulationRun) -> list[dict[str, Any]]:
     return groups
 
 
-HISTOGRAM_TITLES = {
-    "strength": "Applicant strength",
-    "quality": "Program quality",
-    "capacity": "Positions per program",
-    "applicant_fidelity": "Applicants' pre-interview fidelity",
-    "program_fidelity": "Programs' pre-interview fidelity",
-}
-
-
-def _histograms(metrics: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return the run's histograms with bar heights relative to the tallest bin."""
-    result = []
-    for key, title in HISTOGRAM_TITLES.items():
-        histogram = (metrics.get("histograms") or {}).get(key)
-        if not histogram:
-            continue
-        edges, counts = histogram["edges"], histogram["counts"]
-        peak = max(counts) or 1
-        bins = [
-            {"low": low, "high": high, "count": count, "height": round(100 * count / peak)}
-            for low, high, count in zip(edges[:-1], edges[1:], counts, strict=True)
-        ]
-        result.append({"key": key, "title": title, "bins": bins, "low": edges[0], "high": edges[-1], "peak": peak})
-    return result
-
-
 # Readable names of the counts the stages record.
 COUNT_LABELS = {
     "applicant_entries": "applicant list entries",
@@ -193,6 +169,16 @@ def _outcomes(metrics: dict[str, Any]) -> dict[str, Any] | None:
     return {"ranks": ranks, "checks": rows, "passed": checks.get("passed"), "group_tables": group_tables}
 
 
+def _charts(run: SimulationRun) -> dict[str, Any]:
+    """Return the diagnostic charts of a successful run (none for other runs, or without a stored population)."""
+    if run.status != SimulationRun.Status.SUCCEEDED:
+        return {}
+    try:
+        return run_charts(RunData(run))
+    except PopulationError:
+        return {}
+
+
 @require_GET
 def run_detail(request, pk: int, number: int):
     """A run: status, version stamps, the match and its funnel, the pre-interview diagnostics and the parameters."""
@@ -207,7 +193,7 @@ def run_detail(request, pk: int, number: int):
         "outcome_views": _outcomes(metrics),
         "param_groups": _param_groups(run),
         "stamps": run.stamps(),
-        "histograms": _histograms(metrics),
+        "charts": _charts(run),
         "pairs_download": run.n_pairs <= settings.NRMP_DRILLDOWN_MAX_PAIRS,
         "stage_downloads": run.artifacts.filter(kind="stages").exists(),
     }

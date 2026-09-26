@@ -134,6 +134,7 @@ nrmps/
 ├── population_csv.py     # CSV format for population upload/download (one module for both directions)
 ├── views.py              # public pages, simulation list, the simulation page, runs and uploads (HTMX)
 ├── run_views.py          # run page (match, funnel, checks, diagnostics), lists, one agent's stages, downloads
+├── charts.py             # payloads of the run page's diagnostic charts (drawn by static/js/nrmp-charts.js)
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
 ├── help_views.py         # /help/ (reference generated from the schema) and the staff-only developer reference
 ├── ops_views.py          # staff-only /ops/: runs per day, failures, durations, queue, workers, quota use
@@ -150,14 +151,15 @@ nrmps/
 templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/, help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
 static/js/site.js         # toasts, confirmation dialog, HTMX error handling, theme toggle, list editors
-static/vendor/            # htmx and Alpine.js by version (`npm run vendor` in theme/static_src)
+static/js/nrmp-charts.js  # draws [data-chart] elements with ECharts from json_script payloads (theme-aware)
+static/vendor/            # htmx, Alpine.js and ECharts by version (`npm run vendor` in theme/static_src)
 docs/                     # review, plan, status, deployment, model spec
 ```
 
 ### Technology Stack
 
 - Django 6.1 (LoginRequiredMiddleware, MAILERS email), SQLite for development, PostgreSQL in production (Railway)
-- HTMX + Alpine.js, Tailwind CSS 4 + daisyUI 5 (built by django-tailwind's npm project)
+- HTMX + Alpine.js, Tailwind CSS 4 + daisyUI 5 (built by django-tailwind's npm project), Apache ECharts 6 (charts)
 - django-axes (login throttling), WhiteNoise (compressed, hashed static files), Logfire (only with a token)
 - Tests: pytest-django, hypothesis, Playwright + axe; ruff, mypy (django-stubs), codespell; GitHub Actions
 
@@ -167,6 +169,10 @@ docs/                     # review, plan, status, deployment, model spec
 - Render form fields with `{% load form_tags %}{% field_row form.field %}` (daisyUI 5 fieldset with help text and
   errors wired to `aria-describedby`); sortable list headers with `{% load list_tags %}{% sort_th key label %}`.
 - Use daisyUI 5 class names only; `nrmps/tests/test_css_classes.py` fails on classes missing from the built CSS.
+- Charts: add a payload in `nrmps/charts.py` and a figure with
+  `{% include "nrmps/components/chart_figure.html" with chart=... key=... kind=... title=... %}`; register new kinds
+  in `static/js/nrmp-charts.js`. Every chart needs a summary sentence (and a table where the numbers matter), and
+  tooltip text must go through `NRMPCharts.escape`.
 
 **Code Style**:
 - Line length: 120 characters

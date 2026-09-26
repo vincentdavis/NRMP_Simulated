@@ -1,5 +1,5 @@
 {% load humanize %}
-{% comment %}The pre-interview diagnostics of a run (docs/model_spec.md §10). Context: metrics, histograms.{% endcomment %}
+{% comment %}The pre-interview diagnostics of a run (docs/model_spec.md §10). Context: metrics, charts (nrmps.charts).{% endcomment %}
 <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="diagnostics-title">
   <div class="card-body">
     <h2 id="diagnostics-title" class="card-title">Before interviews</h2>
@@ -28,6 +28,16 @@
         </tbody>
       </table>
     </div>
+    {% if charts %}
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
+        {% include "nrmps/components/chart_figure.html" with chart=charts.perception_applicants key="perception-applicants" kind="scatter" title="How accurately do applicants see programs?" height="h-72" %}
+        {% include "nrmps/components/chart_figure.html" with chart=charts.perception_programs key="perception-programs" kind="scatter" title="How accurately do programs see applicants?" height="h-72" %}
+        {% if charts.demand %}
+          {% include "nrmps/components/chart_figure.html" with chart=charts.demand key="demand" kind="demand" title="Is demand concentrated on a few programs?" table="demand" height="h-72" %}
+          {% include "nrmps/components/chart_figure.html" with chart=charts.lorenz key="lorenz" kind="lorenz" payload="chart-demand" title="How unequal is first-choice demand?" height="h-72" %}
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
 </section>
 
@@ -113,23 +123,16 @@
   </div>
 </section>
 
-{% if histograms %}
+{% if charts %}
   <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="histograms-title">
     <div class="card-body">
       <h2 id="histograms-title" class="card-title">Distributions</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {% for histogram in histograms %}
-          <figure class="block w-full min-w-0">
-            <figcaption class="font-medium mb-1">{{ histogram.title }}</figcaption>
-            <div class="flex items-end gap-px h-24 border-b border-base-300" role="img"
-                 aria-label="{{ histogram.title }}: {{ histogram.bins|length }} bins from {{ histogram.low|floatformat:2 }} to {{ histogram.high|floatformat:2 }}; the fullest bin has {{ histogram.peak|intcomma }}.">
-              {% for bin in histogram.bins %}
-                <div class="flex-1 bg-primary" style="height: {{ bin.height }}%" title="{{ bin.low|floatformat:2 }} to {{ bin.high|floatformat:2 }}: {{ bin.count|intcomma }}"></div>
-              {% endfor %}
-            </div>
-            <div class="flex justify-between text-xs text-base-content/70 tabular-nums"><span>{{ histogram.low|floatformat:2 }}</span><span>{{ histogram.high|floatformat:2 }}</span></div>
-          </figure>
-        {% endfor %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {% if charts.strength %}{% include "nrmps/components/chart_figure.html" with chart=charts.strength key="strength" kind="histogram" title="Did the generator produce the applicants asked for?" table="histogram" x_label="Strength (z)" y_label="Applicants" %}{% endif %}
+        {% if charts.quality %}{% include "nrmps/components/chart_figure.html" with chart=charts.quality key="quality" kind="histogram" title="Did the generator produce the programs asked for?" table="histogram" x_label="Quality (z)" y_label="Programs" %}{% endif %}
+        {% if charts.capacity %}{% include "nrmps/components/chart_figure.html" with chart=charts.capacity key="capacity" kind="histogram" title="How are the positions spread over programs?" table="histogram" x_label="Positions" y_label="Programs" %}{% endif %}
+        {% if charts.applicant_fidelity %}{% include "nrmps/components/chart_figure.html" with chart=charts.applicant_fidelity key="applicant-fidelity" kind="histogram" title="How well does each applicant know their true order?" table="histogram" x_label="Rank correlation, true and pre-interview order" y_label="Applicants" %}{% endif %}
+        {% if charts.program_fidelity %}{% include "nrmps/components/chart_figure.html" with chart=charts.program_fidelity key="program-fidelity" kind="histogram" title="How well does each program know its true order?" table="histogram" x_label="Rank correlation, true and pre-interview order" y_label="Programs" %}{% endif %}
       </div>
     </div>
   </section>

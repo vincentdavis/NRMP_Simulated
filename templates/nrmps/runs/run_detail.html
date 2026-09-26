@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load humanize %}
+{% load humanize static %}
 {% block title %}Run {{ run.number }} - {{ simulation.name }}{% endblock %}
 {% block content %}
 <div class="mt-4">
@@ -137,4 +137,10 @@
     </div>
   </section>
 </div>
+{% endblock %}
+{% block extra_js %}
+  {% if charts %}
+    <script src="{% static 'vendor/echarts/6.1.0/echarts.min.js' %}"></script>
+    <script src="{% static 'js/nrmp-charts.js' %}"></script>
+  {% endif %}
 {% endblock %}

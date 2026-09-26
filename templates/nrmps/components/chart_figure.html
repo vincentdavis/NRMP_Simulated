@@ -1,0 +1,56 @@
+{% load humanize format_tags %}
+{% comment %}
+  One diagnostic chart (plan step 3.8), drawn by static/js/nrmp-charts.js from a json_script payload. The summary
+  sentence describes the chart for screen readers and shows below it, and "The numbers" gives its data as a table,
+  so nothing depends on the drawing. Parameters: chart (from nrmps.charts: payload, summary, rows, digits), key
+  (unique id), kind (histogram, scatter, demand, lorenz, funnel), title, table (histogram, demand, funnel or empty),
+  height (a Tailwind height class), x_label and y_label (axis names), payload (id of a payload written by another
+  figure, to reuse it).
+{% endcomment %}
+{% with element_id="chart-"|add:key %}
+<figure class="block w-full min-w-0">
+  <figcaption class="font-medium">{{ title }}</figcaption>
+  {% if not payload %}{{ chart.payload|json_script:element_id }}{% endif %}
+  <div class="{{ height|default:'h-64' }} w-full" data-chart="{{ kind }}" data-payload="{{ payload|default:element_id }}"
+       {% if x_label %}data-x-label="{{ x_label }}"{% endif %} {% if y_label %}data-y-label="{{ y_label }}"{% endif %}
+       role="img" aria-label="{{ title }}" aria-describedby="{{ element_id }}-summary"></div>
+  <p id="{{ element_id }}-summary" class="text-sm text-base-content/70">{{ chart.summary }}</p>
+  {% if table and chart.rows %}
+    <details class="collapse collapse-arrow bg-base-200 mt-2">
+      <summary class="collapse-title text-sm font-medium">The numbers</summary>
+      <div class="collapse-content overflow-x-auto" tabindex="0" role="region" aria-label="{{ title }}: the numbers">
+        <table class="table table-xs">
+          {% if table == "histogram" %}
+            <thead><tr><th scope="col" class="text-right">From</th><th scope="col" class="text-right">To</th><th scope="col" class="text-right">Count</th>{% if chart.deviation is not None %}<th scope="col" class="text-right">Requested</th>{% endif %}</tr></thead>
+            <tbody>
+              {% for row in chart.rows %}
+                <tr>
+                  <td class="text-right tabular-nums">{{ row.low|floatformat:chart.digits }}</td>
+                  <td class="text-right tabular-nums">{{ row.high|floatformat:chart.digits }}</td>
+                  <td class="text-right tabular-nums">{{ row.count|intcomma }}</td>
+                  {% if chart.deviation is not None %}<td class="text-right tabular-nums">{{ row.requested|floatformat:1 }}</td>{% endif %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          {% elif table == "demand" %}
+            <caption class="text-left text-xs">The {{ chart.rows|length }} most wanted programs</caption>
+            <thead><tr><th scope="col">Program</th><th scope="col" class="text-right">Rank it first</th><th scope="col" class="text-right">Positions</th></tr></thead>
+            <tbody>
+              {% for row in chart.rows %}
+                <tr><th scope="row" class="font-normal">{{ row.name }}</th><td class="text-right tabular-nums">{{ row.demand|intcomma }}</td><td class="text-right tabular-nums">{{ row.positions|intcomma }}</td></tr>
+              {% endfor %}
+            </tbody>
+          {% elif table == "funnel" %}
+            <thead><tr><th scope="col">Stage</th><th scope="col" class="text-right">Applications</th><th scope="col" class="text-right">Share of all</th></tr></thead>
+            <tbody>
+              {% for row in chart.rows %}
+                <tr><th scope="row" class="font-normal">{{ row.stage }}</th><td class="text-right tabular-nums">{{ row.count|intcomma }}</td><td class="text-right tabular-nums">{{ row.share|percent }}</td></tr>
+              {% endfor %}
+            </tbody>
+          {% endif %}
+        </table>
+      </div>
+    </details>
+  {% endif %}
+</figure>
+{% endwith %}

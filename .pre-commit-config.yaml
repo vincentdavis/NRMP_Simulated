@@ -15,6 +15,7 @@ repos:
     hooks:
       - id: check-added-large-files
         args: [--maxkb=1024]
+        exclude: ^static/vendor/  # vendored browser libraries (ECharts is 1.1 MB), committed on purpose
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml

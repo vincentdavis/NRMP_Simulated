@@ -82,8 +82,26 @@ def test_private_pages_have_no_serious_accessibility_violations(logged_in_page, 
     assert _serious_violations(page) == []
 
 
+def test_the_run_page_draws_every_chart_without_script_errors(logged_in_page, live, worked_simulation):
+    """ECharts draws each diagnostic chart (plan step 3.8), and again after the theme changes."""
+    page = logged_in_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/")
+    containers = page.locator("[data-chart]")
+    assert containers.count() == 10
+    page.wait_for_function("document.querySelectorAll('[data-chart] canvas').length === 10")
+    page.evaluate("document.documentElement.dataset.theme = 'dark'")
+    page.wait_for_timeout(200)
+    assert page.locator("[data-chart] canvas").count() == 10
+    assert errors == []
+    page.set_viewport_size(PHONE)
+    page.wait_for_timeout(200)
+    assert _overflow(page) <= 0
+
+
 def test_new_simulation_page_has_no_serious_accessibility_violations(logged_in_page, live, simulation):
-    """The page of a brand-new simulation (nothing run yet; the later stages planned)."""
+    """The page of a brand-new simulation (nothing run yet)."""
     page = logged_in_page
     page.goto(f"{live}/simulations/{simulation.pk}/")
     assert _serious_violations(page) == []

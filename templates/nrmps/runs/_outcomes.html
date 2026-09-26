@@ -116,6 +116,9 @@
 <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="funnel-title">
   <div class="card-body">
     <h2 id="funnel-title" class="card-title">From applications to rank order lists</h2>
+    {% if charts.funnel %}
+      {% include "nrmps/components/chart_figure.html" with chart=charts.funnel key="funnel" kind="funnel" title="Where do applications drop out?" table="funnel" height="h-80" %}
+    {% endif %}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="overflow-x-auto">
         <table class="table table-sm">

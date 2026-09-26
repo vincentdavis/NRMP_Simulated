@@ -1,7 +1,7 @@
 {
   "name": "theme",
   "version": "4.2.0",
-  "description": "Tailwind CSS + daisyUI build, and the vendored htmx and Alpine.js files",
+  "description": "Tailwind CSS + daisyUI build, and the vendored htmx, Alpine.js and ECharts files",
   "private": true,
   "scripts": {
     "start": "npm run dev",
@@ -16,6 +16,7 @@
   "license": "MIT",
   "dependencies": {
     "alpinejs": "3.17.4",
+    "echarts": "6.1.0",
     "htmx.org": "2.0.11"
   },
   "devDependencies": {
