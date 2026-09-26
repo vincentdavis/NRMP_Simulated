@@ -287,6 +287,7 @@ NRMP_DRILLDOWN_MAX_PAIRS = int(os.environ.get("NRMP_DRILLDOWN_MAX_PAIRS", "20000
 # before they can run simulations; turn it on once outgoing email works.
 NRMP_REQUIRE_VERIFIED_EMAIL = env_bool("NRMP_REQUIRE_VERIFIED_EMAIL", default=False)
 NRMP_MAX_SIMULATIONS = int(os.environ.get("NRMP_MAX_SIMULATIONS", "50"))
+NRMP_MAX_PRESETS = int(os.environ.get("NRMP_MAX_PRESETS", "50"))
 NRMP_RUNS_PER_DAY = int(os.environ.get("NRMP_RUNS_PER_DAY", "200"))
 NRMP_PAIRS_PER_DAY = int(os.environ.get("NRMP_PAIRS_PER_DAY", "200000000"))
 # Rate limits ("count/period" with period s, m, h or d), counted in the database: sign-ups per client address, and

@@ -137,6 +137,7 @@ def test_the_setup_form_previews_edits_syncs_sliders_and_flags_unsaved_changes(l
 def test_a_preset_can_be_applied_after_confirming(logged_in_page, live, simulation):
     page = logged_in_page
     page.goto(f"{live}/simulations/{simulation.pk}/")
+    page.get_by_text("Presets and parameter files").click()
     page.get_by_label("Start again from a preset").select_option("classroom")
     page.get_by_role("button", name="Apply preset", exact=True).click()
     _confirm(page)

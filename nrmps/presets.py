@@ -1,8 +1,12 @@
-"""Built-in parameter presets (plan step 4.2): named starting points for a simulation.
+"""Parameter presets: named starting points for a simulation (plan steps 4.2 and 4.6).
 
-A preset lists only what it changes from the defaults (`SimulationParams()`); `preset_params` validates the result
-and keeps the simulation's seed, so applying a preset never draws a new market by accident. Every preset is
-validated by the tests and must fit within the default size limit, so it runs without a worker.
+Built-in presets list only what they change from the defaults (`SimulationParams()`); `preset_params` validates the
+result and keeps the simulation's seed, so applying a preset never draws a new market by accident. Every built-in
+preset is validated by the tests and fits within the default size limit, so it runs without a worker.
+
+Users can also save a simulation's parameters as a preset of their own (`nrmps.models.SavedPreset`, stored without
+the seed). `preset_options` lists both kinds for a user, and `resolve_preset` turns a choice into parameters: a
+built-in preset's key, or "user:<id>" for a saved one.
 """
 
 from dataclasses import dataclass, field
@@ -95,3 +99,51 @@ def preset_params(key: str, seed: int | None = None) -> SimulationParams:
 def preset_choices() -> list[tuple[str, str]]:
     """Return the presets as (key, title) choices."""
     return [(key, preset.title) for key, preset in PRESETS.items()]
+
+
+USER_PREFIX = "user:"
+
+
+@dataclass(frozen=True)
+class PresetOption:
+    """A preset a user can choose: built in or saved by the user."""
+
+    key: str
+    title: str
+    description: str
+    own: bool
+
+
+def preset_options(user: Any) -> list[PresetOption]:
+    """Return the built-in presets, then the user's saved presets by name."""
+    options = [PresetOption(key, preset.title, preset.description, own=False) for key, preset in PRESETS.items()]
+    if getattr(user, "is_authenticated", False):
+        options += [
+            PresetOption(f"{USER_PREFIX}{saved.pk}", saved.name, saved.description, own=True)
+            for saved in user.presets.all()
+        ]
+    return options
+
+
+def resolve_preset(user: Any, key: str, seed: int | None) -> tuple[str, SimulationParams]:
+    """Return the title and parameters (with `seed`) of a preset option.
+
+    Raises KeyError for an unknown option (or another user's preset), and pydantic's ValidationError for a saved
+    preset that no longer fits the parameter schema.
+    """
+    if key in PRESETS:
+        return PRESETS[key].title, preset_params(key, seed=seed)
+    number = key.removeprefix(USER_PREFIX)
+    if not key.startswith(USER_PREFIX) or not number.isdigit() or not getattr(user, "is_authenticated", False):
+        raise KeyError(key)
+    saved = user.presets.filter(pk=int(number)).first()
+    if saved is None:
+        raise KeyError(key)
+    data = dict(saved.params)
+    data["run"] = dict(data.get("run") or {}) | {"seed": seed}
+    return saved.name, load_params(data)
+
+
+def saved_params(params: SimulationParams) -> dict[str, Any]:
+    """Return parameters as a saved preset stores them: the JSON without the seed."""
+    return params.with_seed(None).to_json_data()

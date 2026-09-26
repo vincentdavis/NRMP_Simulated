@@ -129,7 +129,7 @@ runs just stay queued, and the clean-up job marks runs queued or running for ove
 interrupted runs as failed, keeps the newest `NRMP_RUNS_KEPT` (50) runs per simulation, and deletes old rate-limit
 counters, worker heartbeats and task records. Run it by hand the same way.
 
-**Quotas and rate limits** (per account; staff are exempt): `NRMP_MAX_SIMULATIONS` (50), `NRMP_RUNS_PER_DAY` (200)
+**Quotas and rate limits** (per account; staff are exempt): `NRMP_MAX_SIMULATIONS` (50), `NRMP_MAX_PRESETS` (50, saved presets), `NRMP_RUNS_PER_DAY` (200)
 and `NRMP_PAIRS_PER_DAY` (200,000,000) in any 24 hours; sign-ups (10 per hour per client address), runs and uploads
 (60 per hour per account) are rate-limited, counted in the database. Once outgoing email works, set
 `NRMP_REQUIRE_VERIFIED_EMAIL=True` so that only accounts with a confirmed address can run simulations.

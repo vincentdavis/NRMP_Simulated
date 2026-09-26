@@ -10,19 +10,59 @@
       The <a class="link" href="{% help_url "parameters" %}">parameter reference</a> explains every parameter and the
       model behind them. The panel beside the form shows what the parameters give as you edit them.
     </p>
-    <form method="post" class="flex flex-wrap items-end gap-2"
-          data-confirm="Replace every parameter with the preset? The seed is kept; changes that are not saved are lost.">
-      {% csrf_token %}
-      <input type="hidden" name="form_id" value="preset">
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend"><label for="preset-choice">Start again from a preset</label></legend>
-        <select id="preset-choice" name="preset" class="select select-sm w-72 max-w-full">
-          {% for key, preset in presets.items %}<option value="{{ key }}">{{ preset.title }}</option>{% endfor %}
-        </select>
-      </fieldset>
-      <button type="submit" class="btn btn-sm btn-outline mb-1">Apply preset</button>
-      <span class="mb-1">{% help_icon "action" "apply_preset" %}</span>
-    </form>
+    <details class="collapse collapse-arrow bg-base-200">
+      <summary class="collapse-title font-medium">Presets and parameter files</summary>
+      <div class="collapse-content space-y-4">
+        <form method="post" class="flex flex-wrap items-end gap-2"
+              data-confirm="Replace every parameter with the preset? The seed is kept; changes that are not saved are lost.">
+          {% csrf_token %}
+          <input type="hidden" name="form_id" value="preset">
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend"><label for="preset-choice">Start again from a preset</label></legend>
+            <select id="preset-choice" name="preset" class="select select-sm w-72 max-w-full">
+              <optgroup label="Built in">
+                {% for option in builtin_presets %}<option value="{{ option.key }}">{{ option.title }}</option>{% endfor %}
+              </optgroup>
+              {% if own_presets %}
+                <optgroup label="Yours">
+                  {% for option in own_presets %}<option value="{{ option.key }}">{{ option.title }}</option>{% endfor %}
+                </optgroup>
+              {% endif %}
+            </select>
+          </fieldset>
+          <button type="submit" class="btn btn-sm btn-outline mb-1">Apply preset</button>
+          <span class="mb-1">{% help_icon "action" "apply_preset" %}</span>
+        </form>
+        <form method="post" class="flex flex-wrap items-end gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="form_id" value="save_preset">
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend"><label for="preset-name">Save the saved parameters as a preset</label></legend>
+            <input id="preset-name" name="name" maxlength="100" required class="input input-sm w-56" placeholder="Name">
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend"><label for="preset-description">Description (optional)</label></legend>
+            <input id="preset-description" name="description" maxlength="300" class="input input-sm w-72 max-w-full">
+          </fieldset>
+          <button type="submit" class="btn btn-sm btn-outline mb-1">Save as preset</button>
+          <span class="mb-1">{% help_icon "action" "save_preset" %}</span>
+        </form>
+        <div class="flex flex-wrap items-end gap-2">
+          <a class="btn btn-sm btn-outline" href="{% url 'nrmps:params_export' pk=simulation.pk %}">Download the parameters (JSON)</a>
+          <form method="post" action="{% url 'nrmps:params_import' pk=simulation.pk %}" enctype="multipart/form-data"
+                class="flex flex-wrap items-end gap-2"
+                data-confirm="Replace every parameter with the file's? Changes that are not saved are lost.">
+            {% csrf_token %}
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend"><label for="params-file">Load parameters from a file</label></legend>
+              <input id="params-file" type="file" name="file" accept=".json,application/json" required class="file-input file-input-sm">
+            </fieldset>
+            <button type="submit" class="btn btn-sm btn-outline mb-1">Load</button>
+            <span class="mb-1">{% help_icon "action" "load_params" %}</span>
+          </form>
+        </div>
+      </div>
+    </details>
     <div class="divider my-1"></div>
   <form method="post" id="parameters" novalidate data-dirty-guard>
     {% csrf_token %}

@@ -156,6 +156,7 @@ def test_data_export_contains_account_simulations_and_runs(auth_client, finished
     archive = zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
     names = archive.namelist()
     assert "account.json" in names
+    assert json.loads(archive.read("presets.json")) == []
     assert json.loads(archive.read("account.json"))["username"] == "alice"
     folder = f"simulations/{simulation.pk}-test-simulation"
     for name in (

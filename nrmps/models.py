@@ -169,6 +169,23 @@ class PopulationUpload(models.Model):
         return f"{self.get_side_display()} of {self.simulation_id}: {self.filename}"
 
 
+class SavedPreset(models.Model):
+    """Parameters a user saved under a name, to start new simulations from (plan step 4.6)."""
+
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="presets")
+    name = models.CharField(max_length=100, help_text="The preset's name, unique among the user's presets.")
+    description = models.CharField(max_length=300, blank=True, default="")
+    params = models.JSONField(help_text="The parameters (SimulationParams JSON) without the seed.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["owner", "name"], name="unique_preset_name_per_owner")]
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class Stage(models.TextChoices):
     """Pipeline stages in order (model_spec.md §3-8)."""
 

@@ -26,14 +26,15 @@
           <legend class="fieldset-legend">{{ form.preset.label }}</legend>
           <p id="preset-help" class="text-sm text-base-content/70">{{ form.preset.help_text }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {% for key, preset, checked in presets %}
+            {% for option, checked in presets %}
               <label class="card card-border bg-base-100 cursor-pointer has-checked:border-primary has-checked:bg-base-200">
                 <span class="card-body p-4 gap-1">
                   <span class="flex items-center gap-2">
-                    <input type="radio" name="preset" value="{{ key }}" class="radio radio-sm radio-primary"{% if checked %} checked{% endif %}>
-                    <span class="font-medium">{{ preset.title }}</span>
+                    <input type="radio" name="preset" value="{{ option.key }}" class="radio radio-sm radio-primary"{% if checked %} checked{% endif %}>
+                    <span class="font-medium">{{ option.title }}</span>
+                    {% if option.own %}<span class="badge badge-sm badge-outline">Yours</span>{% endif %}
                   </span>
-                  <span class="text-sm text-base-content/70">{{ preset.description }}</span>
+                  {% if option.description %}<span class="text-sm text-base-content/70">{{ option.description }}</span>{% endif %}
                 </span>
               </label>
             {% endfor %}

@@ -180,3 +180,19 @@ def get_pipeline(simulation: Simulation) -> list[StageState]:
 def needs_run(states: list[StageState]) -> bool:
     """Return True if running now would change or produce results."""
     return any(state.state in {"stale", "ready", "failed"} for state in states)
+
+
+def pipeline_summary(states: list[StageState]) -> tuple[str, str]:
+    """Return one word for a simulation's state, with a badge colour: for lists of simulations."""
+    found = {state.state for state in states}
+    if found & {"running", "queued"}:
+        return "Running", "badge-info"
+    if "failed" in found:
+        return "Failed", "badge-error"
+    if "blocked" in found:
+        return "Invalid parameters", "badge-error"
+    if found <= {"done", "planned"}:
+        return "Up to date", "badge-success"
+    if found <= {"ready", "planned"}:
+        return "Not run yet", "badge-ghost"
+    return "Out of date", "badge-warning"

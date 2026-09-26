@@ -61,10 +61,10 @@ def send_verification_email(request, user: User) -> None:
 def export_user_data(user: User):
     """Return a file object with a ZIP of everything stored for `user`, positioned at the start.
 
-    The archive holds account.json and, per simulation: simulation.json (fields and draft parameters), the uploaded
-    populations as CSV, and per run run.json (parameters with the seed, versions, status, diagnostics). The latest
-    successful run's applicants, programs and match are included as CSV; other runs can be reproduced from their
-    parameters and seed.
+    The archive holds account.json, presets.json (the saved presets) and, per simulation: simulation.json (fields
+    and draft parameters), the uploaded populations as CSV, and per run run.json (parameters with the seed, versions,
+    status, diagnostics). The latest successful run's applicants, programs and match are included as CSV; other runs
+    can be reproduced from their parameters and seed.
     """
     archive = tempfile.SpooledTemporaryFile(max_size=20 * 1024 * 1024)  # noqa: SIM115 (returned to the caller)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -77,6 +77,16 @@ def export_user_data(user: User):
             "exported_at": timezone.now().isoformat(),
         }
         zf.writestr("account.json", json.dumps(account, indent=2))
+        presets = [
+            {
+                "name": preset.name,
+                "description": preset.description,
+                "created_at": preset.created_at.isoformat(),
+                "params": preset.params,
+            }
+            for preset in user.presets.all()
+        ]
+        zf.writestr("presets.json", json.dumps(presets, indent=2))
         for sim in user.simulations.order_by("id"):
             folder = f"simulations/{sim.pk}-{slugify(sim.name) or 'simulation'}"
             info = {

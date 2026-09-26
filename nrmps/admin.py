@@ -1,13 +1,13 @@
 """Admin site registrations.
 
-Users and simulations can be edited. Runs, their stages and artifacts, and uploaded populations are produced by the
-application, so staff can view and delete them but not add or change them.
+Users and simulations can be edited. Runs, their stages and artifacts, uploaded populations and saved presets are
+produced by the application, so staff can view and delete them but not add or change them.
 """
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import PopulationUpload, RunArtifact, Simulation, SimulationRun, StageRun, User
+from .models import PopulationUpload, RunArtifact, SavedPreset, Simulation, SimulationRun, StageRun, User
 
 
 @admin.register(User)
@@ -110,3 +110,12 @@ class PopulationUploadAdmin(ReadOnlyAdmin):
     def get_queryset(self, request):
         """Never load the bytes for the list."""
         return super().get_queryset(request).defer("data")
+
+
+@admin.register(SavedPreset)
+class SavedPresetAdmin(ReadOnlyAdmin):
+    """Presets users saved from their simulations' parameters."""
+
+    list_display = ("name", "owner", "created_at")
+    list_select_related = ("owner",)
+    search_fields = ("name", "owner__username")

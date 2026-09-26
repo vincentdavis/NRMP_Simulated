@@ -1,9 +1,11 @@
+from typing import Any
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 
 from .models import Simulation
-from .presets import DEFAULT_PRESET, preset_choices
+from .presets import DEFAULT_PRESET, preset_choices, preset_options
 
 User = get_user_model()
 
@@ -118,6 +120,13 @@ class NewSimulationForm(SimulationForm):
         help_text="Every parameter can be changed afterwards.",
         widget=forms.RadioSelect,
     )
+
+    def __init__(self, *args: Any, user: Any = None, **kwargs: Any) -> None:
+        """Offer the built-in presets and `user`'s saved ones."""
+        super().__init__(*args, **kwargs)
+        field = self.fields["preset"]
+        if isinstance(field, forms.ChoiceField):
+            field.choices = [(option.key, option.title) for option in preset_options(user)]
 
     def clean_preset(self) -> str:
         """Return the chosen preset, or the default one when none was chosen."""

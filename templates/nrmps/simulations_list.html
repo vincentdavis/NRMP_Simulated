@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load help_tags %}
+{% load help_tags humanize format_tags %}
 {% block title %}Simulations - NRMP Simulations{% endblock %}
 {% block content %}
 <div class="flex flex-wrap gap-2 justify-between items-center mb-6">
@@ -10,46 +10,50 @@
   </div>
 </div>
 
-{% if simulations %}
+{% if rows %}
   <div class="card bg-base-100 shadow-xl">
     <div class="overflow-x-auto">
       <table class="table table-zebra">
         <thead>
           <tr>
             <th scope="col">Name</th>
-            <th scope="col" class="text-right">Runs</th>
+            <th scope="col" class="text-right">Market</th>
+            <th scope="col">State</th>
             <th scope="col">Latest run</th>
+            <th scope="col" class="text-right">Match rate</th>
             <th scope="col">Created</th>
             <th scope="col" class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {% for sim in simulations %}
+          {% for row in rows %}
           <tr class="row-hover">
             <td>
-              <a href="{% url 'nrmps:simulation_manage' pk=sim.pk %}" class="link link-hover font-medium">
-                {{ sim.name }}
-              </a>
+              <a href="{% url 'nrmps:simulation_manage' pk=row.sim.pk %}" class="link link-hover font-medium">{{ row.sim.name }}</a>
             </td>
-            <td class="text-right tabular-nums">{{ sim.n_runs }}</td>
-            <td>
-              {% if sim.latest_run_number %}
-                <a class="link" href="{% url 'nrmps:run_detail' pk=sim.pk number=sim.latest_run_number %}">Run {{ sim.latest_run_number }}</a>
-                {% include "nrmps/components/run_status.html" with status=sim.latest_run_status %}
+            <td class="text-right tabular-nums whitespace-nowrap">{% if row.market %}{{ row.market.0|intcomma }} × {{ row.market.1|intcomma }}{% else %}-{% endif %}</td>
+            <td><span class="badge badge-sm {{ row.state.1 }} whitespace-nowrap">{{ row.state.0 }}</span></td>
+            <td class="whitespace-nowrap">
+              {% if row.sim.latest_run_number %}
+                <a class="link" href="{% url 'nrmps:run_detail' pk=row.sim.pk number=row.sim.latest_run_number %}">Run {{ row.sim.latest_run_number }}</a>
+                {% include "nrmps/components/run_status.html" with status=row.sim.latest_run_status %}
               {% else %}
                 <span class="text-base-content/70">Not run yet</span>
               {% endif %}
             </td>
-            <td class="whitespace-nowrap">{{ sim.created_at|date:"Y-m-d" }}</td>
+            <td class="text-right tabular-nums">{{ row.match_rate|percent }}</td>
+            <td class="whitespace-nowrap">{{ row.sim.created_at|date:"Y-m-d" }}</td>
             <td class="text-right">
               <div class="flex gap-2 justify-end">
-                <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">
-                  Manage
-                </a>
-                <form method="post" action="{% url 'nrmps:simulation_delete' pk=sim.pk %}"
-                      data-confirm="Delete the simulation “{{ sim.name }}” and everything in it? This cannot be undone.">
+                <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_manage' pk=row.sim.pk %}">Open</a>
+                <form method="post" action="{% url 'nrmps:simulation_duplicate' pk=row.sim.pk %}">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-error">Delete</button>
+                  <button type="submit" class="btn btn-sm btn-ghost" aria-label="Duplicate {{ row.sim.name }}">Duplicate</button>
+                </form>
+                <form method="post" action="{% url 'nrmps:simulation_delete' pk=row.sim.pk %}"
+                      data-confirm="Delete the simulation “{{ row.sim.name }}” and everything in it? This cannot be undone.">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-error" aria-label="Delete {{ row.sim.name }}">Delete</button>
                 </form>
               </div>
             </td>
@@ -72,6 +76,26 @@
         </form>
         <a class="btn btn-outline" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
       </div>
+    </div>
+  </section>
+{% endif %}
+
+{% if saved_presets %}
+  <section class="card bg-base-100 shadow-xl mt-6" aria-labelledby="presets-title">
+    <div class="card-body">
+      <h2 id="presets-title" class="card-title">Your presets</h2>
+      <p class="text-sm text-base-content/70">Parameters you saved from a simulation; new simulations can start from them.</p>
+      <ul class="divide-y divide-base-300">
+        {% for preset in saved_presets %}
+          <li class="py-2 flex flex-wrap gap-2 justify-between items-center">
+            <span><span class="font-medium">{{ preset.name }}</span>{% if preset.description %} <span class="text-sm text-base-content/70">– {{ preset.description }}</span>{% endif %}</span>
+            <form method="post" action="{% url 'nrmps:preset_delete' preset_id=preset.pk %}" data-confirm="Delete the preset “{{ preset.name }}”? Simulations made from it keep their parameters.">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-ghost" aria-label="Delete the preset {{ preset.name }}">Delete</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
     </div>
   </section>
 {% endif %}

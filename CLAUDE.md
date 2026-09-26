@@ -107,6 +107,7 @@ model 2.1 (`docs/model_spec.md`). The interface says "applicant" and "program".
   (`engine.persistence.StageRecord`: every application with its signal, invitation wave, interview, both list ranks,
   and the match).
 - **Stage**: the eight pipeline stages, population to match; all are implemented.
+- **SavedPreset**: parameters a user saved (without the seed) to start new simulations from.
 - **User**: custom user; email unique ignoring case, `email_verified_at` set by signed confirmation links.
 
 Continuous pair-level values (utilities, observed and post-interview views, ranks) are never stored:

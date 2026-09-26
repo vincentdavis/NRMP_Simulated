@@ -9,6 +9,10 @@
       <div class="flex flex-wrap gap-2">
         {% page_help "simulation_manage" %}
         <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
+        <form method="post" action="{% url 'nrmps:simulation_duplicate' pk=simulation.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline">Duplicate</button>
+        </form>
         <form method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}"
               data-confirm="Delete the simulation “{{ simulation.name }}” with its parameters, uploaded files and {{ recent_runs|length }}{% if recent_runs|length >= 10 %} or more{% endif %} runs? This cannot be undone.">
           {% csrf_token %}

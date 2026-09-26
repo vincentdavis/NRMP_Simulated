@@ -1,7 +1,7 @@
 """Per-account quotas (plan step 2.5; ENG-5, CRIT-6). Staff accounts are exempt.
 
 - With `NRMP_REQUIRE_VERIFIED_EMAIL`, accounts must confirm their email address before they can run simulations.
-- At most `NRMP_MAX_SIMULATIONS` simulations per account.
+- At most `NRMP_MAX_SIMULATIONS` simulations and `NRMP_MAX_PRESETS` saved presets per account.
 - At most `NRMP_RUNS_PER_DAY` runs and `NRMP_PAIRS_PER_DAY` applicant x program pairs per account in any 24 hours.
 """
 
@@ -31,6 +31,17 @@ def check_simulation_quota(user: Any) -> None:
         raise QuotaError(
             f"You have {settings.NRMP_MAX_SIMULATIONS} simulations, the most one account can have. Delete one to "
             "create another."
+        )
+
+
+def check_preset_quota(user: Any) -> None:
+    """Raise QuotaError if `user` may not save another preset."""
+    if _exempt(user):
+        return
+    if user.presets.count() >= settings.NRMP_MAX_PRESETS:
+        raise QuotaError(
+            f"You have {settings.NRMP_MAX_PRESETS} saved presets, the most one account can have. Delete one to save "
+            "another."
         )
 
 

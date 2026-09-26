@@ -75,6 +75,26 @@ ACTIONS: dict[str, HelpEntry] = {
         ),
         "parameters",
     ),
+    "save_preset": HelpEntry(
+        _("Save as preset"),
+        _(
+            "Saves the simulation's saved parameters (not changes you have not saved, and not the seed) as a preset "
+            "of yours: new simulations and Apply preset can then start from it."
+        ),
+        "parameters",
+    ),
+    "load_params": HelpEntry(
+        _("Load parameters from a file"),
+        _(
+            "Replaces every parameter with a JSON file's: a parameters download from any simulation, or a run's "
+            "parameters. The file's seed is used when it has one; otherwise the simulation keeps its seed."
+        ),
+        "parameters",
+    ),
+    "duplicate": HelpEntry(
+        _("Duplicate"),
+        _("Copies the simulation with its parameters, seed and uploaded files, but not its runs."),
+    ),
     "upload": HelpEntry(
         _("Upload"),
         _(
@@ -269,7 +289,17 @@ PAGES: dict[str, PageHelp] = {
             _("Press Save and run, or Run to use the saved parameters."),
             _("Open a run to see its results."),
         ),
-        actions=("run", "save_params", "save_and_run", "apply_preset", "upload", "delete_simulation"),
+        actions=(
+            "run",
+            "save_params",
+            "save_and_run",
+            "apply_preset",
+            "save_preset",
+            "load_params",
+            "upload",
+            "duplicate",
+            "delete_simulation",
+        ),
         more="parameters",
     ),
     "run_summary": PageHelp(

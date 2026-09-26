@@ -75,6 +75,10 @@ urlpatterns = [
     path("simulations/new/", views.simulation_create, name="simulation_create"),
     path("simulations/<int:pk>/", views.simulation_manage, name="simulation_manage"),
     path("simulations/<int:pk>/delete/", views.simulation_delete, name="simulation_delete"),
+    path("simulations/<int:pk>/duplicate/", views.simulation_duplicate, name="simulation_duplicate"),
+    path("simulations/<int:pk>/parameters.json", views.params_export, name="params_export"),
+    path("simulations/<int:pk>/parameters/import/", views.params_import, name="params_import"),
+    path("presets/<int:preset_id>/delete/", views.preset_delete, name="preset_delete"),
     path("simulations/<int:pk>/upload/<str:side>/", views.population_upload, name="population_upload"),
     path(
         "simulations/<int:pk>/upload/<str:side>/remove/",
