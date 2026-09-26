@@ -136,6 +136,17 @@ populations, runs, and the stepper with each stage's state) and the run's pages 
 reach the results through "Try a demo" without help) needs people and is an owner action; the browser test of the
 same path (landing page, Try a demo, the demo's results) passes.
 
+**After Phase 4 (owner feedback): waiting runs.** A queued run's page looked half done: "Queued, 0%" above a stages
+table with only the population finished (it is built when the run starts). The stages table now lists every stage:
+finished, in progress, waiting, or not run (after a failure, or for a run from before the stage existed). It
+refreshes while the page polls, and the worker records each stage as it finishes, with its own start time. The
+progress block says what the run waits for: the population is ready, and N runs are ahead of it. It warns when no
+worker is running (at once, from the heartbeats), when the worker stops during a run, and when a run has been queued
+for longer than `NRMP_QUEUE_WARNING_SECONDS` (60), with the command to start a worker in development and a link to
+/ops/ for staff. The run panel and the stepper on the simulation page show the same (stepper states finished,
+running and waiting replace "queued" on every stage). Tested: stages recorded as they finish, every row state, the
+polled table, runs ahead, each warning, and the stepper.
+
 ## Phases 5–8
 
 Not started.

@@ -12,6 +12,11 @@ Programs. Each tab opens with its key numbers, and "?" buttons explain the colum
 The run's key numbers, whether its checks passed, the downloads, how long each stage took, the version stamps and
 the exact parameters (with the seed) the run used, so it can be repeated.
 
+On sites where a background worker computes runs, a run first waits in a queue. Its population is built as soon as
+you press **Run** (so a market that is too large, or an upload that does not fit, is reported at once) and the other
+stages follow when the worker picks the run up. Meanwhile the summary shows which stages have finished and which are
+waiting, how many runs are ahead of it, and a warning if no worker is running or the run has waited unusually long.
+
 ## Population
 
 The applicants and programs as generated, next to what the parameters asked for: group shares and strength, tier

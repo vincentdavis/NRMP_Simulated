@@ -1,2 +1,5 @@
-{% comment %}A run status badge (parameter: status, one of queued, running, succeeded, failed).{% endcomment %}
-{% if status == "succeeded" %}<span class="badge badge-success badge-sm">Finished</span>{% elif status == "failed" %}<span class="badge badge-error badge-sm">Failed</span>{% elif status == "running" %}<span class="badge badge-info badge-sm">Running</span>{% elif status == "queued" %}<span class="badge badge-outline badge-sm">Queued</span>{% endif %}
+{% comment %}
+  A run or stage status badge (parameter: status: queued, running, succeeded or failed; for a stage also waiting or
+  not_run).
+{% endcomment %}
+{% if status == "succeeded" %}<span class="badge badge-success badge-sm">Finished</span>{% elif status == "failed" %}<span class="badge badge-error badge-sm">Failed</span>{% elif status == "running" %}<span class="badge badge-info badge-sm">Running</span>{% elif status == "queued" %}<span class="badge badge-outline badge-sm">Queued</span>{% elif status == "waiting" %}<span class="badge badge-outline badge-sm">Waiting</span>{% elif status == "not_run" %}<span class="badge badge-ghost badge-sm">Not run</span>{% endif %}

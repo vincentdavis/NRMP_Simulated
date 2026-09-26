@@ -41,8 +41,7 @@
            hx-get="{% url 'nrmps:run_status' pk=simulation.pk %}?run={{ active_run.number }}" hx-trigger="every 1s"
            hx-target="#run-panel" hx-swap="outerHTML">
         <div class="w-full">
-          <p>Run {{ active_run.number }} is {{ active_run.get_status_display|lower }}: {{ active_run.progress_percent }}%.</p>
-          <progress class="progress progress-primary w-full" value="{{ active_run.progress_percent }}" max="100" aria-label="Progress of run {{ active_run.number }}"></progress>
+          {% include "nrmps/components/run_progress.html" with run=active_run wait=active_wait %}
         </div>
       </div>
     {% endif %}

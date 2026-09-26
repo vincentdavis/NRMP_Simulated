@@ -221,10 +221,9 @@ def run_pipeline(
 
     def report(stage: str, counts: dict[str, int]) -> None:
         nonlocal clock
-        now = time.perf_counter()
         if on_stage is not None:
-            on_stage(stage, now - clock, counts)
-        clock = now
+            on_stage(stage, time.perf_counter() - clock, counts)
+        clock = time.perf_counter()  # the callback's own time (recording the stage) counts towards no stage
 
     pre = run_pre_interview(
         params,

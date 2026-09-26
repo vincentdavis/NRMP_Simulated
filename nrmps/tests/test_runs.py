@@ -1,5 +1,7 @@
 """Runs: frozen parameters, seeds, versions, artifacts, stages and reproducibility (plan step 2.3)."""
 
+import itertools
+
 import numpy as np
 import pytest
 
@@ -126,6 +128,28 @@ def test_a_failure_during_execution_is_recorded(simulation, user, monkeypatch):
     failed = run.stages.get(stage=Stage.PRE_INTERVIEW)
     assert failed.status == SimulationRun.Status.FAILED
     assert start_run(simulation, user).number == 2  # a failed run is not active
+
+
+def test_each_stage_is_recorded_as_it_finishes(simulation, user, monkeypatch):
+    from nrmps.engine.pipeline import run_pipeline
+
+    run = start_run(simulation, user)
+    recorded: list[set[str]] = []
+
+    def spy(*args, on_stage, **kwargs):
+        def report(stage, seconds, counts):
+            on_stage(stage, seconds, counts)
+            recorded.append(set(run.stages.values_list("stage", flat=True)))
+
+        return run_pipeline(*args, on_stage=report, **kwargs)
+
+    monkeypatch.setattr("nrmps.runs.run_pipeline", spy)
+    run = execute_run(run.pk)
+    stages = [stage.value for stage in Stage]
+    assert recorded == [set(stages[: n + 2]) for n in range(len(stages) - 1)]
+    rows = list(run.stages.order_by("id"))
+    assert rows[1].started_at == run.started_at
+    assert all(later.started_at == earlier.finished_at for earlier, later in itertools.pairwise(rows[1:]))
 
 
 def test_run_data_recomputes_one_agents_rows(finished_run):

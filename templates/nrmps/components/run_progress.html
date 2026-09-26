@@ -1,0 +1,43 @@
+{% load humanize %}
+{% comment %}
+  Where a queued or running run stands: a sentence, the progress bar and, when it may not start or finish soon, a
+  warning (runs.run_wait). Parameters: run, wait (a RunWait), subject (optional, "This run"; default "Run 3").
+  Used by the run page's progress block and the simulation page's run panel, which both poll every second.
+{% endcomment %}
+<p>
+  {% if subject %}{{ subject }}{% else %}Run {{ run.number }}{% endif %}
+  {% if run.status == "queued" %}
+    is waiting to start{% if wait.ahead %}, behind {{ wait.ahead|intcomma }} other run{{ wait.ahead|pluralize }}{% endif %}.
+    Its population is ready; the other stages start when the background worker picks it up.
+  {% elif wait.stage %}
+    is running the {{ wait.stage|lower }} stage ({{ run.progress_percent }}%).
+  {% else %}
+    has finished every stage and is saving the results.
+  {% endif %}
+</p>
+<progress class="progress progress-primary w-full" value="{{ run.progress_percent }}" max="100" aria-label="Progress of run {{ run.number }}"></progress>
+{% if wait.warning %}
+  <div class="alert alert-warning mt-3">
+    <p>
+      {% if wait.worker_missing %}
+        {% if run.status == "queued" %}
+          No background worker is running, so this run cannot start yet. It starts as soon as a worker is running
+          again.
+        {% else %}
+          The background worker computing this run seems to have stopped, so the run may not finish.
+        {% endif %}
+      {% elif wait.ahead %}
+        It has been waiting for {{ run.created_at|timesince }} because other runs are ahead of it.
+      {% else %}
+        It has been waiting for {{ run.created_at|timesince }}, although runs usually start within seconds. If it has
+        not started in a few minutes, <a class="link" href="{% url 'nrmps:contact' %}">let us know</a>.
+      {% endif %}
+      {% if DEBUG and wait.worker_missing %}
+        Start one with <code>python manage.py nrmp_worker</code>.
+      {% endif %}
+      {% if request.user.is_staff %}
+        <a class="link" href="{% url 'nrmps:ops' %}">The ops page</a> shows the queue and the workers.
+      {% endif %}
+    </p>
+  </div>
+{% endif %}

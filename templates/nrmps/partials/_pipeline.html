@@ -8,15 +8,15 @@
   <div class="overflow-x-auto">
     <ul class="steps steps-horizontal w-full min-w-max">
       {% for stage in stages %}
-        <li class="step{% if stage.state == 'done' %} step-primary{% elif stage.state == 'stale' %} step-warning{% elif stage.state == 'failed' %} step-error{% elif stage.state == 'running' or stage.state == 'queued' %} step-info{% endif %}"
-            data-content="{% if stage.state == 'done' %}✓{% elif stage.state == 'stale' %}!{% elif stage.state == 'failed' %}✕{% elif stage.state == 'planned' %}·{% else %}●{% endif %}">
+        <li class="step{% if stage.state == 'done' %} step-primary{% elif stage.state == 'stale' %} step-warning{% elif stage.state == 'failed' %} step-error{% elif stage.state == 'running' or stage.state == 'finished' %} step-info{% endif %}"
+            data-content="{% if stage.state == 'done' or stage.state == 'finished' %}✓{% elif stage.state == 'stale' %}!{% elif stage.state == 'failed' %}✕{% elif stage.state == 'planned' %}·{% elif stage.state == 'waiting' %}…{% else %}●{% endif %}">
           <span class="text-xs px-1">
             {% if results_run and stage.has_results %}
               <a class="link font-medium" href="{% url stage.results_url_name pk=simulation.pk number=results_run.number %}">{{ stage.label }}</a><br>
             {% else %}
               <span class="font-medium">{{ stage.label }}</span><br>
             {% endif %}
-            <span class="{% if stage.state == 'planned' %}text-base-content/70{% endif %}">{{ stage.state_label }}</span>
+            <span class="{% if stage.state == 'planned' or stage.state == 'waiting' %}text-base-content/70{% endif %}">{{ stage.state_label }}</span>
           </span>
         </li>
       {% endfor %}

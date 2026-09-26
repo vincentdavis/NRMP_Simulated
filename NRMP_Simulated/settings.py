@@ -301,6 +301,8 @@ NRMP_RATE_LIMITS = {
 # before it counts as interrupted.
 NRMP_RUNS_KEPT = int(os.environ.get("NRMP_RUNS_KEPT", "50"))
 NRMP_STALE_RUN_MINUTES = int(os.environ.get("NRMP_STALE_RUN_MINUTES", "60"))
+# A run's page warns when it has been queued for longer than this (runs normally start within seconds).
+NRMP_QUEUE_WARNING_SECONDS = int(os.environ.get("NRMP_QUEUE_WARNING_SECONDS", "60"))
 
 # Email (Django 6.1 MAILERS): SMTP when EMAIL_HOST is set (any provider: Postmark, SendGrid, Mailgun, SES ...);
 # otherwise messages are written to the log, which is enough for development.

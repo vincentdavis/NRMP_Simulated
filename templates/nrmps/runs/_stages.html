@@ -1,0 +1,26 @@
+{% load humanize %}
+{% comment %}
+  The stages table of a run's summary (run_views._stage_rows): every stage, finished, in progress, waiting or not
+  run. While the run is queued or running, the progress block's polling returns it out of band (oob), so stages
+  appear as they finish.
+{% endcomment %}
+<section id="run-stages" class="card bg-base-100 shadow-xl mb-6" aria-labelledby="stages-title"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
+  <div class="card-body">
+    <h2 id="stages-title" class="card-title">Stages</h2>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead><tr><th scope="col">Stage</th><th scope="col">Status</th><th scope="col" class="text-right">Time</th><th scope="col">Result</th></tr></thead>
+        <tbody>
+          {% for row in stage_rows %}
+            <tr>
+              <td>{{ row.label }}</td>
+              <td>{% include "nrmps/components/run_status.html" with status=row.status %}</td>
+              <td class="text-right tabular-nums">{% if row.duration_ms is not None %}{{ row.duration_ms|intcomma }} ms{% endif %}</td>
+              <td>{{ row.result }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>

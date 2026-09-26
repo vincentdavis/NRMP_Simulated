@@ -1,6 +1,7 @@
 """Background runs, the worker, quotas, rate limits and operations (plan step 2.5)."""
 
 import io
+import re
 import threading
 from datetime import timedelta
 
@@ -13,10 +14,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from nrmps.management.commands.nrmp_worker import beat
-from nrmps.models import RateLimitCounter, Simulation, SimulationRun, WorkerHeartbeat
+from nrmps.models import RateLimitCounter, Simulation, SimulationRun, Stage, StageRun, WorkerHeartbeat
 from nrmps.quotas import QuotaError, check_run_quota
 from nrmps.ratelimit import hit, parse_rate
-from nrmps.runs import dispatch_run, run_now, start_run
+from nrmps.runs import dispatch_run, run_now, run_wait, start_run
 
 from .conftest import PASSWORD
 
@@ -62,7 +63,7 @@ def test_database_backend_queues_the_run_for_the_worker(database_tasks, auth_cli
     assert "Email me when it finishes" in body
     assert "Run</button>" not in body.replace("\n", "").replace("  ", "")  # no second run while one is queued
     progress = auth_client.get(reverse("nrmps:run_progress", kwargs={"pk": simulation.pk, "number": 1}))
-    assert b"This run is queued: 0%." in progress.content
+    assert "This run is waiting to start." in _text(progress)
 
     call_command("nrmp_worker", batch=True, startup_delay=False, reload=False, verbosity=0)
 
@@ -102,6 +103,138 @@ def test_the_worker_takes_larger_markets(settings):
     assert max_pairs() == 100
     settings.TASK_BACKEND = "database"
     assert max_pairs() == 5000
+
+
+# --- Waiting runs -------------------------------------------------------------------------------------------------
+
+
+def _text(response) -> str:
+    """Return a response's text without tags, whitespace collapsed."""
+    return " ".join(re.sub(r"<[^>]+>", " ", response.content.decode()).split())
+
+
+def _run_page(client, sim, name="nrmps:run_detail"):
+    return client.get(reverse(name, kwargs={"pk": sim.pk, "number": 1}))
+
+
+def _queued_earlier(user, sim) -> SimulationRun:
+    """Queue a run of a second simulation of `user`, created five minutes ago (before any run of `sim`)."""
+    other = Simulation.objects.create(owner=user, name="Other", params=sim.params)
+    run = start_run(other, user)
+    SimulationRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(minutes=5))
+    run.refresh_from_db()
+    return run
+
+
+def test_a_queued_run_has_its_population_and_its_other_stages_wait(auth_client, simulation, user):
+    start_run(simulation, user)
+    body = _text(_run_page(auth_client, simulation))
+    assert "This run is waiting to start. Its population is ready; the other stages start when the background" in body
+    assert "Population Finished" in body
+    for label in ("Pre-interview", "Applications", "Signals", "Invitations", "Interviews", "Rank order lists", "Match"):
+        assert f"{label} Waiting" in body, label
+    assert "has been waiting" not in body  # no warning yet
+
+
+def test_the_polled_progress_carries_the_stages_table(auth_client, simulation, user):
+    start_run(simulation, user)
+    body = _run_page(auth_client, simulation, "nrmps:run_progress").content.decode()
+    assert 'id="run-progress"' in body
+    assert '<section id="run-stages"' in body
+    assert 'hx-swap-oob="outerHTML"' in body
+
+
+def test_a_running_run_shows_the_stage_in_progress(auth_client, simulation, user):
+    run = start_run(simulation, user)
+    SimulationRun.objects.filter(pk=run.pk).update(
+        status=SimulationRun.Status.RUNNING, started_at=timezone.now(), progress_done=run.progress_total // 2
+    )
+    body = _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+    assert "This run is running the pre-interview stage (50%)." in body
+    assert "Pre-interview Running In progress" in body
+    assert "Applications Waiting" in body
+    for stage in Stage:  # every stage finished; the results are being saved
+        StageRun.objects.get_or_create(run=run, stage=stage, defaults={"status": "succeeded", "counts": {}})
+    body = _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+    assert "This run has finished every stage and is saving the results." in body
+    assert "In progress" not in body
+
+
+def test_a_failed_run_shows_the_stages_it_did_not_reach(auth_client, simulation, user, monkeypatch):
+    def boom(*args, **kwargs):
+        raise ValueError("No interviews to rank.")
+
+    monkeypatch.setattr("nrmps.engine.pipeline.rank_lists", boom)
+    run_now(simulation, user)
+    body = _text(_run_page(auth_client, simulation))
+    assert "Interviews Finished" in body
+    assert "Rank order lists Failed" in body
+    assert "Match Not run" in body
+
+
+def test_runs_ahead_are_counted(simulation, user):
+    first = _queued_earlier(user, simulation)
+    run = start_run(simulation, user)
+    assert (run_wait(first).ahead, run_wait(run).ahead) == (0, 1)
+    SimulationRun.objects.filter(pk=first.pk).update(status=SimulationRun.Status.RUNNING)
+    assert run_wait(run).ahead == 1  # a running run is ahead too
+    assert run_wait(run).stage == "Pre-interview"
+
+
+def test_a_long_wait_is_explained(auth_client, simulation, user, settings):
+    run = start_run(simulation, user)
+    SimulationRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(minutes=3))
+    body = _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+    assert "It has been waiting for 3 minutes, although runs usually start within seconds." in body
+    assert "let us know" in body
+    settings.NRMP_QUEUE_WARNING_SECONDS = 600
+    assert "has been waiting" not in _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+
+
+def test_a_wait_behind_other_runs_says_so(auth_client, simulation, user):
+    _queued_earlier(user, simulation)
+    run = start_run(simulation, user)
+    SimulationRun.objects.filter(pk=run.pk).update(created_at=timezone.now() - timedelta(seconds=90))
+    body = _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+    assert "This run is waiting to start, behind 1 other run." in body
+    assert "It has been waiting for 1 minute because other runs are ahead of it." in body
+
+
+def test_a_missing_worker_is_reported_at_once(auth_client, simulation, user, settings):
+    settings.TASK_BACKEND = "database"
+    start_run(simulation, user)
+    body = _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+    assert "No background worker is running, so this run cannot start yet." in body
+    assert "nrmp_worker" not in body
+    assert "ops page" not in body
+    settings.DEBUG = True
+    user.is_staff = True
+    user.save()
+    body = _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+    assert "Start one with python manage.py nrmp_worker" in body
+    assert "The ops page shows the queue and the workers." in body
+    now = timezone.now()
+    WorkerHeartbeat.objects.create(worker_id="w", started_at=now, last_seen=now)
+    assert "No background worker" not in _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+
+
+def test_a_worker_that_stops_during_a_run_is_reported(auth_client, simulation, user, settings):
+    settings.TASK_BACKEND = "database"
+    run = start_run(simulation, user)
+    SimulationRun.objects.filter(pk=run.pk).update(status=SimulationRun.Status.RUNNING, started_at=timezone.now())
+    old = timezone.now() - timedelta(minutes=5)
+    WorkerHeartbeat.objects.create(worker_id="w", started_at=old, last_seen=old)
+    body = _text(_run_page(auth_client, simulation, "nrmps:run_progress"))
+    assert "The background worker computing this run seems to have stopped" in body
+
+
+def test_the_simulation_page_explains_a_waiting_run(auth_client, simulation, user, settings):
+    settings.TASK_BACKEND = "database"
+    start_run(simulation, user)
+    body = _text(auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})))
+    assert "Run 1 is waiting to start. Its population is ready" in body
+    assert "No background worker is running" in body
+    assert "Population Finished Pre-interview Waiting" in body  # the stepper
 
 
 # --- "Run finished" email -------------------------------------------------------------------------------------------

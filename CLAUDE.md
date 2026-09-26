@@ -102,7 +102,8 @@ model 2.1 (`docs/model_spec.md`). The interface says "applicant" and "program".
 - **SimulationRun**: one execution. Frozen parameters with the seed used, the parameter hash, version stamps (model,
   engine, schema, app, git SHA, numpy, Python), population source and digest, per-stage fingerprints, sizes, status,
   progress and the diagnostics (`metrics`). At most one queued or running run per simulation.
-- **StageRun**: one stage of a run with its fingerprint, timing and counts (or the error of the stage that failed).
+- **StageRun**: one stage of a run with its fingerprint, timing and counts (or the error of the stage that failed),
+  recorded as the stage finishes, so a running run's page shows how far it has got.
 - **RunArtifact**: npz bytes of a run: the population, the per-agent pre-interview results, and the stage decisions
   (`engine.persistence.StageRecord`: every application with its signal, invitation wave, interview, both list ranks,
   and the match).
@@ -127,8 +128,8 @@ nrmps/
 │                         #   metrics, applications, signals, invitations, interviews, rol, match (deferred
 │                         #   acceptance), outcomes, validate (checks of every match), pipeline (run_pipeline),
 │                         #   persistence (npz, digest, StageRecord)
-├── runs.py               # start_run / dispatch_run / execute_run, fingerprints, RunData (recomputed pair values,
-│                         #   stage rows and totals, CSV rows)
+├── runs.py               # start_run / dispatch_run / execute_run, fingerprints, run_wait (what a queued run
+│                         #   waits for), RunData (recomputed pair values, stage rows and totals, CSV rows)
 ├── validation.py         # the validation report: random markets against theory and an independent solver
 ├── tasks.py              # django.tasks task that executes a run (immediate backend or django-tasks-db worker)
 ├── pipeline.py           # stage state machine for the stepper: done, stale (with the reason), running, planned ...

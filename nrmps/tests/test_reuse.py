@@ -38,6 +38,8 @@ def test_the_list_shows_market_state_and_match_rate(auth_client, finished_run, s
         (["done", "stale"], "Out of date"),
         (["ready", "ready"], "Not run yet"),
         (["running", "running"], "Running"),
+        (["finished", "waiting"], "Running"),
+        (["finished", "finished"], "Running"),
         (["ready", "failed"], "Failed"),
         (["blocked", "blocked"], "Invalid parameters"),
     ],

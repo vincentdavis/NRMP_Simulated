@@ -4,7 +4,8 @@ Each stage's state comes from the draft parameters and the runs:
 
 - done: the latest successful run computed this stage from exactly what the draft would use now;
 - stale: something the stage depends on changed since (the reason names it), so running again changes the results;
-- queued or running: a run is in progress;
+- finished, running or waiting: a run is in progress and has finished this stage, is computing it, or has not
+  reached it yet (a queued run has its population: it is built when the run starts);
 - failed: the latest run failed at this stage (the error is shown);
 - ready: nothing has run yet; blocked: the parameters are not valid;
 - planned: the stage is not implemented yet.
@@ -27,8 +28,9 @@ from .runs import fingerprints, upload_sources
 STATE_LABELS = {
     "done": "Done",
     "stale": "Out of date",
-    "queued": "Queued",
+    "finished": "Finished",
     "running": "Running",
+    "waiting": "Waiting",
     "failed": "Failed",
     "ready": "Ready",
     "blocked": "Blocked",
@@ -143,6 +145,11 @@ def get_pipeline(simulation: Simulation) -> list[StageState]:
     failed_stage = None
     if failed is not None:
         failed_stage = failed.stages.filter(status=SimulationRun.Status.FAILED).values_list("stage", flat=True).first()
+    active_stages: set[str] = set()
+    in_progress = False
+    if active is not None:
+        active_stages = set(active.stages.values_list("stage", flat=True))
+        in_progress = active.status == SimulationRun.Status.RUNNING
     now_prints: dict[str, str] = {}
     if draft is not None and reference is not None:
         seed = draft.run.seed if draft.run.seed is not None else reference.seed
@@ -155,9 +162,14 @@ def get_pipeline(simulation: Simulation) -> list[StageState]:
         if stage not in IMPLEMENTED_STAGES:
             states.append(StageState(stage.value, label, "planned", "Not implemented yet."))
         elif active is not None:
-            states.append(
-                StageState(stage.value, label, str(active.status), f"Run {active.number} is {active.status}.")
-            )
+            if stage.value in active_stages:
+                states.append(StageState(stage.value, label, "finished", f"Finished in run {active.number}."))
+            elif in_progress:
+                states.append(StageState(stage.value, label, "running", f"Run {active.number} is computing it."))
+                in_progress = False
+            else:
+                status = active.get_status_display().lower()
+                states.append(StageState(stage.value, label, "waiting", f"Run {active.number} is {status}."))
         elif failed is not None and failed_stage == stage.value:
             states.append(StageState(stage.value, label, "failed", f"Run {failed.number} failed: {failed.error}"))
         elif draft is None:
@@ -185,7 +197,7 @@ def needs_run(states: list[StageState]) -> bool:
 def pipeline_summary(states: list[StageState]) -> tuple[str, str]:
     """Return one word for a simulation's state, with a badge colour: for lists of simulations."""
     found = {state.state for state in states}
-    if found & {"running", "queued"}:
+    if found & {"finished", "running", "waiting"}:
         return "Running", "badge-info"
     if "failed" in found:
         return "Failed", "badge-error"

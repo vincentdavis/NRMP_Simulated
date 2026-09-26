@@ -1,12 +1,12 @@
 {% comment %}
-  Progress of a queued or running run on its page. Polls every second; when the run has finished the server asks
-  the browser to reload the page (HX-Refresh), which then shows the results.
+  Progress of a queued or running run on its page. Polls every second (the response also carries the stages table,
+  out of band); when the run has finished the server asks the browser to reload the page (HX-Refresh), which then
+  shows the results.
 {% endcomment %}
 <div id="run-progress" role="status" class="rounded-box border border-base-300 p-4 mb-4"
      hx-get="{% url 'nrmps:run_progress' pk=simulation.pk number=run.number %}" hx-trigger="every 1s"
      hx-target="this" hx-swap="outerHTML">
   <div class="w-full">
-    <p>This run is {{ run.get_status_display|lower }}: {{ run.progress_percent }}%.</p>
-    <progress class="progress progress-primary w-full" value="{{ run.progress_percent }}" max="100" aria-label="Progress of run {{ run.number }}"></progress>
+    {% include "nrmps/components/run_progress.html" with subject="This run" %}
   </div>
 </div>

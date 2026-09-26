@@ -20,7 +20,7 @@ from .engine.numeric import quantiles
 from .engine.persistence import StageRecord
 from .engine.pipeline import SideResult
 from .engine.validate import COUNT_CHECKS, FLAG_CHECKS
-from .models import RunArtifact, SimulationRun
+from .models import IMPLEMENTED_STAGES, RunArtifact, SimulationRun
 from .params_forms import ParamsForm
 from .population_csv import plain_csv_lines, population_csv_lines
 from .runs import (
@@ -31,6 +31,7 @@ from .runs import (
     PairRows,
     RunData,
     StageRows,
+    run_wait,
 )
 from .views import get_owned_simulation
 
@@ -125,15 +126,33 @@ COUNT_LABELS = {
 
 
 def _stage_rows(run: SimulationRun) -> list[dict[str, Any]]:
-    """Return the run's stages with their counts in words."""
-    return [
-        {
-            "stage": stage,
-            "result": stage.error
-            or ", ".join(f"{intcomma(value)} {COUNT_LABELS.get(key, key)}" for key, value in stage.counts.items()),
-        }
-        for stage in run.stages.order_by("id")
-    ]
+    """Return every stage of the run in order: its status, time and counts in words.
+
+    A stage without a record is waiting while the run is queued or running (the first one of a running run is in
+    progress), and was not run if the run failed before it (or is from before the stage existed).
+    """
+    recorded = {stage.stage: stage for stage in run.stages.all()}
+    in_progress = run.status == SimulationRun.Status.RUNNING
+    rows = []
+    for stage in IMPLEMENTED_STAGES:
+        record = recorded.get(stage.value)
+        if record is not None:
+            counts = ", ".join(f"{intcomma(n)} {COUNT_LABELS.get(key, key)}" for key, n in record.counts.items())
+            rows.append(
+                {
+                    "label": stage.label,
+                    "status": record.status,
+                    "duration_ms": record.duration_ms,
+                    "result": record.error or counts,
+                }
+            )
+        elif in_progress:
+            rows.append({"label": stage.label, "status": "running", "duration_ms": None, "result": "In progress"})
+            in_progress = False
+        else:
+            status = "waiting" if run.is_active else "not_run"
+            rows.append({"label": stage.label, "status": status, "duration_ms": None, "result": ""})
+    return rows
 
 
 RANK_LABELS = [*(str(rank) for rank in range(1, 11)), "11+"]  # the matched-rank bins, in order
@@ -215,6 +234,7 @@ def _run_context(run: SimulationRun, tab: str, **extra: Any) -> dict[str, Any]:
         "tabs": tabs,
         "metrics": metrics,
         "outcomes": outcomes,
+        "wait": run_wait(run) if run.is_active else None,
         **extra,
     }
 
@@ -427,10 +447,16 @@ def _application_table(request: HttpRequest, data: RunData, record: StageRecord)
 
 @require_GET
 def run_progress(request, pk: int, number: int):
-    """The progress block of a queued or running run (polled); once the run has finished, reload the page."""
+    """The progress block of a queued or running run (polled), with the stages table out of band.
+
+    Once the run has finished, the browser reloads the page, which then shows the results.
+    """
     run = get_run(request, pk, number)
     if run.is_active:
-        return render(request, "nrmps/runs/_progress.html", {"simulation": run.simulation, "run": run})
+        context = {"simulation": run.simulation, "run": run, "wait": run_wait(run), "stage_rows": _stage_rows(run)}
+        progress = render(request, "nrmps/runs/_progress.html", context).content.decode()
+        stages = render(request, "nrmps/runs/_stages.html", context | {"oob": True}).content.decode()
+        return HttpResponse(progress + stages)
     response = HttpResponse("")
     response["HX-Refresh"] = "true"
     return response

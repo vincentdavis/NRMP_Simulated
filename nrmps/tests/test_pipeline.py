@@ -2,7 +2,7 @@
 
 import pytest
 
-from nrmps.models import Stage
+from nrmps.models import SimulationRun, Stage, StageRun
 from nrmps.params import load_params
 from nrmps.pipeline import get_pipeline, needs_run
 from nrmps.runs import execute_run, run_now, start_run
@@ -107,13 +107,28 @@ def test_a_blank_seed_matches_the_last_runs_seed(finished_run, simulation):
     assert _states(simulation)["population"][0] == "done"
 
 
-def test_a_queued_run_shows_on_every_implemented_stage(simulation, user):
+def test_a_queued_run_has_its_population_and_the_other_stages_wait(simulation, user):
     run = start_run(simulation, user)
     states = _states(simulation)
-    assert states["population"] == ("queued", "Run 1 is queued.")
-    assert {state for state, _reason in states.values()} == {"queued"}
+    assert states["population"] == ("finished", "Finished in run 1.")
+    assert states["pre_interview"] == ("waiting", "Run 1 is queued.")
+    assert {state for key, (state, _reason) in states.items() if key != "population"} == {"waiting"}
     execute_run(run.pk)
     assert {state for state, _reason in _states(simulation).values()} == {"done"}
+
+
+def test_a_running_run_shows_the_stage_it_is_computing(simulation, user):
+    run = start_run(simulation, user)
+    SimulationRun.objects.filter(pk=run.pk).update(status=SimulationRun.Status.RUNNING)
+    StageRun.objects.create(run=run, stage=Stage.PRE_INTERVIEW, status="succeeded", counts={})
+    states = _states(simulation)
+    assert [states[key][0] for key in ("population", "pre_interview", "applications", "signals")] == [
+        "finished",
+        "finished",
+        "running",
+        "waiting",
+    ]
+    assert states["applications"][1] == "Run 1 is computing it."
 
 
 def test_a_failed_run_marks_the_stage_that_failed(simulation, user, monkeypatch):
@@ -137,6 +152,8 @@ def test_a_failure_in_a_later_stage_lands_on_that_stage(simulation, user, monkey
     assert [recorded[key] for key in STAGES[:6]] == ["succeeded"] * 6
     assert recorded["rank_lists"] == "failed"
     assert "match" not in recorded
+    rows = {row.stage: row for row in run.stages.all()}
+    assert rows["rank_lists"].started_at == rows["interviews"].finished_at
     states = _states(simulation)
     assert states["rank_lists"] == ("failed", "Run 1 failed: No interviews to rank.")
     assert states["interviews"][0] == "ready"

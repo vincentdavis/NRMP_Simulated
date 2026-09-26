@@ -123,7 +123,10 @@ pairs). No worker is needed.
 
 `/healthz` reports the queue and, with a worker, how long ago it was last seen (`"worker": "missing"` after two
 minutes without a heartbeat). The health check still returns 200, so a stopped worker never takes the site down;
-runs just stay queued, and the clean-up job marks runs queued or running for over an hour as interrupted.
+runs just stay queued, and the clean-up job marks runs queued or running for over an hour as interrupted. A queued
+run's page says how many runs are ahead of it and warns its owner when no worker has been seen for two minutes, when
+the worker stops during the run, or when the run has been queued for longer than `NRMP_QUEUE_WARNING_SECONDS`
+(default 60).
 
 **Clean-up.** The **cleanup** cron service (`railway.cron.json`) runs `manage.py nrmp_cleanup` daily: it marks
 interrupted runs as failed, keeps the newest `NRMP_RUNS_KEPT` (50) runs per simulation, and deletes old rate-limit

@@ -13,7 +13,7 @@ import secrets
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import cached_property
 from typing import Any
 
@@ -22,7 +22,7 @@ import numpy as np
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
@@ -48,7 +48,16 @@ from .engine.population import Population, PopulationError, generate_population
 from .engine.utility import MarketModel, build_market
 from .exceptions import SimulationError
 from .limits import check_market_size
-from .models import IMPLEMENTED_STAGES, PopulationUpload, RunArtifact, Simulation, SimulationRun, Stage, StageRun
+from .models import (
+    IMPLEMENTED_STAGES,
+    PopulationUpload,
+    RunArtifact,
+    Simulation,
+    SimulationRun,
+    Stage,
+    StageRun,
+    WorkerHeartbeat,
+)
 from .params import SimulationParams, canonical_json, stage_inputs
 from .population_csv import UploadedSide, applicant_side, program_side
 from .quotas import check_run_quota
@@ -203,8 +212,9 @@ class StageReport:
 def execute_run(run_id: int) -> SimulationRun:
     """Compute a queued run's stages, from the pre-interview views to the match, and store the results.
 
-    Problems with the data are recorded on the run (status failed, with the message, on the stage that failed);
-    unexpected errors are logged and recorded with a generic message. A run that is not queued is left alone.
+    Each stage is recorded as it finishes, so the run's page shows how far it has got. Problems with the data are
+    recorded on the run (status failed, with the message, on the stage that failed); unexpected errors are logged and
+    recorded with a generic message. A run that is not queued is left alone.
     """
     run = SimulationRun.objects.get(pk=run_id)
     now = timezone.now()
@@ -214,6 +224,7 @@ def execute_run(run_id: int) -> SimulationRun:
     started = time.perf_counter()
     last_update = 0.0
     reports: list[StageReport] = []
+    stage_started = now
 
     def progress(done: int, total: int) -> None:
         nonlocal last_update
@@ -223,7 +234,21 @@ def execute_run(run_id: int) -> SimulationRun:
             SimulationRun.objects.filter(pk=run_id).update(progress_done=done)
 
     def on_stage(stage: str, seconds: float, counts: dict[str, int]) -> None:
-        reports.append(StageReport(stage, round(seconds * 1000), counts))
+        nonlocal stage_started
+        report = StageReport(stage, round(seconds * 1000), counts)
+        finished = timezone.now()
+        StageRun.objects.create(
+            run=run,
+            stage=stage,
+            status=Status.SUCCEEDED,
+            fingerprint=run.fingerprints.get(stage, ""),
+            started_at=stage_started,
+            finished_at=finished,
+            duration_ms=report.milliseconds,
+            counts=counts,
+        )
+        reports.append(report)
+        stage_started = finished
 
     try:
         params = run.get_params()
@@ -255,7 +280,7 @@ def execute_run(run_id: int) -> SimulationRun:
         else:
             message = "The run failed unexpectedly. The error has been logged; please try again or report it."
             logger.exception("Run failed unexpectedly run_id=%s", run_id)
-        _finish(run, Status.FAILED, started, reports, error=message)
+        _finish(run, Status.FAILED, started, reports, error=message, failed_since=stage_started)
         return _notify(SimulationRun.objects.get(pk=run_id))
     _finish(run, Status.SUCCEEDED, started, reports, metrics=result.metrics, artifacts=artifacts)
     return _notify(SimulationRun.objects.get(pk=run_id))
@@ -290,24 +315,18 @@ def _finish(
     error: str = "",
     metrics: dict[str, Any] | None = None,
     artifacts: dict[str, bytes] | None = None,
+    failed_since: datetime | None = None,
 ) -> None:
-    """Record the stages and the run's outcome in one transaction (a failure lands on the first unfinished stage)."""
+    """Record the run's outcome and results in one transaction; a failure lands on the first unfinished stage.
+
+    The finished stages (`reports`) are already recorded: `execute_run` records each one as it finishes, and the
+    failed stage started when the last of them finished (`failed_since`).
+    """
     duration = _milliseconds(started)
     finished = timezone.now()
     with transaction.atomic():
         for kind, data in (artifacts or {}).items():
             _save_artifact(run, kind, data)
-        for report in reports:
-            StageRun.objects.create(
-                run=run,
-                stage=report.stage,
-                status=Status.SUCCEEDED,
-                fingerprint=run.fingerprints.get(report.stage, ""),
-                started_at=run.started_at or finished,
-                finished_at=finished,
-                duration_ms=report.milliseconds,
-                counts=report.counts,
-            )
         if status == Status.FAILED:
             done = {report.stage for report in reports} | {Stage.POPULATION.value}
             failed = next(stage for stage in IMPLEMENTED_STAGES if stage.value not in done)
@@ -316,7 +335,7 @@ def _finish(
                 stage=failed,
                 status=Status.FAILED,
                 fingerprint=run.fingerprints.get(failed.value, ""),
-                started_at=run.started_at or finished,
+                started_at=failed_since or finished,
                 finished_at=finished,
                 duration_ms=duration - sum(report.milliseconds for report in reports),
                 error=error,
@@ -359,6 +378,57 @@ def interrupt_stale_runs(older_than: timedelta) -> int:
         status=Status.FAILED,
         finished_at=timezone.now(),
         error="The run was interrupted before it finished (the worker stopped). Please run it again.",
+    )
+
+
+# --- Waiting runs -----------------------------------------------------------------------------------------------------
+
+# A worker records a heartbeat every 30 seconds (manage.py nrmp_worker); one not seen for this long has stopped.
+WORKER_STALE_SECONDS = 120
+
+
+def worker_last_seen() -> int | None:
+    """Return how many seconds ago a worker last recorded its heartbeat, or None if none ever did."""
+    last = WorkerHeartbeat.objects.order_by("-last_seen").values_list("last_seen", flat=True).first()
+    return None if last is None else round((timezone.now() - last).total_seconds())
+
+
+@dataclass(frozen=True)
+class RunWait:
+    """Where a queued or running run stands, for its progress block: its stage, its wait and what may hold it up."""
+
+    stage: str  # the stage in progress (running) or the next one to start (queued); "" once every stage finished
+    ahead: int  # runs that start before this one: queued earlier, or running (queued runs only)
+    worker_missing: bool  # runs wait for a worker here (TASK_BACKEND=database) and none has been seen lately
+    too_long: bool  # queued for longer than NRMP_QUEUE_WARNING_SECONDS
+
+    @property
+    def warning(self) -> bool:
+        """Return True if the page should warn that the run may not start or finish soon."""
+        return self.worker_missing or self.too_long
+
+
+def run_wait(run: SimulationRun) -> RunWait:
+    """Return where a queued or running run stands: its current stage, how long it has waited and why."""
+    queued = run.status == Status.QUEUED
+    recorded = set(run.stages.values_list("stage", flat=True))
+    stage = next((stage for stage in IMPLEMENTED_STAGES if stage.value not in recorded), None)
+    ahead = 0
+    if queued:
+        ahead = (
+            SimulationRun.objects.filter(
+                Q(status=Status.RUNNING) | Q(status=Status.QUEUED, created_at__lt=run.created_at)
+            )
+            .exclude(pk=run.pk)
+            .count()
+        )
+    background = settings.TASK_BACKEND == "database"
+    last_seen = worker_last_seen() if background else None
+    return RunWait(
+        stage=str(stage.label) if stage else "",
+        ahead=ahead,
+        worker_missing=background and (last_seen is None or last_seen > WORKER_STALE_SECONDS),
+        too_long=queued and (timezone.now() - run.created_at).total_seconds() > settings.NRMP_QUEUE_WARNING_SECONDS,
     )
 
 

@@ -12,7 +12,6 @@ from django.db.models import F
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django_htmx.http import trigger_client_event
@@ -31,13 +30,11 @@ from .previews import market_preview
 from .quotas import QuotaError, check_preset_quota, check_simulation_quota
 from .ratelimit import MESSAGE as RATE_MESSAGE
 from .ratelimit import over_limit, rate_limit
-from .runs import dispatch_run, start_run
+from .runs import WORKER_STALE_SECONDS, dispatch_run, run_wait, start_run, worker_last_seen
 
 logger = logging.getLogger(__name__)
 
 RECENT_RUNS = 10
-# A worker whose heartbeat is older than this counts as missing in /healthz and on the ops page.
-WORKER_STALE_SECONDS = 120
 
 
 def get_owned_simulation(request: HttpRequest, pk: int) -> Simulation:
@@ -69,7 +66,7 @@ def healthz(request):
 
 def task_health() -> dict[str, Any]:
     """Describe the background runs: backend, queue and, with a worker, how long ago it was last seen."""
-    from .models import SimulationRun, WorkerHeartbeat
+    from .models import SimulationRun
 
     health: dict[str, Any] = {
         "backend": settings.TASK_BACKEND,
@@ -77,8 +74,7 @@ def task_health() -> dict[str, Any]:
         "running": SimulationRun.objects.filter(status=SimulationRun.Status.RUNNING).count(),
     }
     if settings.TASK_BACKEND == "database":
-        last = WorkerHeartbeat.objects.order_by("-last_seen").values_list("last_seen", flat=True).first()
-        seconds = None if last is None else round((timezone.now() - last).total_seconds())
+        seconds = worker_last_seen()
         health["worker_last_seen_seconds"] = seconds
         health["worker"] = "ok" if seconds is not None and seconds <= WORKER_STALE_SECONDS else "missing"
     return health
@@ -215,7 +211,8 @@ def manage_context(request: HttpRequest, sim: Simulation, **overrides) -> dict:
         "market": {"applicants": n, "programs": m, "pairs": n * m},
         "max_pairs": max_pairs(),
         "background": settings.TASK_BACKEND == "database",
-        "active_run": sim.active_run(),
+        "active_run": (active_run := sim.active_run()),
+        "active_wait": run_wait(active_run) if active_run else None,
         "latest_run": sim.latest_run(),
         "results_run": (results_run := sim.latest_run(succeeded=True)),
         "getting_started": getting_started(sim, results_run),
