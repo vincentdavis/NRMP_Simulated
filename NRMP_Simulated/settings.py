@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -121,7 +122,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    ### Add ons
+    ### Add-ons
     "django_htmx.middleware.HtmxMiddleware",
     # Last, as django-axes requires.
     "axes.middleware.AxesMiddleware",
@@ -169,7 +170,7 @@ elif DEBUG:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": str(BASE_DIR / "db.sqlite3"),
         }
     }
 else:
@@ -267,12 +268,14 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     # Start low and raise to 31536000 once HTTPS is confirmed everywhere. Subdomains and preload stay off on
-    # purpose, so `check --deploy` reports security.W005 and security.W021.
+    # purpose (other services may share the parent domain), so their deploy-check warnings are silenced; any other
+    # `check --deploy` warning fails CI.
     SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "3600"))
+    SILENCED_SYSTEM_CHECKS = ["security.W005", "security.W021"]
 
 
 # Logging. Logfire is used in production only, and only sends data when a token is configured.
-LOGGING = {
+LOGGING: dict[str, Any] = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {

@@ -9,7 +9,7 @@ import os
 
 os.environ["DEBUG"] = "False"
 os.environ.setdefault("SECRET_KEY", "test-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz")
-os.environ["DATABASE_URL"] = os.environ.get("NRMP_TEST_DATABASE_URL", "sqlite:///:memory:")
+os.environ["DATABASE_URL"] = os.environ.get("NRMP_TEST_DATABASE_URL") or "sqlite:///:memory:"
 os.environ["LOGFIRE_SEND_TO_LOGFIRE"] = "false"
 
 from .settings import *  # noqa: F403

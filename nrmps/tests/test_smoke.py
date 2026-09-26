@@ -79,7 +79,7 @@ def _config_post_data() -> dict:
     """Form data for the configuration form built from SMALL_CONFIG."""
     import json
 
-    data = {"form_id": "config"}
+    data: dict[str, object] = {"form_id": "config"}
     for key, value in SMALL_CONFIG.items():
         data[key] = json.dumps(value) if isinstance(value, list) else value
     return data

@@ -16,12 +16,13 @@ Phase 3 builds the remaining stages (applications, invitations, interviews, rank
 not extend this module with new stages.
 """
 
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from itertools import islice
 
 import numpy as np
-from django.db import connection, transaction
+import numpy.typing as npt
+from django.db import connection, models, transaction
 
 from .exceptions import MissingConfigError, PopulationError
 from .limits import check_market_size
@@ -46,22 +47,36 @@ def _batches(items: Iterable, size: int) -> Iterator[list]:
         yield batch
 
 
-def _update_columns(model, pks: Sequence[int], columns: dict[str, Sequence]) -> None:
+def _concrete_field(model: type[models.Model], name: str) -> models.Field:
+    """Return a model's concrete field by name."""
+    field = model._meta.get_field(name)
+    assert isinstance(field, models.Field)  # noqa: S101 (narrows the type; reverse relations are never passed)
+    return field
+
+
+def _column(field: models.Field) -> str:
+    """Return the database column name of a concrete field."""
+    assert field.column is not None  # noqa: S101 (concrete fields always have a column)
+    return field.column
+
+
+def _update_columns(model: type[models.Model], pks: npt.ArrayLike, columns: Mapping[str, npt.ArrayLike]) -> None:
     """Set several columns on many rows. `columns` maps field names to sequences aligned with `pks`; NaN -> NULL.
 
     PostgreSQL loads the values with COPY into a temporary table and applies one UPDATE ... FROM; other databases
     (SQLite) run one prepared UPDATE per row in batches, which is fast there.
     """
+    pks = np.asarray(pks)
     if not len(pks):
         return
-    fields = [model._meta.get_field(name) for name in columns]
+    fields = [_concrete_field(model, name) for name in columns]
     values = [_to_python(columns[field.name], integer=field.get_internal_type() == "IntegerField") for field in fields]
     rows = zip((int(pk) for pk in pks), *values, strict=True)
     if connection.vendor == "postgresql":
         _update_columns_postgresql(model, fields, rows)
         return
     q = connection.ops.quote_name
-    assignments = ", ".join(f"{q(field.column)} = %s" for field in fields)
+    assignments = ", ".join(f"{q(_column(field))} = %s" for field in fields)
     sql = f"UPDATE {q(model._meta.db_table)} SET {assignments} WHERE {q('id')} = %s"  # noqa: S608 (identifiers from model meta)
     with connection.cursor() as cursor:
         # Use the database driver's cursor directly: query-recording wrappers (django-debug-toolbar in development)
@@ -75,11 +90,11 @@ def _update_columns_postgresql(model, fields, rows) -> None:
     q = connection.ops.quote_name
     temp = q("nrmps_bulk_update")
     column_defs = ", ".join(
-        f"{q(field.column)} {'integer' if field.get_internal_type() == 'IntegerField' else 'double precision'}"
+        f"{q(_column(field))} {'integer' if field.get_internal_type() == 'IntegerField' else 'double precision'}"
         for field in fields
     )
-    column_list = ", ".join(q(field.column) for field in fields)
-    assignments = ", ".join(f"{q(field.column)} = u.{q(field.column)}" for field in fields)
+    column_list = ", ".join(q(_column(field)) for field in fields)
+    assignments = ", ".join(f"{q(_column(field))} = u.{q(_column(field))}" for field in fields)
     with connection.cursor() as cursor:
         cursor.execute(f"DROP TABLE IF EXISTS {temp}")
         cursor.execute(f"CREATE TEMPORARY TABLE {temp} (id bigint PRIMARY KEY, {column_defs}) ON COMMIT DROP")
@@ -91,7 +106,7 @@ def _update_columns_postgresql(model, fields, rows) -> None:
         )
 
 
-def _to_python(values: Sequence, *, integer: bool = False) -> list:
+def _to_python(values: npt.ArrayLike, *, integer: bool = False) -> list:
     """Convert a numpy array (or sequence) to Python floats, or ints if `integer`, mapping NaN to None."""
     convert = int if integer else float
     return [None if np.isnan(v) else convert(v) for v in np.asarray(values, dtype=float)]
@@ -128,7 +143,7 @@ def _insert_cross_product(simulation: Simulation) -> None:
     meta = Interview._meta
     defaults = ["status", "student_applied", "student_signal", "student_accepted", "school_invited"]
     columns = ["simulation", "student", "school", *defaults]
-    column_sql = ", ".join(q(meta.get_field(name).column) for name in columns)
+    column_sql = ", ".join(q(_column(_concrete_field(Interview, name))) for name in columns)
     placeholders = ", ".join(["%s"] * len(defaults))
     sql = (
         f"INSERT INTO {q(meta.db_table)} ({column_sql}) "  # noqa: S608 (identifiers come from model meta)
@@ -137,7 +152,12 @@ def _insert_cross_product(simulation: Simulation) -> None:
         f"WHERE s.{q('simulation_id')} = %s AND p.{q('simulation_id')} = %s "
         f"ORDER BY s.{q('id')}, p.{q('id')}"
     )
-    params = [simulation.pk, *(meta.get_field(name).get_default() for name in defaults), simulation.pk, simulation.pk]
+    params = [
+        simulation.pk,
+        *(_concrete_field(Interview, name).get_default() for name in defaults),
+        simulation.pk,
+        simulation.pk,
+    ]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
 

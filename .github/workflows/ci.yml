@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, production]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint, types and Django checks
+    runs-on: ubuntu-latest
+    env:
+      # Production settings for the checks: DEBUG off, throwaway secret, SQLite, Logfire silent.
+      DEBUG: "False"
+      SECRET_KEY: ci-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz-ABCDEFGH
+      DATABASE_URL: sqlite:///ci.sqlite3
+      LOGFIRE_SEND_TO_LOGFIRE: "false"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: ruff
+        run: uv run ruff check .
+      - name: ruff format
+        run: uv run ruff format --check .
+      - name: codespell
+        run: uv run codespell .
+      - name: mypy
+        run: uv run mypy .
+      - name: Migrations are up to date
+        run: uv run python manage.py makemigrations --check --dry-run
+      - name: Deploy checks
+        run: uv run python manage.py check --deploy --fail-level WARNING
+      - name: ty (informational)
+        run: uv run ty check nrmps
+        continue-on-error: true
+
+  test:
+    name: Tests (${{ matrix.database }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [sqlite, postgresql]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --locked
+      - name: pytest
+        env:
+          NRMP_TEST_DATABASE_URL: ${{ matrix.database == 'postgresql' && 'postgres://postgres:postgres@localhost:5432/postgres' || '' }}
+        run: uv run pytest

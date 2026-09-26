@@ -45,7 +45,22 @@ completed from the page), found while checking the UI in a browser.
 250k-pair cap took at most 3.4 s locally on PostgreSQL; σ = 0 gives observed == true and σ > 0 gives Spearman < 1;
 no `|safe` in templates; a failed upload changes nothing. The manage page still overflows at 375 px (UX-9, step 1.4).
 
-## Phases 1–8
+## Phase 1: Quality foundation and UI hygiene
+
+| Step | Status | Notes |
+|---|---|---|
+| 1.1 Tests, CI, linters | Done | pytest-django, hypothesis (strict-rank and CSV round-trip properties); GitHub Actions: ruff, format, codespell, mypy (django-stubs plugin; clean), `makemigrations --check`, `check --deploy --fail-level WARNING` (the two deliberate HSTS warnings are silenced in the settings), pytest on SQLite and PostgreSQL 17, ty as information only; pre-commit (ruff, codespell, file checks, migrations). ruff: Google docstring convention, rule sets fixed (DOC/TRIO/FAST dropped; DTZ and PT added), migrations and `docs/` excluded; every finding fixed, including dead `generate_meta_scores` and nullable `User.full_name` (migration `0010`, NULL → ""). `prod` is a default uv group so local runs can use PostgreSQL. **Deviations:** the one formatting commit came earlier (before step 0.3); factory-boy was not needed (fixtures suffice); the review's DA property test waits for the match in step 3.6. The workflow was run step by step locally, not yet on GitHub. |
+| 1.2 Deployment and operations | Not started | |
+| 1.3 Front-end dependencies | Not started | |
+| 1.4 daisyUI 5 migration | Not started | |
+| 1.5 Feedback and navigation | Not started | |
+| 1.6 Copy, vocabulary, unused parameters | Not started | Needs decision D2. |
+| 1.7 CSV v2 | Mostly done in step 0.6 | Remaining: sample and template files, help text. |
+| 1.8 View structure and admin | Not started | |
+| 1.9 Email and accounts | Not started | |
+| 1.10 Documentation | Not started | |
+
+## Phases 2–8
 
 Not started.
 

@@ -1,0 +1,28 @@
+# Install once with `uvx pre-commit install`; run on everything with `uvx pre-commit run --all-files`.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.9
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+  - repo: local
+    hooks:
+      - id: django-migrations
+        name: Django migrations are up to date
+        entry: env DJANGO_SETTINGS_MODULE=NRMP_Simulated.settings_test uv run python manage.py makemigrations --check --dry-run
+        language: system
+        pass_filenames: false
+        files: ^nrmps/(models\.py|migrations/)

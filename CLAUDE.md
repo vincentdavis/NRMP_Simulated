@@ -49,19 +49,25 @@ python manage.py tailwind install
 ```
 
 ### Code Quality and Testing
+CI (`.github/workflows/ci.yml`) runs all of these on every push and pull request; pre-commit
+(`uvx pre-commit install`) runs the fast ones before each commit.
 ```bash
-# Run linter (Ruff)
-ruff check .
+# Run linter and formatter (Ruff)
+uv run ruff check .
+uv run ruff format .
 
-# Run linter with auto-fix
-ruff check --fix .
+# Spelling
+uv run codespell .
 
-# Run type checking
-mypy .
+# Type checking (mypy with the django-stubs plugin)
+uv run mypy .
 
-# Run tests (pytest-django; NRMP_Simulated/settings_test.py runs the production configuration
-# against an in-memory SQLite database)
-pytest
+# Migrations are up to date
+uv run python manage.py makemigrations --check --dry-run
+
+# Run tests (pytest-django + hypothesis; NRMP_Simulated/settings_test.py runs the production configuration
+# against an in-memory SQLite database; set NRMP_TEST_DATABASE_URL=postgres://... to use PostgreSQL)
+uv run pytest
 ```
 
 ### Docker Development
@@ -143,7 +149,7 @@ This is a Django-based web application that simulates the National Resident Matc
 - Alpine.js for client-side interactivity
 
 **Development Tools**:
-- Ruff for linting and formatting (configured in pyproject.toml)
+- Ruff for linting and formatting (configured in ruff.toml)
 - mypy for type checking
 - pytest for testing
 - django-debug-toolbar for development debugging

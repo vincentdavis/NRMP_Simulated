@@ -1,5 +1,4 @@
-"""
-WSGI config for NRMP_Simulated project.
+"""WSGI config for NRMP_Simulated project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 

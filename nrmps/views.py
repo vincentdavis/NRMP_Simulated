@@ -70,7 +70,7 @@ def _page_size(request) -> int:
     """Return the requested page size if it is one of the offered sizes, else 100."""
     try:
         size = int(request.GET.get("page_size", 100))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 100
     return size if size in PAGE_SIZES else 100
 
@@ -593,9 +593,7 @@ def documentation(request):
             "validate_constraints",
         ],
         # Functions to exclude
-        "excluded_functions": [
-            "generate_meta_scores",  # Example: hide this function
-        ],
+        "excluded_functions": [],
         # Check for special attributes to control documentation
         "respect_doc_attributes": True,  # Use __doc_include__ and __doc_exclude__
     }
@@ -610,10 +608,7 @@ def documentation(request):
             return False
         if hasattr(obj, "__doc_include__") and obj.__doc_include__:
             return True
-        if hasattr(obj, "__doc_private__") and obj.__doc_private__:
-            return False
-
-        return True
+        return not (hasattr(obj, "__doc_private__") and obj.__doc_private__)
 
     def extract_docstring_info(obj):
         """Extract and clean docstring from an object."""
@@ -685,8 +680,8 @@ def documentation(request):
                     "help_text": getattr(field, "help_text", ""),
                 }
                 model_info["fields"].append(field_info)
-        except Exception:
-            pass  # Skip if field extraction fails
+        except AttributeError, TypeError:
+            logger.debug("Could not list the fields of %s for the documentation page", name)
 
         model_classes.append(model_info)
 

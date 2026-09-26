@@ -58,8 +58,8 @@ Railway terminates TLS and forwards `X-Forwarded-Proto`. With `DEBUG` off the ap
 - sends HSTS with `max-age=3600` (`SECURE_HSTS_SECONDS`).
 
 Once HTTPS is confirmed everywhere, raise `SECURE_HSTS_SECONDS` to `31536000`. Subdomains and preload stay off on
-purpose. `manage.py check --deploy` therefore reports `security.W005` and `security.W021`, and those two are the
-only accepted warnings.
+purpose, so their deploy-check warnings (`security.W005`, `security.W021`) are silenced in the settings; CI runs
+`manage.py check --deploy --fail-level WARNING`, so any other warning fails the build.
 
 ## Email (*Planned*, step 1.9)
 

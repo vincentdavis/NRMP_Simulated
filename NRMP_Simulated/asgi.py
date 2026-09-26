@@ -1,5 +1,4 @@
-"""
-ASGI config for NRMP_Simulated project.
+"""ASGI config for NRMP_Simulated project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 

@@ -15,10 +15,12 @@ from .validators import validate_attribute_list
 
 
 def default_school_meta_preference():
+    """Return the default applicant attributes that programs evaluate."""
     return ["board_scores", "research", "honors"]
 
 
 def default_applicant_meta_preference():
+    """Return the default program attributes that applicants evaluate."""
     return ["program_size", "reputation", "location"]
 
 
@@ -98,11 +100,9 @@ def _population_change(method):
 
 
 class User(AbstractUser):
-    """Custom user model extending Django's AbstractUser.
-    Note: Django's AbstractUser already includes username, password, email fields
-    """
+    """Custom user model extending Django's AbstractUser (which provides username, password and email)."""
 
-    full_name = models.CharField(max_length=255, blank=True, null=True)
+    full_name = models.CharField(max_length=255, blank=True, default="")
     disabled = models.BooleanField(default=False, null=True, blank=True)
     status = models.CharField(max_length=50, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -215,8 +215,6 @@ class Simulation(models.Model):
         - Raises MissingConfigError if the simulation has no configuration.
         - Returns the number of students created.
         """
-        import random
-
         config = self.configs.order_by("-id").first()
         if config is None:
             raise MissingConfigError()
@@ -298,8 +296,6 @@ class Simulation(models.Model):
         - Raises MissingConfigError if the simulation has no configuration.
         - Returns the number of schools created.
         """
-        import random
-
         config = self.configs.order_by("-id").first()
         if config is None:
             raise MissingConfigError()
@@ -322,7 +318,7 @@ class Simulation(models.Model):
             # Use beta distribution to ensure scores stay between 0-1
             base_score = generate_beta_score(score_mean, score_std) if score_std > 0 else float(score_mean)
             capacity_raw = random.gauss(cap_mean, cap_std) if cap_std > 0 else float(cap_mean)
-            capacity = int(round(capacity_raw))
+            capacity = round(capacity_raw)
             if capacity < 0:
                 capacity = 0
             score_meta = {}
@@ -371,12 +367,12 @@ class Simulation(models.Model):
         return len(to_create)
 
     @_population_change
-    def delete_students(self) -> int:
+    def delete_students(self) -> None:
         """Delete the student population for this simulation."""
         self.students.all().delete()
 
     @_population_change
-    def delete_schools(self) -> int:
+    def delete_schools(self) -> None:
         """Delete the school population for this simulation."""
         self.schools.all().delete()
 
@@ -551,6 +547,9 @@ class SimulationConfig(models.Model):
         help_text="Not used yet: how noisy programs' view of applicants is after interviewing.",
     )
 
+    def __str__(self):
+        return f"{self.simulation.name}-{self.id}"
+
     def clean(self):
         """Reject base-score standard deviations that no Beta distribution with the requested mean can have.
 
@@ -572,19 +571,6 @@ class SimulationConfig(models.Model):
                 )
         if errors:
             raise ValidationError(errors)
-
-    def __str__(self):
-        return f"{self.simulation.name}-{self.id}"
-
-
-def generate_meta_scores(self, score: float, meta_scores: list[str], meta_stddev: float) -> dict[str:float]:
-    """Generates meta-scores for each student and school."""
-    for meta in meta_scores:
-        self.score_meta[meta] = score + random.gauss(0, meta_stddev)
-
-
-# Example: This function will be hidden from documentation
-generate_meta_scores.__doc_exclude__ = True
 
 
 class Student(models.Model):

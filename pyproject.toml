@@ -21,11 +21,13 @@ prod = [
     "psycopg[binary]>=3.3.6",
 ]
 dev = [
+    "codespell>=2.4.3",
     "django-browser-reload>=1.21.0",
     "django-debug-toolbar>=8.0.0",
     "django-reset-migrations>=0.4.0",
-    "django-stubs>=6.1.1",
+    "django-stubs[compatible-mypy]>=6.1.1",
     "django-tailwind[cookiecutter,honcho,reload]>=4.5.0",
+    "hypothesis>=6.168.1",
     "pytest>=9.1.1",
     "pytest-django>=4.14.0",
     "ruff>=0.16.9",
@@ -41,3 +43,27 @@ filterwarnings = [
     # WhiteNoise warns that STATIC_ROOT does not exist until collectstatic has run.
     "ignore:No directory at:UserWarning",
 ]
+
+[tool.mypy]
+plugins = ["mypy_django_plugin.main"]
+exclude = ["migrations/", "^docs/"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[tool.django-stubs]
+django_settings_module = "NRMP_Simulated.settings_test"
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "axes.*", "debug_toolbar.*", "django_browser_reload.*", "hypothesis.*"]
+ignore_missing_imports = true
+
+[tool.uv]
+# Local development and CI get the production database driver and server too, so tests can run on PostgreSQL.
+# The Docker image installs `--no-dev --group prod`.
+default-groups = ["dev", "prod"]
+
+[tool.codespell]
+# Vendored, minified or generated files, binaries and local caches.
+skip = "*.lock,package-lock.json,./static/js,./theme/static,./theme/static_src/node_modules,./staticfiles,./.venv,./.git,*.png,*.jpg,*.sqlite3,*.sqlite,./.ruff_cache,./.pytest_cache,./.mypy_cache,./.hypothesis,./.idea"
+# AER: American Economic Review (a citation in the review).
+ignore-words-list = "aer"

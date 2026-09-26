@@ -25,6 +25,7 @@ class SignupForm(UserCreationForm):
         fields = ("username", "full_name", "email")
 
     def save(self, commit: bool = True):
+        """Save the user, including the optional full name and email."""
         user = super().save(commit=False)
         user.full_name = self.cleaned_data.get("full_name", "")
         email = self.cleaned_data.get("email")
