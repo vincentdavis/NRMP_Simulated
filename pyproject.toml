@@ -32,6 +32,7 @@ dev = [
     "django-stubs[compatible-mypy]>=6.1.1",
     "django-tailwind[cookiecutter,honcho,reload]>=4.5.0",
     "hypothesis>=6.168.1",
+    "matching>=1.4.3",
     "pytest>=9.1.1",
     "pytest-django>=4.14.0",
     "pytest-playwright>=0.9.0",
@@ -76,7 +77,7 @@ strict_equality = true
 extra_checks = true
 
 [[tool.mypy.overrides]]
-module = ["scipy.*", "axes.*", "debug_toolbar.*", "django_browser_reload.*", "hypothesis.*", "axe_playwright_python.*"]
+module = ["scipy.*", "matching.*", "axes.*", "debug_toolbar.*", "django_browser_reload.*", "hypothesis.*", "axe_playwright_python.*"]
 ignore_missing_imports = true
 
 [tool.uv]

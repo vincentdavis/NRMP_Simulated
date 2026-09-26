@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import zipfile
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -15,7 +16,7 @@ from numpy.typing import NDArray
 
 from nrmps.params import canonical_json
 
-from .pipeline import SideResult
+from .pipeline import PipelineResult, SideResult
 from .population import ApplicantSide, Population, ProgramSide
 
 FORMAT = "nrmp-population"
@@ -164,3 +165,124 @@ def results_from_npz(data: bytes) -> tuple[SideResult, SideResult]:
         popularity=arrays["applicant_popularity"].astype(np.int64),
     )
     return applicants, programs
+
+
+# --- Stage decisions (model_spec.md §7-8) ----------------------------------------------------------------------------
+# Only decisions are stored: who applied, signalled, was invited, interviewed, ranked and matched. Every continuous
+# value (views, screening scores, realised utilities) is recomputed exactly from the population and the seed.
+
+
+@dataclass(frozen=True, eq=False)
+class StageRecord:
+    """The decisions of the stages from applications to the match."""
+
+    algorithm: str
+    # Per application (sorted by applicant, then program).
+    i: NDArray[np.int32]
+    j: NDArray[np.int32]
+    pre_rank: NDArray[np.int32]
+    category: NDArray[np.int8]
+    signal_tier: NDArray[np.int8]
+    invite_wave: NDArray[np.int8]
+    eligible: NDArray[np.bool_]
+    accepted: NDArray[np.bool_]
+    applicant_rank: NDArray[np.int16]
+    program_rank: NDArray[np.int16]
+    # Per applicant.
+    count: NDArray[np.int32]
+    competitiveness: NDArray[np.float64]
+    standing: NDArray[np.float64]
+    certified: NDArray[np.bool_]
+    match_program: NDArray[np.int32]
+    match_applicant_rank: NDArray[np.int16]
+    match_program_rank: NDArray[np.int16]
+    alternative: NDArray[np.int32] | None
+    # Per program.
+    prestige: NDArray[np.float64]
+    program_uses_signals: NDArray[np.bool_]
+    slots: NDArray[np.int32]
+    filled: NDArray[np.int32]
+    # Per signal tier.
+    signal_boost: NDArray[np.float64]
+
+
+STAGE_DTYPES = {
+    "i": "<i4",
+    "j": "<i4",
+    "pre_rank": "<i4",
+    "category": "i1",
+    "signal_tier": "i1",
+    "invite_wave": "i1",
+    "eligible": "?",
+    "accepted": "?",
+    "applicant_rank": "<i2",
+    "program_rank": "<i2",
+    "count": "<i4",
+    "competitiveness": "<f8",
+    "standing": "<f8",
+    "certified": "?",
+    "match_program": "<i4",
+    "match_applicant_rank": "<i2",
+    "match_program_rank": "<i2",
+    "alternative": "<i4",
+    "prestige": "<f8",
+    "program_uses_signals": "?",
+    "slots": "<i4",
+    "filled": "<i4",
+    "signal_boost": "<f8",
+}
+
+
+def stage_record(result: PipelineResult) -> StageRecord:
+    """Return the decisions of a pipeline result."""
+    applications, signals, invitations = result.applications, result.signals, result.invitations
+    lists, match = result.lists, result.match
+    return StageRecord(
+        algorithm=match.algorithm,
+        i=applications.i,
+        j=applications.j,
+        pre_rank=applications.pre_rank,
+        category=applications.category,
+        signal_tier=signals.tier,
+        invite_wave=invitations.wave,
+        eligible=invitations.eligible,
+        accepted=invitations.accepted,
+        applicant_rank=lists.applicant_rank.astype(np.int16),
+        program_rank=lists.program_rank.astype(np.int16),
+        count=applications.count,
+        competitiveness=applications.competitiveness,
+        standing=applications.standing,
+        certified=lists.certified,
+        match_program=match.program,
+        match_applicant_rank=match.applicant_list_rank.astype(np.int16),
+        match_program_rank=match.program_list_rank.astype(np.int16),
+        alternative=match.alternative,
+        prestige=applications.prestige,
+        program_uses_signals=signals.program_uses,
+        slots=invitations.slots,
+        filled=match.filled,
+        signal_boost=signals.boost,
+    )
+
+
+def stages_to_npz(record: StageRecord) -> bytes:
+    """Serialise the stage decisions."""
+    arrays = {
+        name: np.asarray(getattr(record, name)).astype(dtype, copy=False)
+        for name, dtype in STAGE_DTYPES.items()
+        if getattr(record, name) is not None
+    }
+    return write_npz(arrays, {"format": "nrmp-stages", "version": 1, "algorithm": record.algorithm})
+
+
+def stages_from_npz(data: bytes) -> StageRecord:
+    """Load stage decisions written by `stages_to_npz`, in native byte order."""
+    arrays, meta = read_npz(data)
+    if meta.get("format") != "nrmp-stages":
+        raise ValueError("Not a stage file")
+    native = {
+        name: arrays[name].astype(np.dtype(dtype).newbyteorder("="))
+        for name, dtype in STAGE_DTYPES.items()
+        if name in arrays
+    }
+    return StageRecord(algorithm=str(meta["algorithm"]), alternative=native.pop("alternative", None), **native)

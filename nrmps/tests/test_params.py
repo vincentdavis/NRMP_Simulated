@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from nrmps.params import (
     MAX_PAIRS,
+    STAGE_INPUTS,
     ApplicantAttribute,
     SimulationParams,
     iter_fields,
@@ -144,16 +145,10 @@ def test_load_params_fills_defaults():
 
 def test_implemented_data_leaves_out_planned_parameters():
     data = SimulationParams().implemented_data()
-    assert "apps" not in data
-    assert "match" not in data
     assert set(data["run"]) == {"seed"}
-    assert set(data["info"]) == {
-        "applicant_pre_noise_sd",
-        "program_pre_noise_sd",
-        "visibility_heteroskedasticity",
-        "halo_share",
-    }
-    assert set(data["applicants"]["groups"][0]) == {"name", "share", "strength_mean", "strength_sd"}
+    assert set(data["interview"]) == {"applicant_cap", "acceptance_order"}
+    assert "fit_shock_sd" in data["info"]
+    assert "applications_mean" in data["applicants"]["groups"][0]
 
 
 def test_stage_inputs_change_only_with_what_the_stage_reads():
@@ -180,9 +175,35 @@ def test_every_parameter_is_described():
 
 def test_planned_parameters_are_marked():
     planned = {spec.path for spec in iter_fields(SimulationParams) if not spec.implemented}
-    assert {"run.replicates", "info.interview_informativeness", "apps.mean", "match.algorithm"} <= planned
-    assert "run.seed" not in planned
-    assert "info.halo_share" not in planned
+    assert planned == {
+        "run.replicates",
+        "run.resample_population",
+        "run.ci_level",
+        "interview.n_dates",
+        "interview.dates_per_program",
+    }
+
+
+def test_each_stage_reads_only_its_own_parameters():
+    base = SimulationParams()
+    changes = {
+        "applications": {"apps": {"mean": 12}},
+        "signals": {"signals": {"allocation": "random"}},
+        "invitations": {"invites": {"rounds": 5}},
+        "interviews": {"info": {"fit_shock_sd": 0.9}},
+        "rank_lists": {"rol": {"applicant_top_k": 3}},
+        "match": {"match": {"compare_both": True}},
+    }
+    for changed_stage, groups in changes.items():
+        other = SimulationParams.model_validate(groups)
+        for stage in STAGE_INPUTS:
+            same = stage_inputs(other, stage) == stage_inputs(base, stage)
+            assert same == (stage != changed_stage), (changed_stage, stage)
+    # A group's application mean belongs to the applications stage, not to the population.
+    groups = [g.model_dump() | {"applications_mean": 50.0} for g in base.applicants.groups]
+    other = SimulationParams.model_validate({"applicants": {"groups": groups}})
+    assert stage_inputs(other, "population") == stage_inputs(base, "population")
+    assert stage_inputs(other, "applications") != stage_inputs(base, "applications")
 
 
 # --- Forms ------------------------------------------------------------------------------------------------------------
@@ -254,11 +275,18 @@ def test_form_sections_separate_planned_parameters():
     implemented = {bound.name for section in form.sections() for bound in section.fields + section.advanced_fields}
     planned = {bound.name for section in form.sections(planned=True) for bound in section.fields}
     assert "info__applicant_pre_noise_sd" in implemented
-    assert "info__fit_shock_sd" in planned
+    assert "info__fit_shock_sd" in implemented
+    assert "interview__n_dates" in planned
     assert not implemented & planned
     lists = {view.spec.path for section in form.sections() for view in section.lists}
-    assert lists == {"applicants.groups", "applicants.attributes", "programs.tiers", "programs.attributes"}
-    assert not LISTS["signals.tiers"].implemented
+    assert lists == {
+        "applicants.groups",
+        "applicants.attributes",
+        "programs.tiers",
+        "programs.attributes",
+        "signals.tiers",
+    }
+    assert LISTS["signals.tiers"].implemented
 
 
 @settings(max_examples=40, deadline=None)

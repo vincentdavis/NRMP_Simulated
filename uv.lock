@@ -803,6 +803,18 @@ wheels = [
 ]
 
 [[package]]
+name = "matching"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/d2/0c0802609e9f3fd7029ece2a1fc7145be669c6713f3be1da353ac4cdb8ce/matching-1.4.3.tar.gz", hash = "sha256:130d9e88661f623dc39e84675facee2ce2b192420a2f8c4f274a38393837a5de", size = 25144, upload-time = "2023-10-04T14:30:50.198Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/07/a405824cf7392682d949bd482695dbff004dfa259b9be0e32780ffb88941/matching-1.4.3-py3-none-any.whl", hash = "sha256:0ce02354174aff8e0dc6fdc155a0f25e113107b7dbf983e51a8288e1726efdd1", size = 30065, upload-time = "2023-10-04T14:30:48.015Z" },
+]
+
+[[package]]
 name = "mdurl"
 version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -891,6 +903,7 @@ dev = [
     { name = "django-stubs", extra = ["compatible-mypy"] },
     { name = "django-tailwind", extra = ["cookiecutter", "honcho", "reload"] },
     { name = "hypothesis" },
+    { name = "matching" },
     { name = "pytest" },
     { name = "pytest-django" },
     { name = "pytest-playwright" },
@@ -928,6 +941,7 @@ dev = [
     { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=6.1.1" },
     { name = "django-tailwind", extras = ["cookiecutter", "honcho", "reload"], specifier = ">=4.5.0" },
     { name = "hypothesis", specifier = ">=6.168.1" },
+    { name = "matching", specifier = ">=1.4.3" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-django", specifier = ">=4.14.0" },
     { name = "pytest-playwright", specifier = ">=0.9.0" },

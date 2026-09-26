@@ -1,16 +1,17 @@
-# NRMP Simulated: model specification 2.0
+# NRMP Simulated: model specification 2.1
 
-**Status: normative for `model_version = "2.0"`** (engine `2.0.x`, parameter schema v1 in `nrmps/params.py`),
-adopted by owner decision D1 on 2026-09-25. The Python engine (`nrmps/engine/`), the help formulas, presets and any
+**Status: normative for `model_version = "2.1"`** (engine `2.1.x`, parameter schema v1 in `nrmps/params.py`).
+Model 2.0 was adopted by owner decision D1 on 2026-09-25; 2.1 adds the stages from applications to the match (§7–8)
+and leaves §3–6 unchanged. The Python engine (`nrmps/engine/`), the help formulas, presets and any
 browser port implement this document. Every run stores the `model_version` it used (§12.11); any change to a
 formula, a stream ID or a draw recipe needs a new model version, because results are then no longer reproducible
 from (parameters, seed). The defects of the legacy v1 generator that motivated this model are described in
 [Appendix A §1](review/A-model-spec.md) of the project review; by decision D3 the v1 generator and its results are
 removed rather than kept read-only.
 
-Implementation status: Phase 2 implements §3–6, the pre-interview ranks of §8 and the diagnostics of §10 that exist
-before applications. §7, rank order lists and the match are specified but not implemented; their parameters exist in
-the schema with `implemented = false` (§12.10).
+Implementation status: everything in §3–10 is implemented for single applicants. Replicates, SOAP, couples, dates
+and the optional Bayesian interview update are specified as planned; their parameters exist in the schema with
+`implemented = false` (§12.10).
 
 ---
 
@@ -150,7 +151,7 @@ $\operatorname{Corr}_j(C,T_{i\cdot})=0$ for *every* applicant, not only on avera
 
 **Defaults:** $\rho_A=0.6$, $\rho_P=0.7$, $\beta=0.3$, $\tau=0.5$, $\lambda=10$. In schema v1 β, τ and λ are shared by
 both sides. Planned geography terms ($\gamma_A\,\mathbb 1\{\text{region}_i=\text{region}_j\}$, $\gamma_P$) are not
-part of model 2.0.
+part of model 2.1.
 
 ---
 
@@ -168,31 +169,101 @@ $$\hat u_{ij}=u_{ij}+\sigma_{A,pre}\,h_j\,\delta_{ij},\qquad \hat v_{ji}=v_{ji}+
 - **Halo (correlated error)** ψ: $\delta_{ij}=\sqrt{1-\psi}\,\delta^0_{ij}+\sqrt\psi\,\nu_j$, so everyone misjudges
   program $j$ in the same direction (herding); symmetrically $\zeta_{ji}=\sqrt{1-\psi}\,\zeta^0_{ji}+\sqrt\psi\,\nu'_i$.
   $\delta^0$ (`PRE_A`), $\zeta^0$ (`PRE_P`), $\nu$ (`HALO_A`) and $\nu'$ (`HALO_P`) are standard normals.
-- **Signals** (planned) enter the program's screening score, not its utility:
-  $\text{screen}_{ji}=\hat v_{ji}+b_{\text{tier}(ij)}$, $b$ in SD units. By default signals do not affect rank lists.
+- **Signals** enter the program's screening score, not its utility (§7.3); by default they do not affect rank lists.
 
 ---
 
-## 7. Interviews and post-interview update (planned)
+## 7. From applications to interviews
 
-For each pair that interviewed:
-- **Fit shock** $f_{ij}\sim N(0,\sigma_{fit})$ (stream `FIT`) is revealed: $u^*_{ij}=u_{ij}+f_{ij}$; welfare metrics use
-  $u^*$. Programs are symmetric with $g_{ji}$.
-- **Post-interview observation:** $\tilde u_{ij}=u^*_{ij}+(1-\kappa)\,\sigma_{A,pre}\,h_j\,\delta_{ij}$, reusing the
-  *same* $\delta_{ij}$, so the interview shrinks the existing misperception. κ = 0 leaves the error unchanged; κ = 1
-  reveals the truth. An optional Bayesian variant combines $\hat u$ with a fresh signal (Appendix A §7).
-- Pairs that did not interview get no post-interview score and cannot be ranked.
+Model 2.1 adds these stages; §3–6 are unchanged, so everything up to the pre-interview ranks is reproduced exactly.
+Every stage works on the sparse set of pairs that reached it. Two public percentiles recur:
+
+- the program's **prestige** $p_j$, the quantile (§12.5) of the applicants' common view $C_j$;
+- the applicant's **self-assessed competitiveness** $c_i$, the quantile of $S_i+\sigma_{self}\,\xi_i$, where $S_i$ is
+  the programs' common view of the applicant (§5), $\xi_i\sim N(0,1)$ and $\sigma_{self}$ =
+  `apps.self_assessment_noise_sd` (0 = perfect self-knowledge).
+
+### 7.1 Applications (stream `APPS`)
+
+- **Count.** $\mu_i$ is the applicant's group `applications_mean`, or `apps.mean` when blank. `fixed`:
+  $k_i=\operatorname{round}(\mu_i)$; `poisson`: $k_i\sim\text{Poisson}(\mu_i)$; `negbin`: negative binomial with mean
+  $\mu_i$ and variance $\mu_i+d\,\mu_i^2$ ($d$ = `apps.dispersion`). Then $k_i=\min(\max(k_i,1),M)$.
+- **Strategy** (`apps.strategy`); every strategy uses the applicant's strict pre-interview ranks (§8) of all programs:
+  - `top_n`: the $k_i$ programs the applicant ranks best before interviews;
+  - `all`: every program ($k_i=M$);
+  - `random`: the $k_i$ programs with the smallest `APPS` pair uniforms $a_{ij}$;
+  - `portfolio`: reach $R_i=\{j:p_j>c_i+b\}$, safety $S_i=\{j:p_j<c_i-b\}$ and target $T_i$ the rest, with
+    $b$ = `apps.target_band`. With $n_R=\min(\operatorname{round}(k_i\,s_R),k_i)$ and
+    $n_S=\min(\operatorname{round}(k_i\,s_S),k_i-n_R)$ from `apps.portfolio_shares`, the applicant takes the best
+    $n_R$ of $R_i$, the best $n_S$ of $S_i$, fills up to $k_i$ with the best of $T_i$, and finally with the best
+    remaining programs of any category ("best" always means the best pre-interview rank).
+
+### 7.2 Signals (stream `SIGNALS`)
+
+- Tiers (`signals.tiers`, for example gold 3 and silver 12) are filled in order. If the applicant's group sets
+  `n_signals`, the applicant sends at most that many in total, filling tiers in order.
+- Signals go only to programs the applicant applied to, in the order given by `signals.allocation`: `top_utility`,
+  the best pre-interview rank first; `realistic`, first the non-reach applications ($p_j\le c_i+b$) by pre-interview
+  rank, then the reach ones; `random`, the smallest `SIGNALS` pair uniforms first.
+- Program $j$ uses signals when its `SIGNALS` population uniform is below `signals.program_use_share`.
+
+### 7.3 Screening, invitations and acceptance (streams `INVITES`, `ACCEPT`)
+
+- **Screening score** of applied pair $(i,j)$:
+  $\text{screen}_{ji}=\hat v_{ji}+\beta_t$ when the applicant signalled $j$ and $j$ uses signals, else
+  $\hat v_{ji}-y\,\max(0,Q^S_i-p_j)$, where $\beta_t$ is the boost of the signal's tier, $y$ =
+  `invites.yield_protection` and $Q^S_i$ the quantile of $S_i$ (a program sees an applicant as overqualified when the
+  applicant stands higher than the program, unless a signal it reads says otherwise).
+- **Hard screen** (strategies `threshold_then_top` and `threshold_then_random`, when `invites.screen_attribute` is
+  set): applicants whose attribute quantile is below `screen_min_percentile` are never invited.
+- **Slots:** $s_j=\lceil \texttt{interviews\_per\_position}\cdot c_j-10^{-9}\rceil$ (the tolerance keeps exact
+  products such as 1.1 × 10 from rounding up).
+- **Waves** $w=1..W$ ($W$ = `invites.rounds`). In each wave every program with open slots
+  $o_j=s_j-\text{accepted}_j>0$ invites up to $\lceil 1.2\,o_j\rceil$, computed exactly as $(12\,o_j+9)$ div 10
+  ($o_j$ in the last wave), of the
+  eligible applicants it has not invited yet: `top_score` and `threshold_then_top` by screening score (ties by the
+  `TIE_P` keys); `signal_first` signalled applicants first (tier order, then score), then the others by score;
+  `threshold_then_random` by the smallest `INVITES` pair uniforms.
+- **Responses.** After all programs have invited, applicants respond in the order of a random permutation (one per
+  wave, from the `ACCEPT` generator). Each goes through their new invitations, `best_first` by pre-interview view
+  $\hat u_{ij}$ or `first_come` by the smallest `ACCEPT` pair uniforms, and accepts while they have fewer than
+  `interview.applicant_cap` accepted interviews and the program has an open slot; otherwise they decline.
+
+### 7.4 Interviews and the post-interview view (streams `FIT`, `FIT_P`)
+
+For each accepted interview:
+- **Fit shock:** $u^*_{ij}=u_{ij}+\sigma_{fit}\,f_{ij}$ and $v^*_{ji}=v_{ji}+\sigma_{fit}\,g_{ji}$ with standard
+  normals $f$ (`FIT`) and $g$ (`FIT_P`); welfare metrics use $u^*$ and $v^*$.
+- **Post-interview view:** $\tilde u_{ij}=u^*_{ij}+(1-\kappa)\,e_{ij}$, where $e_{ij}$ is the *same* pre-interview
+  error term ($\hat u=u+e$, §6), so the interview shrinks the existing misperception: κ = 0 leaves it unchanged,
+  κ = 1 reveals $u^*$ exactly. Programs are symmetric: $\tilde v_{ji}=v^*_{ji}+(1-\kappa)\,e'_{ji}$. An optional
+  Bayesian variant (Appendix A §7) is not part of model 2.1.
+- Pairs that did not interview get no post-interview view and cannot be ranked.
 
 ## 8. Ranking, tie-breaking and the match
 
-- **Strict orders everywhere** (implemented). $\text{rank}_i(j)$ comes from `np.lexsort((t_ij, -score_ij))` with tie
-  keys $t_{ij}$ from `TIE_A` (applicants ranking programs) or `TIE_P` (programs ranking applicants); rank 1 is best and
-  ranks are a permutation of $1..|D_i|$. The domain $D_i$ is explicit: all programs before applications (Phase 2),
-  the applied set afterwards, and interviewed pairs for rank order lists.
-- **Rank order lists** (planned): length ≤ 300; applicant policies all-interviewed, top-k or above-reservation; program
-  policies all-interviewed or do-not-rank below a quantile.
-- **Mechanism** (planned): applicant-proposing deferred acceptance with capacities, optionally program-proposing;
-  0 blocking pairs against submitted lists on every run (singles).
+- **Strict orders everywhere.** $\text{rank}_i(j)$ comes from `np.lexsort((t_ij, -score_ij))` with tie keys
+  $t_{ij}$ from `TIE_A` (applicants ranking programs) or `TIE_P` (programs ranking applicants); rank 1 is best and
+  ranks are a permutation of $1..|D_i|$. The domain $D_i$ is explicit: all programs before applications, and the
+  interviewed pairs for rank order lists.
+- **Rank order lists.** Applicants rank the programs they interviewed at by $\tilde u_{ij}$, keeping, by
+  `rol.applicant_policy`: `all_interviewed` all of them; `top_k` and `truncate_k` the first `applicant_top_k`;
+  `above_reservation` those with $\tilde u_{ij}\ge$ `reservation_utility`; `likelihood_weighted` all of them, ordered
+  by $\tilde u_{ij}+\ln\Phi((c_i-p_j)/b)$ instead (applicants move programs they are less likely to match with down
+  the list). Programs rank the applicants they interviewed by $\tilde v_{ji}$, plus the signal boost when
+  `signals.use_in_ranking` is on and the program uses signals, keeping, by `rol.program_policy`: `all_interviewed`
+  all; `dnr_quantile` the best $\max(1,\lceil n(1-q)-10^{-9}\rceil)$ of $n$ ($q$ = `program_dnr_quantile`); `dnr_threshold`
+  those with $\tilde v_{ji}\ge$ `reservation_utility`. Lists are at most 300 long. Applicants with a non-empty list are
+  *certified* and take part in the match.
+- **Mechanism.** Deferred acceptance with capacities (Gale–Shapley; Roth–Peranson without couples): proposers go down
+  their lists; a program (or an applicant, when programs propose) holds the best offers it ranked, up to its
+  capacity (1 for an applicant), and rejects the rest; proposals to someone who did not rank the proposer are
+  rejected. `match.algorithm` chooses the proposing side (applicants by default, as the NRMP). The result is the
+  unique proposer-optimal stable matching, whatever the processing order.
+- **Validation on every run:** no blocking pair against the submitted lists; capacities respected; each matched
+  pair on both lists. With `match.compare_both` the other side's algorithm also runs; the matched applicants and the
+  number matched to each program must then be equal (rural hospitals theorem), and every applicant weakly prefers
+  the applicant-proposing result.
 
 ---
 
@@ -203,18 +274,18 @@ For each pair that interviewed:
 | # | Test | Status |
 |---|---|---|
 | 1 | Determinism: same (params, seed, replicate) ⇒ byte-identical population npz, identical utilities and metrics JSON | implemented |
-| 2 | CRN: changing only σ_pre keeps population, weights, u and v; changing only ρ keeps the population; κ keeps stages < 7 | implemented (κ planned) |
-| 3 | Exactness: σ = 0 ⇒ $\hat u=u$ and pre-ranks = true ranks; σ > 0, γ_h = 0, large N ⇒ pooled Corr(u, û) within ±0.01 of $\sqrt{1/(1+\sigma^2)}$; κ = 1 ⇒ $\tilde u=u^*$ | implemented (κ planned) |
+| 2 | CRN: changing only σ_pre keeps population, weights, u and v; changing only ρ keeps the population; κ keeps applications, signals and invitations | implemented |
+| 3 | Exactness: σ = 0 ⇒ $\hat u=u$ and pre-ranks = true ranks; σ > 0, γ_h = 0, large N ⇒ pooled Corr(u, û) within ±0.01 of $\sqrt{1/(1+\sigma^2)}$; κ = 1 ⇒ $\tilde u=u^*$ | implemented |
 | 4 | Correlation knob: $\rho_A=1,\sigma=0$ ⇒ identical rankings; for ρ ∈ {0, …, 0.8}, N ≥ 500, M ≥ 100, the mean pairwise correlation is within ±0.02 of ρ (±0.01 at 0); $\operatorname{Corr}_j(C,T_{i\cdot})=0$ for every applicant | implemented (both sides) |
 | 5 | Moments: Var(u) ≈ 1; Dirichlet mean and variance; Σc = P, all c ≥ 1; realised applicants per position | implemented |
 | 6 | Ranks are permutations; tie-breaking differs by seed and repeats for the same seed | implemented |
-| 7 | Match: stability, capacity, rural-hospitals theorem, agreement with an oracle | planned |
+| 7 | Match: stability, capacity, rural-hospitals theorem, agreement with an oracle; stage invariants (applications ≤ M, signals ⊆ applications, accepted ⊆ invited ⊆ applied, caps and slots respected, lists ⊆ interviews) | implemented |
 | 8 | Validation: bad shares, duplicate keys, M > P, the pair guard, bad seeds and mismatched attribute keys raise before any computation | implemented |
 | 9 | JS parity on 200 × 20 markets | planned (the recipe of §12.3–12.4 is fixed now) |
 
 ## 10. Diagnostics
 
-Computed on every pre-interview run (`nrmps/engine/metrics.py` documents the JSON):
+Computed on every run (`nrmps/engine/metrics.py` and `nrmps/engine/outcomes.py` document the JSON):
 
 | Diagnostic | Definition |
 |---|---|
@@ -224,7 +295,12 @@ Computed on every pre-interview run (`nrmps/engine/metrics.py` documents the JSO
 | Fidelity | noise SD, reliability, expected and pooled Corr(u, û), per-agent Spearman(u_i·, û_i·) mean and deciles, observed consensus |
 | First choices | distinct pre-interview first choices, share of the most popular program and of the 10 most popular |
 | Histograms | strength, quality, capacity, per-agent fidelity (20 bins) |
-| Planned | post-interview fidelity, interviews per position, match outcomes, welfare, regret, true-preference blocking pairs |
+| Funnel | applications, signals, invitations, interviews and list entries per applicant and per position; applicants with no interview |
+| Match | match rate (of certified applicants), fill rate, unfilled positions and programs, share matched to their 1st and a top-3 choice, the matched-rank distribution, list length of matched and unmatched applicants, blocking pairs (always 0), and the proposing-side comparison when requested |
+| Signals | signal-to-interview and signal-to-match rates |
+| Welfare | the true-utility rank ($u^*$) of the match among the applicant's interviews; regret against the best interviewed program; post-interview fidelity |
+| By group | match rate and mean matched rank per applicant group and per strength decile |
+| Planned | replicates and intervals, true-preference blocking pairs |
 
 ## 11. Parameter symbols ↔ schema names
 
@@ -241,7 +317,13 @@ Computed on every pre-interview run (`nrmps/engine/metrics.py` documents the JSO
 | $\sigma_{A,pre},\sigma_{P,pre}$ | `info.applicant_pre_noise_sd`, `info.program_pre_noise_sd` | 0.5, 0.5 |
 | κ, $\sigma_{fit}$ | `info.interview_informativeness`, `info.fit_shock_sd` | 0.6, 0.3 |
 | $\gamma_h$, ψ | `info.visibility_heteroskedasticity`, `info.halo_share` | 0, 0 |
-| $b$ | `signals.tiers[].boost` | [] |
+| $\mu_i$, count distribution, $d$ | `apps.mean` (or `applicants.groups[].applications_mean`), `apps.count_dist`, `apps.dispersion` | 30, negbin, 0.5 |
+| strategy, $s_R,s_T,s_S$, $b$, $\sigma_{self}$ | `apps.strategy`, `apps.portfolio_shares`, `apps.target_band`, `apps.self_assessment_noise_sd` | portfolio, 0.25 / 0.5 / 0.25, 0.15, 0.5 |
+| tiers, $\beta_t$ | `signals.tiers[]` (name, count, boost), `signals.allocation`, `signals.program_use_share`, `signals.use_in_ranking` | [], realistic, 1.0, off |
+| $s_j$, $W$, $y$ | `invites.interviews_per_position`, `invites.rounds`, `invites.yield_protection`, `invites.strategy`, `invites.screen_attribute`, `invites.screen_min_percentile` | 10, 3, 0, top_score, blank, 0 |
+| interview cap | `interview.applicant_cap`, `interview.acceptance_order` | 12, first_come |
+| list policies | `rol.applicant_policy`, `rol.applicant_top_k`, `rol.reservation_utility`, `rol.program_policy`, `rol.program_dnr_quantile` | all_interviewed, 20, −1.0, dnr_quantile, 0.1 |
+| mechanism | `match.algorithm`, `match.compare_both` | applicant_proposing, off |
 
 ---
 
@@ -262,14 +344,21 @@ These definitions make results reproducible and portable. Changing any of them c
 | 7 | `IDIO_P` | pair | $\eta_{ji}$ |
 | 8 | `PRE_A` | pair | $\delta^0_{ij}$ |
 | 9 | `PRE_P` | pair | $\zeta^0_{ji}$ |
-| 10–16 | `APPS`, `SIGNALS`, `INVITES`, `ACCEPT`, `FIT`, `POST_A`, `POST_P` | planned | later stages |
+| 10 | `APPS` | population, pair | application counts $k_i$ and self-assessment $\xi_i$; `random` strategy keys $a_{ij}$ |
+| 11 | `SIGNALS` | population, pair | which programs use signals; `random` allocation keys |
+| 12 | `INVITES` | pair | `threshold_then_random` invitation keys |
+| 13 | `ACCEPT` | population, pair | applicants' response order per wave; `first_come` keys |
+| 14 | `FIT` | pair | applicants' fit shocks $f_{ij}$ |
+| 15, 16 | `POST_A`, `POST_P` | planned | the Bayesian interview update |
 | 17 | `TIE_A` | pair | applicants' tie keys |
 | 18 | `TIE_P` | pair | programs' tie keys |
 | 19 | `SOAP` | planned | post-match SOAP |
 | 20 | `HALO_A` | pair | $\nu_j$ at pair (0, j) |
 | 21 | `HALO_P` | pair | $\nu'_i$ at pair (i, 0) |
+| 22 | `FIT_P` | pair | programs' fit shocks $g_{ji}$ |
 
-IDs are never renumbered or reused. `IDIO_*` count as population streams for the replicate modes (§3).
+IDs are never renumbered or reused. `IDIO_*` count as population streams for the replicate modes (§3). A stream of
+both kinds draws its population values from its `Generator` and its pair values from Philox with its ID.
 
 ### 12.2 Population-level draws
 
@@ -285,6 +374,10 @@ i.e. child `stream` of child `replicate` of `SeedSequence(seed)`. Draw order per
   block of Gamma(α + 1) variates $G$, then an $n\times K$ block of uniforms $U\in(0,1]$ (`1 - random()`);
   $\log g=\log G+\log(U)/\alpha$ (Marsaglia–Tsang boost), then $w=\exp(\log g-\max)/\sum\exp(\log g-\max)$ per row.
   With one attribute $w\equiv1$ and nothing is drawn.
+- `APPS`: N counts (`poisson`: `poisson(μ)`; `negbin`: `negative_binomial(1/d, (1/d)/(1/d + μ))`; `fixed`: none),
+  then N standard normals $\xi$.
+- `SIGNALS`: M uniforms (program use).
+- `ACCEPT`: one permutation of the N applicant indices per invitation wave, in wave order.
 
 These rely on numpy's `Generator` algorithms, which numpy may change between versions; store the numpy version with
 a run, and store populations (npz) when they must survive upgrades.
@@ -370,8 +463,13 @@ R     = d[i,0]*ỹ[j,0] + d[i,1]*ỹ[j,1] + …     (accumulated left to right o
 T     = (R - mean_i) / sd_i
 inner = sqrt(tau_i)*T + sqrt(1 - tau_i)*eps_ij
 u     = sqrt(rho)*C[j] + sqrt(1 - rho)*inner
-u_hat = u + scale[j]*delta_ij,   scale[j] = sigma_pre*(1 + gamma_h*(1 - P_j))
+e     = scale[j]*delta_ij,   scale[j] = sigma_pre*(1 + gamma_h*(1 - P_j))
 delta = sqrt(1 - psi)*delta0_ij + sqrt(psi)*nu_j
+u_hat = u + e
+u_star = u + sigma_fit*f_ij                     (interviewed pairs; programs: v + sigma_fit*g_ji)
+u_post = u_star + (1 - kappa)*e
+screen = v_hat + boost                           (signalled, program uses signals)
+screen = v_hat - y*max(0, QS_i - p_j)            (not signalled)
 ```
 
 The attribute contraction is an explicit fixed-order sum rather than a BLAS matrix product, so any block of rows,
@@ -392,21 +490,18 @@ and keys unique and matching `^[a-z][a-z0-9_]{0,39}$`; shapes and dtypes; no NaN
 ≥ 1; weight rows non-negative summing to 1 ± 10⁻⁶. The attribute keys of the parameters must equal the population's.
 `population_digest` hashes canonical metadata and little-endian float64 / int16 / int32 array bytes.
 
-### 12.10 Parameters implemented in model 2.0 (Phase 2)
+### 12.10 Parameters implemented in model 2.1
 
 | Group | Implemented | Planned (in the schema, `implemented = false`) |
 |---|---|---|
 | run | `seed` | `replicates`, `resample_population` (the engine already maps population streams to replicate 0 unless it is set), `ci_level` |
-| market | all fields | – |
-| applicants | `groups[]` name, share, strength_mean, strength_sd; `attributes[]` | `groups[].applications_mean`, `groups[].n_signals` |
-| programs | `quality_sd`, `tiers[]`, `attributes[]` | – |
-| prefs | all fields | – |
-| info | `applicant_pre_noise_sd`, `program_pre_noise_sd`, `visibility_heteroskedasticity`, `halo_share` | `interview_informativeness`, `fit_shock_sd` |
-| apps, signals, invites, interview, rol, match | – | all fields |
+| market, applicants, programs, prefs, info, apps, signals, invites, rol, match | all fields | – |
+| interview | `applicant_cap`, `acceptance_order` | `n_dates`, `dates_per_program` |
 
-Cross-field rules on implemented parameters are validation errors (group and tier shares sum to 1 within 10⁻⁶,
-unique names and keys, M ≤ P, $N\cdot M\le5\times10^7$); rules on planned stages are warnings
-(`SimulationParams.warnings()`).
+Cross-field rules are validation errors when they would make a stage impossible (group and tier shares sum to 1
+within 10⁻⁶, unique names and keys, M ≤ P, $N\cdot M\le5\times10^7$); rules that only make a setting unusual are
+warnings (`SimulationParams.warnings()`), for example portfolio shares that do not add up to 1 or fewer interview
+slots per applicant than half the interview cap.
 
 ### 12.11 Version stamps
 
@@ -414,11 +509,18 @@ Every run stores, next to its parameters and seed:
 
 | Stamp | Source | Changes when |
 |---|---|---|
-| `model_version` | `nrmps.engine.MODEL_VERSION` (`"2.0"`) | a formula, stream ID, draw recipe or numeric definition in this document changes |
-| `engine_version` | `nrmps.engine.ENGINE_VERSION` (`"2.0.x"`) | the engine code changes without changing results (the patch number), or with a new model version |
+| `model_version` | `nrmps.engine.MODEL_VERSION` (`"2.1"`) | a formula, stream ID, draw recipe or numeric definition in this document changes |
+| `engine_version` | `nrmps.engine.ENGINE_VERSION` (`"2.1.x"`) | the engine code changes without changing results (the patch number), or with a new model version |
 | `schema_version` | `nrmps.params.SCHEMA_VERSION` (1) | the parameter schema changes incompatibly; older versions are upgraded on load |
 | `app_version` | `version` in `pyproject.toml` | a release |
 | `git_sha` | `GIT_SHA` or Railway's `RAILWAY_GIT_COMMIT_SHA` | every deploy (empty when unknown) |
 | `numpy_version`, `python_version` | the running interpreter | an upgrade; population draws use numpy's algorithms (§12.2) |
 
 Exports carry the same stamps, so a result can be traced to the code and model that produced it.
+
+### 12.12 Model history
+
+| Version | Changes |
+|---|---|
+| 2.0 | Population, true utilities, the pre-interview view and strict ranks (§3–6, §8 ranks). |
+| 2.1 | Applications, signals, screening and invitations, interviews, rank order lists and the match (§7–8); streams 10–14 and 22 defined. Results of §3–6 are unchanged. |

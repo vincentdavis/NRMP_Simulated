@@ -174,7 +174,12 @@ SECTIONS = (
     "rol",
     "match",
 )
-IMPLEMENTED_SECTIONS = ("run", "market", "applicants", "programs", "prefs", "info")
+IMPLEMENTED_SECTIONS = tuple(
+    key
+    for key in SECTIONS
+    if not isinstance(extra := SimulationParams.model_fields[key].json_schema_extra, dict)
+    or extra.get("implemented", True) is not False
+)
 LISTS = _list_specs()
 
 

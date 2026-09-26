@@ -5,6 +5,7 @@ import json
 import pytest
 from django.urls import reverse
 
+from nrmps.engine import ENGINE_VERSION, MODEL_VERSION
 from nrmps.models import Simulation, SimulationRun
 from nrmps.params import SimulationParams, load_params
 from nrmps.params_forms import post_data
@@ -138,7 +139,13 @@ def test_other_users_cannot_see_or_run_the_simulation(client, other_user, simula
 
 def test_run_page_shows_versions_stages_and_diagnostics(auth_client, finished_run):
     body = auth_client.get(_run_url(finished_run)).content.decode()
-    for text in ("Run 1", "Model 2.0, engine 2.0.0", "Population", "Pre-interview", "Agreement (true utilities)"):
+    for text in (
+        "Run 1",
+        f"Model {MODEL_VERSION}, engine {ENGINE_VERSION}",
+        "Population",
+        "Pre-interview",
+        "Agreement (true utilities)",
+    ):
         assert text in body, text
     assert "Applicant groups" in body
     assert "Distributions" in body
@@ -217,7 +224,7 @@ def test_csv_downloads_stream(auth_client, finished_run, name, first_line, lines
 def test_json_downloads(auth_client, finished_run):
     record = json.loads(_body(auth_client.get(_run_url(finished_run, "run_download", name="metrics.json"))))
     assert record["seed"] == 12345
-    assert record["stamps"]["model_version"] == "2.0"
+    assert record["stamps"]["model_version"] == MODEL_VERSION
     assert record["metrics"]["market"]["n_applicants"] == 60
     params = json.loads(_body(auth_client.get(_run_url(finished_run, "run_download", name="params.json"))))
     assert load_params(params) == load_params(SMALL_PARAMS)

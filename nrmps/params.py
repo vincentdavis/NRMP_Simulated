@@ -244,16 +244,14 @@ class ApplicantGroup(ParamGroup):
     applications_mean: float | None = param(
         None,
         title="Applications (mean)",
-        description="Mean number of applications for this group; blank uses the overall mean.",
-        implemented=False,
+        description="Mean applications for this group; blank uses the overall mean.",
         ge=1,
         le=7_000,
     )
     n_signals: int | None = param(
         None,
         title="Signals",
-        description="Number of preference signals for this group; blank uses the signal tiers.",
-        implemented=False,
+        description="Most signals an applicant in this group sends; blank uses the signal tiers in full.",
         ge=0,
         le=100,
     )
@@ -505,7 +503,6 @@ class InfoParams(ParamGroup):
         0.6,
         title="Interview informativeness",
         description="How much an interview shrinks the pre-interview error (0 = not at all, 1 = reveals the truth).",
-        implemented=False,
         ge=0,
         le=1,
     )
@@ -514,7 +511,6 @@ class InfoParams(ParamGroup):
         title="Interview fit shock",
         description="New fit, good or bad, that only shows at the interview.",
         unit="SD",
-        implemented=False,
         ge=0,
         le=2,
     )
@@ -539,7 +535,7 @@ class InfoParams(ParamGroup):
     )
 
 
-# --- planned stages ---------------------------------------------------------------------------------------------
+# --- from applications to the match (model_spec.md §7-8) ------------------------------------------------------
 
 
 class PortfolioShares(ParamGroup):
@@ -551,27 +547,26 @@ class PortfolioShares(ParamGroup):
 
 
 class AppsParams(ParamGroup):
-    """Applications (planned, Phase 3)."""
+    """Applications (model_spec.md §7.1)."""
 
     count_dist: Literal["fixed", "poisson", "negbin"] = param(
         "negbin",
         title="Application count",
         description="Distribution of the number of applications per applicant.",
-        implemented=False,
     )
     mean: float = param(
         30.0,
         title="Applications (mean)",
-        description="Mean applications per applicant (ERAS 2025-26 real average: about 82).",
-        implemented=False,
+        description=(
+            "Mean applications per applicant; a group's own mean replaces it (ERAS 2025-26 real average: about 82)."
+        ),
         ge=1,
         le=7_000,
     )
     dispersion: float = param(
         0.5,
         title="Application dispersion",
-        description="Negative-binomial dispersion of the application count.",
-        implemented=False,
+        description="Spread of the negative-binomial application count: the variance is mean + dispersion x mean².",
         level="advanced",
         ge=0.01,
         le=10,
@@ -579,20 +574,23 @@ class AppsParams(ParamGroup):
     strategy: Literal["top_n", "portfolio", "all", "random"] = param(
         "portfolio",
         title="Application strategy",
-        description="How applicants choose programs.",
-        implemented=False,
+        description=(
+            "How applicants choose programs: the best by their pre-interview view (top n), a reach / target / safety "
+            "portfolio, every program, or at random."
+        ),
     )
     portfolio_shares: PortfolioShares = param(
         title="Portfolio mix",
         description="Reach, target and safety shares of the portfolio strategy; they add up to 1.",
         default_factory=PortfolioShares,
-        implemented=False,
     )
     target_band: float = param(
         0.15,
         title="Target band",
-        description="Percentile gap between applicant and program that still counts as a target.",
-        implemented=False,
+        description=(
+            "How close a program's prestige percentile must be to the applicant's self-assessed standing to count "
+            "as a target (portfolio strategy and realistic signals)."
+        ),
         level="advanced",
         ge=0,
         le=0.5,
@@ -602,7 +600,6 @@ class AppsParams(ParamGroup):
         title="Self-assessment error",
         description="Error in applicants' estimate of their own competitiveness (0 = perfect self-knowledge).",
         unit="SD",
-        implemented=False,
         ge=0,
         le=2,
     )
@@ -619,26 +616,23 @@ class SignalTier(ParamGroup):
 
 
 class SignalsParams(ParamGroup):
-    """Preference signals (planned, Phase 3)."""
+    """Preference signals (model_spec.md §7.2)."""
 
     tiers: list[SignalTier] = param(
         title="Signal tiers",
         description="Signal tiers, for example gold 3 / boost 0.8 and silver 12 / boost 0.4.",
         default_factory=list,
         max_length=MAX_SIGNAL_TIERS,
-        implemented=False,
     )
     allocation: Literal["top_utility", "realistic", "random"] = param(
         "realistic",
         title="Signal allocation",
         description="Where applicants send their signals.",
-        implemented=False,
     )
     program_use_share: float = param(
         1.0,
         title="Programs using signals",
         description="Share of programs that use signals when screening.",
-        implemented=False,
         ge=0,
         le=1,
     )
@@ -646,40 +640,40 @@ class SignalsParams(ParamGroup):
         False,
         title="Signals affect rank lists",
         description="Whether a signal also affects programs' rank lists.",
-        implemented=False,
     )
 
 
 class InvitesParams(ParamGroup):
-    """Screening and interview invitations (planned, Phase 3)."""
+    """Screening and interview invitations (model_spec.md §7.3)."""
 
     interviews_per_position: float = param(
         10.0,
         title="Interviews per position",
         description="Interview slots per position: each program has ceil(ratio x positions) slots.",
-        implemented=False,
         ge=1,
         le=30,
     )
     strategy: Literal["top_score", "threshold_then_top", "threshold_then_random", "signal_first"] = param(
         "top_score",
         title="Invitation strategy",
-        description="How programs choose whom to invite.",
-        implemented=False,
+        description=(
+            "How programs choose whom to invite: by screening score; after the hard screen by score or at random; "
+            "or signalled applicants first."
+        ),
     )
     screen_attribute: str | None = param(
         None,
         title="Screening attribute",
         description="Applicant attribute used as a hard screen (blank = none).",
-        implemented=False,
         level="advanced",
         pattern=KEY_PATTERN,
     )
     screen_min_percentile: float = param(
         0.0,
         title="Screening minimum percentile",
-        description="Minimum percentile of the screening attribute.",
-        implemented=False,
+        description=(
+            "Applicants below this percentile of the screening attribute are not invited (threshold strategies)."
+        ),
         level="advanced",
         ge=0,
         le=1,
@@ -687,8 +681,9 @@ class InvitesParams(ParamGroup):
     yield_protection: float = param(
         0.0,
         title="Yield protection",
-        description="Penalty for applicants who look overqualified, unless they signalled.",
-        implemented=False,
+        description=(
+            "Screening penalty per percentile an applicant stands above the program, unless they signalled it."
+        ),
         level="advanced",
         ge=0,
         le=2,
@@ -696,29 +691,28 @@ class InvitesParams(ParamGroup):
     rounds: int = param(
         3,
         title="Invitation rounds",
-        description="Invitation waves; declined slots are offered again.",
-        implemented=False,
+        description="Invitation waves; programs invite again to fill the slots that were declined.",
         ge=1,
         le=10,
     )
 
 
 class InterviewParams(ParamGroup):
-    """Interviews (planned, Phase 3)."""
+    """Interviews (model_spec.md §7.3-7.4); interview dates are planned."""
 
     applicant_cap: int = param(
         12,
         title="Interviews per applicant (max)",
         description="The most interviews an applicant accepts and attends.",
-        implemented=False,
         ge=1,
         le=50,
     )
     acceptance_order: Literal["best_first", "first_come"] = param(
         "first_come",
         title="Acceptance order",
-        description="How applicants accept invitations.",
-        implemented=False,
+        description=(
+            "In which order applicants accept invitations: the best (by pre-interview view) or the first first."
+        ),
     )
     n_dates: int = param(
         0,
@@ -741,30 +735,33 @@ class InterviewParams(ParamGroup):
 
 
 class RolParams(ParamGroup):
-    """Rank order lists (planned, Phase 3)."""
+    """Rank order lists (model_spec.md §8)."""
 
     applicant_policy: Literal["all_interviewed", "top_k", "above_reservation", "truncate_k", "likelihood_weighted"] = (
         param(
             "all_interviewed",
             title="Applicant rank lists",
-            description="Which interviewed programs applicants rank.",
-            implemented=False,
+            description=(
+                "Which interviewed programs applicants rank: all, the top k, those above the reservation utility, or "
+                "all with the ones they are less likely to match moved down (likelihood weighted)."
+            ),
         )
     )
     applicant_top_k: int = param(
         20,
         title="Applicant list length",
         description="List length for the top-k policies.",
-        implemented=False,
         ge=1,
         le=300,
     )
     reservation_utility: float = param(
         -1.0,
         title="Reservation utility",
-        description="Applicants rank only programs above this utility (above-reservation policy).",
+        description=(
+            "Applicants (above-reservation policy) and programs (do-not-rank threshold) rank only above this "
+            "post-interview utility."
+        ),
         unit="SD",
-        implemented=False,
         level="advanced",
         ge=-5,
         le=5,
@@ -772,33 +769,32 @@ class RolParams(ParamGroup):
     program_policy: Literal["all_interviewed", "dnr_quantile", "dnr_threshold"] = param(
         "dnr_quantile",
         title="Program rank lists",
-        description="Which interviewed applicants programs rank.",
-        implemented=False,
+        description=(
+            "Which interviewed applicants programs rank: all, all but the bottom share, or those above the "
+            "reservation utility."
+        ),
     )
     program_dnr_quantile: float = param(
         0.1,
         title="Do-not-rank share",
         description="Bottom share of interviewees a program does not rank.",
-        implemented=False,
         ge=0,
         le=0.9,
     )
 
 
 class MatchParams(ParamGroup):
-    """The matching mechanism (planned, Phase 3)."""
+    """The matching mechanism (model_spec.md §8)."""
 
     algorithm: Literal["applicant_proposing", "program_proposing"] = param(
         "applicant_proposing",
         title="Algorithm",
         description="Deferred acceptance proposed by applicants (as the NRMP) or by programs.",
-        implemented=False,
     )
     compare_both: bool = param(
         False,
         title="Compare both sides proposing",
         description="Also run the other proposing side and report the differences.",
-        implemented=False,
     )
 
 
@@ -828,21 +824,25 @@ class SimulationParams(ParamGroup):
     prefs: PrefsParams = param(title="Preferences", description="Agreement and tastes.", default_factory=PrefsParams)
     info: InfoParams = param(title="Information", description="Noise and interviews.", default_factory=InfoParams)
     apps: AppsParams = param(
-        title="Applications", description="Planned.", default_factory=AppsParams, implemented=False
+        title="Applications",
+        description="How many programs applicants apply to, and which.",
+        default_factory=AppsParams,
     )
     signals: SignalsParams = param(
-        title="Signals", description="Planned.", default_factory=SignalsParams, implemented=False
+        title="Signals", description="Preference signals and how programs use them.", default_factory=SignalsParams
     )
     invites: InvitesParams = param(
-        title="Invitations", description="Planned.", default_factory=InvitesParams, implemented=False
+        title="Invitations",
+        description="Interview slots, screening and invitation waves.",
+        default_factory=InvitesParams,
     )
     interview: InterviewParams = param(
-        title="Interviews", description="Planned.", default_factory=InterviewParams, implemented=False
+        title="Interviews", description="How many interviews applicants accept.", default_factory=InterviewParams
     )
     rol: RolParams = param(
-        title="Rank order lists", description="Planned.", default_factory=RolParams, implemented=False
+        title="Rank order lists", description="Who ranks whom after interviews.", default_factory=RolParams
     )
-    match: MatchParams = param(title="Match", description="Planned.", default_factory=MatchParams, implemented=False)
+    match: MatchParams = param(title="Match", description="The matching algorithm.", default_factory=MatchParams)
 
     # Derived market shape (model_spec.md §4.3).
 
@@ -877,26 +877,31 @@ class SimulationParams(ParamGroup):
                         "utilities is pure fit, whatever the taste share.",
                     )
                 )
-        # Planned stages: warnings only until the stages exist.
+        # Settings that are valid but work against each other.
         n_programs = self.n_programs()
         max_signals = max((tier.count for tier in self.signals.tiers), default=0)
         if not max_signals <= self.apps.mean <= n_programs:
             found.append(
                 ParamWarning(
                     "apps.mean",
-                    f"Planned: the mean number of applications ({self.apps.mean:g}) should be at least the largest "
+                    f"The mean number of applications ({self.apps.mean:g}) should be at least the largest "
                     f"signal count ({max_signals}) and at most the number of programs ({n_programs:,}).",
                 )
             )
         shares = self.apps.portfolio_shares
         if abs(math.fsum((shares.reach, shares.target, shares.safety)) - 1.0) > SHARE_TOLERANCE:
-            found.append(ParamWarning("apps.portfolio_shares", "Planned: the portfolio shares should add up to 1."))
+            found.append(
+                ParamWarning(
+                    "apps.portfolio_shares",
+                    "The portfolio shares should add up to 1; the target share is what remains after reach and safety.",
+                )
+            )
         slots = self.invites.interviews_per_position * self.n_positions()
         if slots / self.market.n_applicants < self.interview.applicant_cap / 2:
             found.append(
                 ParamWarning(
                     "invites.interviews_per_position",
-                    f"Planned: {slots / self.market.n_applicants:.1f} interview slots per applicant is less than half "
+                    f"{slots / self.market.n_applicants:.1f} interview slots per applicant is less than half "
                     f"the interview cap ({self.interview.applicant_cap}), so most applicants could never reach it.",
                 )
             )
@@ -905,8 +910,7 @@ class SimulationParams(ParamGroup):
             found.append(
                 ParamWarning(
                     "invites.screen_attribute",
-                    f"Planned: the screening attribute {self.invites.screen_attribute!r} is not an applicant "
-                    "attribute.",
+                    f"The screening attribute {self.invites.screen_attribute!r} is not an applicant attribute.",
                 )
             )
         return found
@@ -975,24 +979,51 @@ def _implemented(model: type[BaseModel], data: Any) -> Any:
     return result
 
 
-# Implemented stages and the parameter groups each reads (model_spec.md §12.10). Fingerprints hash these, the seed
-# and the upstream stage's fingerprint, so a stage is stale exactly when something it depends on changed.
+# Implemented stages and the parameters each reads (model_spec.md). A path selects a group or a field; "[a,b]" after a
+# list keeps only those fields of its items. Fingerprints hash these, the seed and the upstream stage's fingerprint,
+# so a stage is stale exactly when something it depends on changed.
 STAGE_INPUTS: dict[str, tuple[str, ...]] = {
-    "population": ("market", "applicants", "programs", "prefs.weight_concentration"),
-    "pre_interview": ("prefs", "info"),
+    "population": (
+        "market",
+        "applicants.groups[name,share,strength_mean,strength_sd]",
+        "applicants.attributes",
+        "programs",
+        "prefs.weight_concentration",
+    ),
+    "pre_interview": (
+        "prefs",
+        "info.applicant_pre_noise_sd",
+        "info.program_pre_noise_sd",
+        "info.visibility_heteroskedasticity",
+        "info.halo_share",
+    ),
+    "applications": ("apps", "applicants.groups[name,applications_mean]"),
+    "signals": ("signals", "applicants.groups[name,n_signals]"),
+    "invitations": ("invites", "interview.applicant_cap", "interview.acceptance_order"),
+    "interviews": ("info.interview_informativeness", "info.fit_shock_sd"),
+    "rank_lists": ("rol", "signals.use_in_ranking"),
+    "match": ("match",),
 }
 
 
+def _select(data: Any, path: str) -> Any:
+    """Return the value at a dotted STAGE_INPUTS path, projecting list items to the fields in brackets."""
+    fields: list[str] = []
+    if path.endswith("]"):
+        path, _, selection = path[:-1].partition("[")
+        fields = selection.split(",")
+    value: Any = data
+    for part in path.split("."):
+        value = value[part]
+    if fields:
+        return [{name: item.get(name) for name in fields} for item in value]
+    return value
+
+
 def stage_inputs(params: SimulationParams, stage: str) -> dict[str, Any]:
-    """Return the implemented parameters `stage` reads, keyed by their dotted path."""
+    """Return the implemented parameters `stage` reads, keyed by their STAGE_INPUTS path."""
     data = params.implemented_data()
-    inputs: dict[str, Any] = {}
-    for path in STAGE_INPUTS[stage]:
-        value: Any = data
-        for part in path.split("."):
-            value = value[part]
-        inputs[path] = value
-    return inputs
+    return {path: _select(data, path) for path in STAGE_INPUTS[stage]}
 
 
 # --- loading and field descriptions ------------------------------------------------------------------------------

@@ -80,6 +80,26 @@ class SideModel:
         result: F64 = self.sqrt_rho * self.common[targets][None, :] + self.sqrt_one_minus_rho * inner
         return result
 
+    def pair_taste(self, agents: Indices, targets: Indices) -> F64:
+        """Return the taste terms of aligned (agent, target) pairs, equal to the same entries of `taste`."""
+        d = self.deviation[agents]
+        y = self.residual[targets]
+        index = d[:, 0] * y[:, 0]
+        for k in range(1, d.shape[1]):
+            index = index + d[:, k] * y[:, k]
+        taste = (index - self.taste_mean[agents]) / self.taste_sd[agents]
+        result: F64 = np.where(self.has_taste[agents], taste, 0.0)
+        return result
+
+    def pair_utilities(self, agents: Indices, targets: Indices) -> F64:
+        """Return the true utilities of aligned (agent, target) pairs, equal to the same entries of `utilities`."""
+        i, j = (agents, targets) if self.agents_are_applicants else (targets, agents)
+        idio = pair_normals(self.seed, self.idio_stream, self.idio_replicate, i, j)
+        inner = self.sqrt_tau[agents] * self.pair_taste(agents, targets)
+        inner = inner + self.sqrt_one_minus_tau[agents] * idio
+        result: F64 = self.sqrt_rho * self.common[targets] + self.sqrt_one_minus_rho * inner
+        return result
+
 
 def build_side(
     *,
@@ -155,6 +175,14 @@ class Observation:
     replicate: int
     seed: int
 
+    def _error(self, i: Indices, j: Indices, targets: Indices) -> F64:
+        """Return e = scale * delta for counters (i, j) that broadcast like `targets` (model_spec.md §12.7)."""
+        delta = pair_normals(self.seed, self.stream, self.replicate, i, j)
+        if self.halo is not None:
+            delta = self.sqrt_one_minus_psi * delta + self.sqrt_psi * self.halo[targets]
+        result: F64 = self.scale[targets] * delta
+        return result
+
     def observe(self, utilities: F64, agents: Indices, targets: Indices) -> F64:
         """Return the observed scores for a block of true utilities (agents x targets)."""
         if self.sigma == 0:
@@ -163,11 +191,15 @@ class Observation:
             i, j = agents[:, None], targets[None, :]
         else:
             i, j = targets[None, :], agents[:, None]
-        error = pair_normals(self.seed, self.stream, self.replicate, i, j)
-        if self.halo is not None:
-            error = self.sqrt_one_minus_psi * error + self.sqrt_psi * self.halo[targets][None, :]
-        result: F64 = utilities + self.scale[targets][None, :] * error
+        result: F64 = utilities + self._error(i, j, targets[None, :])
         return result
+
+    def pair_error(self, agents: Indices, targets: Indices) -> F64:
+        """Return the pre-interview error terms e of aligned (agent, target) pairs (zeros when sigma is 0)."""
+        if self.sigma == 0:
+            return np.zeros(agents.shape[0])
+        i, j = (agents, targets) if self.agents_are_applicants else (targets, agents)
+        return self._error(i, j, targets)
 
 
 def build_observation(

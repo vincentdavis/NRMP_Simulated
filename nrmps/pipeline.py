@@ -34,14 +34,30 @@ STATE_LABELS = {
     "planned": "Planned",
 }
 
-# Readable names of the parameter groups in STAGE_INPUTS.
+# Readable names of the parameters in STAGE_INPUTS.
 INPUT_TITLES = {
     "market": "market",
-    "applicants": "applicant groups or attributes",
+    "applicants.groups[name,share,strength_mean,strength_sd]": "applicant groups",
+    "applicants.attributes": "applicant attributes",
     "programs": "program quality, tiers or attributes",
     "prefs.weight_concentration": "weight concentration",
     "prefs": "preferences",
-    "info": "information (noise)",
+    "info.applicant_pre_noise_sd": "information (noise)",
+    "info.program_pre_noise_sd": "information (noise)",
+    "info.visibility_heteroskedasticity": "information (noise)",
+    "info.halo_share": "information (noise)",
+    "apps": "applications",
+    "applicants.groups[name,applications_mean]": "group application means",
+    "signals": "signals",
+    "applicants.groups[name,n_signals]": "group signal limits",
+    "invites": "invitations",
+    "interview.applicant_cap": "the interview cap",
+    "interview.acceptance_order": "the acceptance order",
+    "info.interview_informativeness": "interview informativeness",
+    "info.fit_shock_sd": "the fit shock",
+    "rol": "rank order lists",
+    "signals.use_in_ranking": "signals in ranking",
+    "match": "the match settings",
 }
 
 
@@ -73,7 +89,10 @@ def _changes(draft: SimulationParams, run: SimulationRun, stage: str) -> list[st
     if draft.run.seed is not None and draft.run.seed != run.seed:
         changes.append("the seed")
     now, then = stage_inputs(draft, stage), stage_inputs(run.get_params(), stage)
-    changes.extend(INPUT_TITLES.get(path, path) for path in STAGE_INPUTS[stage] if now[path] != then[path])
+    for path in STAGE_INPUTS[stage]:
+        title = INPUT_TITLES.get(path, path)
+        if now[path] != then[path] and title not in changes:
+            changes.append(title)
     return changes
 
 

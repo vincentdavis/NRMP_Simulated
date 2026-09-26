@@ -39,6 +39,7 @@ class Stream(IntEnum):
     SOAP = 19
     HALO_A = 20
     HALO_P = 21
+    FIT_P = 22
 
 
 # Streams that make up the population and the true utilities; they use replicate 0 unless every replicate draws a

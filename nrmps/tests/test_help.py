@@ -3,6 +3,8 @@
 import pytest
 from django.urls import reverse
 
+from nrmps.engine import MODEL_VERSION
+
 pytestmark = pytest.mark.django_db
 
 
@@ -11,7 +13,7 @@ def test_help_page_is_public_and_generated_from_the_schema(client):
     for text in (
         "Quick start",
         "How the simulation works",
-        "model 2.0",
+        f"model {MODEL_VERSION}",
         "1,000 applicants for 926 positions in 142 programs",
         "Applicant agreement",
         "Mean positions per program",

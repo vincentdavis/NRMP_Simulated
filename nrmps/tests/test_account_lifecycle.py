@@ -12,6 +12,7 @@ from django.db.migrations.executor import MigrationExecutor
 from django.urls import reverse
 
 from nrmps.accounts import VERIFY_SALT, verification_token
+from nrmps.engine import MODEL_VERSION
 from nrmps.models import Simulation, User
 
 from .conftest import PASSWORD
@@ -162,7 +163,7 @@ def test_data_export_contains_account_simulations_and_runs(auth_client, finished
     assert json.loads(archive.read(f"{folder}/simulation.json"))["params"] == simulation.params
     record = json.loads(archive.read(f"{folder}/runs/1/run.json"))
     assert record["seed"] == 12345
-    assert record["stamps"]["model_version"] == "2.0"
+    assert record["stamps"]["model_version"] == MODEL_VERSION
     assert archive.read(f"{folder}/runs/1/applicants.csv").decode().count("\n") == 61
 
 
