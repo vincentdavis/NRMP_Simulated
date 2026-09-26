@@ -20,8 +20,8 @@ def _post(client, sim, step):
 
 
 def test_successful_step_sends_a_success_toast(auth_client, simulation):
-    response = _post(auth_client, simulation, "create-students")
-    assert _toast(response) == {"level": "success", "text": "Created 20 students."}
+    response = _post(auth_client, simulation, "create-applicants")
+    assert _toast(response) == {"level": "success", "text": "Created 20 applicants."}
 
 
 def test_failed_step_sends_an_error_toast(auth_client, populated_simulation):
@@ -51,9 +51,9 @@ def test_confirmations_state_what_will_be_deleted(auth_client, populated_simulat
 
     initialize_interview(populated_simulation)
     body = auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": populated_simulation.pk})).content.decode()
-    assert "This replaces the 20 current students and deletes all 80 interview rows" in body
-    assert "Delete all 4 schools? This also deletes all 80 interview rows" in body
-    assert "with its configuration, 20 students, 4 schools and 80 interview rows? This cannot be undone." in body
+    assert "This replaces the 20 current applicants and deletes all 80 interview rows" in body
+    assert "Delete all 4 programs? This also deletes all 80 interview rows" in body
+    assert "with its configuration, 20 applicants, 4 programs and 80 interview rows? This cannot be undone." in body
 
 
 def test_step_buttons_show_a_spinner_while_running(auth_client, simulation):

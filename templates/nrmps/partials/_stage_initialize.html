@@ -24,7 +24,7 @@
                 hx-swap="outerHTML"
                 hx-disabled-elt="this"
                 hx-sync="#stage-cards:drop"
-                hx-confirm="Create one interview row per student and school pair?{% if counts.n_interviews %} This replaces the {{ counts.n_interviews }} current rows and their ratings and ranks.{% endif %}"
+                hx-confirm="Create one interview row per applicant and program pair?{% if counts.n_interviews %} This replaces the {{ counts.n_interviews }} current rows and their ratings and ranks.{% endif %}"
                 {% if not simulation|stage_reached:"populations" %}disabled{% endif %}>
           <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
           (re)Initialize Interviews

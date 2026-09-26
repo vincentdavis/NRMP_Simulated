@@ -73,17 +73,19 @@ urlpatterns = [
     # Steps (HTMX): create/delete populations, initialize interviews, compute ratings (see views.STEPS)
     path("simulations/<int:pk>/steps/<slug:step>/", views.simulation_step, name="simulation_step"),
     # Actions (HTMX)
-    path("simulations/<int:pk>/upload-students/", views.simulation_upload_students, name="simulation_upload_students"),
-    path("simulations/<int:pk>/upload-schools/", views.simulation_upload_schools, name="simulation_upload_schools"),
+    path(
+        "simulations/<int:pk>/upload-applicants/", views.simulation_upload_students, name="simulation_upload_students"
+    ),
+    path("simulations/<int:pk>/upload-programs/", views.simulation_upload_schools, name="simulation_upload_schools"),
     # (Re)Create actions
     # Downloads
     path(
-        "simulations/<int:pk>/download-students/",
+        "simulations/<int:pk>/download-applicants/",
         views.simulation_download_students,
         name="simulation_download_students",
     ),
     path(
-        "simulations/<int:pk>/download-schools/", views.simulation_download_schools, name="simulation_download_schools"
+        "simulations/<int:pk>/download-programs/", views.simulation_download_schools, name="simulation_download_schools"
     ),
     path(
         "simulations/<int:pk>/download-interviews/",
@@ -91,8 +93,8 @@ urlpatterns = [
         name="simulation_download_interviews",
     ),
     # Lists
-    path("simulations/<int:pk>/students/", views.simulation_students, name="simulation_students"),
-    path("simulations/<int:pk>/schools/", views.simulation_schools, name="simulation_schools"),
+    path("simulations/<int:pk>/applicants/", views.simulation_students, name="simulation_students"),
+    path("simulations/<int:pk>/programs/", views.simulation_schools, name="simulation_schools"),
     path("simulations/<int:pk>/interviews/", views.simulation_interviews, name="simulation_interviews"),
     # Interview actions
 ]

@@ -14,7 +14,7 @@
     </h2>
     {% include "nrmps/partials/_stage_alert.html" with stage="pre_interview" %}
     <div class="flex flex-wrap gap-2 justify-between items-center">
-      <div class="text-sm">Compute pre-interview scores and rankings for all student-school pairs.</div>
+      <div class="text-sm">Compute pre-interview ratings and rankings for every applicant-program pair.</div>
       <div class="flex gap-2 flex-wrap">
         <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View Interviews</a>
         <button class="btn btn-sm btn-primary"

@@ -111,6 +111,9 @@ class ValidatorLimitsMixin:
 class SimulationForm(forms.ModelForm):
     """Form for creating and updating Simulations."""
 
+    # Fields that have no effect yet (shown with a "Not used yet" badge).
+    planned_fields = ("iterations", "public")
+
     class Meta:
         model = Simulation
         fields = ("name", "public", "description", "iterations")
@@ -121,7 +124,7 @@ class StudentsUploadForm(forms.Form):
     """Upload a CSV of applicants; see `population_csv` for the format and validation."""
 
     file = forms.FileField(
-        label="Students CSV",
+        label="Applicants CSV",
         help_text="CSV with a header row: name, score, and optionally score_meta and meta_preference (JSON objects).",
         widget=forms.FileInput(attrs={"accept": ".csv,text/csv"}),
     )
@@ -131,7 +134,7 @@ class SchoolsUploadForm(forms.Form):
     """Upload a CSV of programs; see `population_csv` for the format and validation."""
 
     file = forms.FileField(
-        label="Schools CSV",
+        label="Programs CSV",
         help_text=(
             "CSV with a header row: name, capacity, score, and optionally score_meta and meta_preference "
             "(JSON objects)."
@@ -157,8 +160,36 @@ class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
             self.add_error("number_of_applicants", message)
         return cleaned
 
+    # Parameters the engine does not use yet (shown with a "Not used yet" badge and collapsed on the page).
+    planned_fields = (
+        "applicant_interview_limit",
+        "applicant_post_interview_rating_error",
+        "school_interview_limit",
+        "school_post_interview_rating_error",
+    )
+
     class Meta:
         model = SimulationConfig
+        labels = {
+            "number_of_applicants": "Applicants",
+            "number_of_schools": "Programs",
+            "applicant_score_mean": "Applicant score mean",
+            "applicant_score_stddev": "Applicant score SD",
+            "applicant_interview_limit": "Max interviews per applicant",
+            "applicant_meta_preference_stddev": "Applicant preference diversity",
+            "applicant_meta_scores_stddev": "Applicant attribute spread",
+            "applicant_pre_interview_rating_error": "Applicant pre-interview noise",
+            "applicant_post_interview_rating_error": "Applicant post-interview noise",
+            "school_score_mean": "Program score mean",
+            "school_score_stddev": "Program score SD",
+            "school_capacity_mean": "Positions per program (mean)",
+            "school_capacity_stddev": "Positions per program (SD)",
+            "school_interview_limit": "Program interview limit",
+            "school_meta_preference_stddev": "Program preference diversity",
+            "school_meta_scores_stddev": "Program attribute spread",
+            "school_pre_interview_rating_error": "Program pre-interview noise",
+            "school_post_interview_rating_error": "Program post-interview noise",
+        }
         fields = (
             "number_of_applicants",
             "number_of_schools",

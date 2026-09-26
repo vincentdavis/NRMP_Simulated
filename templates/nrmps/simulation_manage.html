@@ -9,7 +9,7 @@
       <div class="flex flex-wrap gap-2">
         <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
         <form method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}"
-              data-confirm="Delete the simulation “{{ simulation.name }}” with its configuration, {{ counts.n_students }} students, {{ counts.n_schools }} schools and {{ counts.n_interviews }} interview rows? This cannot be undone.">
+              data-confirm="Delete the simulation “{{ simulation.name }}” with its configuration, {{ counts.n_students }} applicants, {{ counts.n_schools }} programs and {{ counts.n_interviews }} interview rows? This cannot be undone.">
           {% csrf_token %}
           <button type="submit" class="btn btn-error">Delete simulation</button>
         </form>
@@ -76,8 +76,6 @@
               {% field_row config_form.applicant_meta_scores_stddev %}
               {% field_row config_form.applicant_meta_preference_stddev %}
               {% field_row config_form.applicant_pre_interview_rating_error %}
-              {% field_row config_form.applicant_post_interview_rating_error %}
-              {% field_row config_form.applicant_interview_limit %}
             </div>
             {% include "nrmps/components/attribute_editor.html" with side="applicant" field=config_form.applicant_meta_preference items=meta_lists.applicant json=meta_json.applicant label="Program attributes applicants value" %}
 
@@ -91,10 +89,24 @@
               {% field_row config_form.school_meta_scores_stddev %}
               {% field_row config_form.school_meta_preference_stddev %}
               {% field_row config_form.school_pre_interview_rating_error %}
-              {% field_row config_form.school_post_interview_rating_error %}
-              {% field_row config_form.school_interview_limit %}
             </div>
             {% include "nrmps/components/attribute_editor.html" with side="school" field=config_form.school_meta_preference items=meta_lists.school json=meta_json.school label="Applicant attributes programs value" %}
+
+            <details class="collapse collapse-arrow bg-base-200 mt-2"{% if config_form.errors %} open{% endif %}>
+              <summary class="collapse-title font-semibold">Planned parameters (not used yet)</summary>
+              <div class="collapse-content">
+                <p class="text-sm text-base-content/70 mb-2">
+                  These belong to stages that are not implemented yet (invitations and interviews). Saving them has no
+                  effect on the results for now.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                  {% field_row config_form.applicant_interview_limit %}
+                  {% field_row config_form.applicant_post_interview_rating_error %}
+                  {% field_row config_form.school_interview_limit %}
+                  {% field_row config_form.school_post_interview_rating_error %}
+                </div>
+              </div>
+            </details>
 
             <div class="card-actions justify-end mt-2">
               <button type="submit" class="btn btn-primary">Save configuration</button>

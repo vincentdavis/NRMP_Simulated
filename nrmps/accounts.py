@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from .models import Interview, User
-from .population_csv import COLUMNS, INTERVIEW_COLUMNS, csv_lines, plain_csv_lines
+from .population_csv import COLUMNS, DISPLAY_NAMES, INTERVIEW_COLUMNS, csv_lines, plain_csv_lines
 
 VERIFY_SALT = "nrmps.accounts.verify-email"
 
@@ -60,8 +60,8 @@ def send_verification_email(request, user: User) -> None:
 def export_user_data(user: User):
     """Return a file object with a ZIP of everything stored for `user`, positioned at the start.
 
-    The archive holds account.json and, per simulation, simulation.json (fields and configuration), students.csv,
-    schools.csv (the upload format) and interviews.csv.
+    The archive holds account.json and, per simulation, simulation.json (fields and configuration), applicants.csv,
+    programs.csv (the upload format) and interviews.csv.
     """
     archive = tempfile.SpooledTemporaryFile(max_size=20 * 1024 * 1024)  # noqa: SIM115 (returned to the caller)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -89,7 +89,7 @@ def export_user_data(user: User):
             zf.writestr(f"{folder}/simulation.json", json.dumps(info, indent=2))
             for kind, queryset in (("students", sim.students), ("schools", sim.schools)):
                 records = queryset.order_by("id").values_list(*COLUMNS[kind]).iterator(chunk_size=2000)
-                _write_lines(zf, f"{folder}/{kind}.csv", csv_lines(kind, records))
+                _write_lines(zf, f"{folder}/{DISPLAY_NAMES[kind]}.csv", csv_lines(kind, records))
             rows = (
                 Interview.objects.filter(simulation=sim)
                 .order_by("id")

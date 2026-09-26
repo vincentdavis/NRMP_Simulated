@@ -18,7 +18,7 @@ from .exceptions import SimulationError
 from .forms import SchoolsUploadForm, SimulationConfigForm, SimulationForm, StudentsUploadForm
 from .models import Interview, Simulation, SimulationConfig
 from .population_csv import COLUMNS as POPULATION_COLUMNS
-from .population_csv import INTERVIEW_COLUMNS, csv_lines, parse_population_csv, plain_csv_lines
+from .population_csv import DISPLAY_NAMES, INTERVIEW_COLUMNS, csv_lines, parse_population_csv, plain_csv_lines
 from .simulation_engine import (
     compute_post_interview_scores_and_rankings,
     compute_pre_interview_scores_and_rankings,
@@ -265,10 +265,10 @@ class Step:
 
 
 STEPS: dict[str, Step] = {
-    "create-students": Step("populations", lambda sim: sim.create_students(), "Created {count:,} students."),
-    "create-schools": Step("populations", lambda sim: sim.create_schools(), "Created {count:,} schools."),
-    "delete-students": Step("populations", lambda sim: sim.delete_students(), "Deleted all students."),
-    "delete-schools": Step("populations", lambda sim: sim.delete_schools(), "Deleted all schools."),
+    "create-applicants": Step("populations", lambda sim: sim.create_students(), "Created {count:,} applicants."),
+    "create-programs": Step("populations", lambda sim: sim.create_schools(), "Created {count:,} programs."),
+    "delete-applicants": Step("populations", lambda sim: sim.delete_students(), "Deleted all applicants."),
+    "delete-programs": Step("populations", lambda sim: sim.delete_schools(), "Deleted all programs."),
     "initialize-interviews": Step("initialized", initialize_interview, "Created {count:,} interview rows."),
     "compute-pre-interview": Step(
         "pre_interview",
@@ -304,7 +304,7 @@ def _upload(request, pk: int, form_class, kind: str):
             return sim.upload_students(rows)
         return sim.upload_schools(rows)
 
-    return _run_step(request, pk, "populations", action, f"Loaded {{count:,}} {kind} from the file.")
+    return _run_step(request, pk, "populations", action, f"Loaded {{count:,}} {DISPLAY_NAMES[kind]} from the file.")
 
 
 @require_http_methods(["POST"])
@@ -328,7 +328,7 @@ def _download_population(request, pk: int, kind: str):
     queryset = sim.students if kind == "students" else sim.schools
     records = queryset.order_by("id").values_list(*POPULATION_COLUMNS[kind]).iterator(chunk_size=2000)
     response = StreamingHttpResponse(csv_lines(kind, records), content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = f'attachment; filename="simulation_{sim.id}_{kind}.csv"'
+    response["Content-Disposition"] = f'attachment; filename="simulation_{sim.id}_{DISPLAY_NAMES[kind]}.csv"'
     return response
 
 

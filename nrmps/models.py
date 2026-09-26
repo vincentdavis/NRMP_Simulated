@@ -111,8 +111,6 @@ class User(AbstractUser):
     email_verified_at = models.DateTimeField(
         null=True, blank=True, help_text="When the current email address was confirmed (empty: not confirmed)."
     )
-    disabled = models.BooleanField(default=False, null=True, blank=True)
-    status = models.CharField(max_length=50, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -162,14 +160,11 @@ def _count_subquery(model):
 
 
 class Simulation(models.Model):
-    """Simulation model.
+    """A simulation: its owner, settings, pipeline stage, populations and results.
 
-    This contains the very basic simulations setup and links to the others parts of a simulation
-
-    method: create_students() -> builds the population of students
-     method: create_schools() -> builds the population of schools
-     method: upload_students() -> uploads students from a CSV file
-     method: upload_schools() -> uploads schools from a CSV file
+    Applicants are stored as `Student` rows and programs as `School` rows (the code keeps the original names; the
+    interface says applicant and program). Population methods (create_*, upload_*, delete_*) run in one locked
+    transaction and reset the pipeline stage.
     """
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="simulations")
@@ -625,10 +620,7 @@ class SimulationConfig(models.Model):
 
 
 class Student(models.Model):
-    """Student model.
-
-    This contains each student in a simulation. The student "population".
-    """
+    """An applicant (a medical student applying to residency programs), shown as "applicant" in the interface."""
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="students")
     name = models.CharField(max_length=255, help_text="Applicant name.")
@@ -636,9 +628,6 @@ class Student(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(1.0)],
         help_text="Applicant's base (true overall) strength, 0-1; centre of their attribute scores.",
     )
-    meta_stddev = models.FloatField(
-        default=0.0, help_text="Standard deviation of the score."
-    )  # This will define how close each score is to the base "score"
     score_meta = models.JSONField(
         default=dict,
         help_text=(
@@ -657,15 +646,15 @@ class Student(models.Model):
         ),
     )
 
+    class Meta:
+        verbose_name = "applicant"
+
     def __str__(self):
         return self.name
 
 
 class School(models.Model):
-    """School model.
-
-    This contains each school in a simulation. The school "population".
-    """
+    """A residency program, shown as "program" in the interface."""
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="schools")
     name = models.CharField(max_length=255, help_text="Program name.")
@@ -674,11 +663,6 @@ class School(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(1.0)],
         help_text="Program's base (true overall) quality, 0-1; centre of its attribute scores.",
     )
-    meta_stddev = models.FloatField(
-        validators=[MinValueValidator(0), MaxValueValidator(99)],
-        default=1.0,
-        help_text="Standard deviation of the score.",
-    )  # This will define how close each score is to the base "score"
     score_meta = models.JSONField(
         default=dict,
         help_text=(
@@ -699,17 +683,15 @@ class School(models.Model):
         ),
     )
 
+    class Meta:
+        verbose_name = "program"
+
     def __str__(self):
         return self.name
 
 
 class Interview(models.Model):
-    """Interview model.
-
-    This contains the interview step data for the simulation.
-    It records the interview status between each student and school in the simulation.
-    This includes the student's interview rank of the school and the school's interview rank of the student
-    """
+    """One applicant-program pair: true utilities, pre- and post-interview ratings and ranks, and stage flags."""
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="interviews")
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="interviews")
@@ -791,12 +773,7 @@ class Interview(models.Model):
 
 
 class Match(models.Model):
-    """Match model.
-
-    This contains the match step data for the simulation.
-    It records the match status between each student and school in the simulation
-    This includes the student's match rank of the school and the school's match rank of the student
-    """
+    """One matched applicant-program pair produced by the matching algorithm (not produced yet)."""
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="matches")
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="matches")

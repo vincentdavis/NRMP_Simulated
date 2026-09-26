@@ -33,6 +33,8 @@ REQUIRED = {
     "schools": {"name", "capacity", "score"},
 }
 LABELS = {"students": "applicant", "schools": "program"}
+# User-facing plural names of the two populations (file names, messages); the code keeps students / schools.
+DISPLAY_NAMES = {"students": "applicants", "schools": "programs"}
 
 
 @dataclass

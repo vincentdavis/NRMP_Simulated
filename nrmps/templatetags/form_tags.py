@@ -43,4 +43,6 @@ def field_row(field, label: str | None = None):
         "label": label or field.label,
         "widget_html": field.as_widget(attrs=attrs),
         "is_checkbox": isinstance(widget, widgets.CheckboxInput),
+        # Forms list parameters the engine does not use yet in `planned_fields`.
+        "planned": field.name in getattr(field.form, "planned_fields", ()),
     }

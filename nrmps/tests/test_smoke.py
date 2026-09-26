@@ -121,8 +121,8 @@ def test_implemented_workflow_end_to_end(auth_client):
         assert response.status_code == 200, name
         return response
 
-    step("create-students")
-    step("create-schools")
+    step("create-applicants")
+    step("create-programs")
     assert sim.students.count() == 20
     assert sim.schools.count() == 4
 

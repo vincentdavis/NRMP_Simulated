@@ -9,7 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from nrmps import simulation_engine as se
-from nrmps.population_csv import MAX_UPLOAD_ROWS, PopulationCSVError, parse_population_csv
+from nrmps.population_csv import DISPLAY_NAMES, MAX_UPLOAD_ROWS, PopulationCSVError, parse_population_csv
 
 pytestmark = pytest.mark.django_db
 
@@ -177,7 +177,7 @@ def test_only_the_first_problems_are_listed():
 @pytest.mark.parametrize("kind", ["students", "schools"])
 def test_sample_files_are_valid(kind):
     """The sample files linked beside the upload inputs parse without problems (HELP-15)."""
-    path = Path(django_settings.BASE_DIR) / "static" / "samples" / f"{kind}_sample.csv"
+    path = Path(django_settings.BASE_DIR) / "static" / "samples" / f"{DISPLAY_NAMES[kind]}_sample.csv"
     rows = parse_population_csv(SimpleUploadedFile(path.name, path.read_bytes()), kind)
     assert rows
 
@@ -185,7 +185,7 @@ def test_sample_files_are_valid(kind):
 def test_sample_files_work_together(auth_client, simulation):
     """Uploading both samples gives a population the pre-interview stage can rate."""
     for kind in ("students", "schools"):
-        path = Path(django_settings.BASE_DIR) / "static" / "samples" / f"{kind}_sample.csv"
+        path = Path(django_settings.BASE_DIR) / "static" / "samples" / f"{DISPLAY_NAMES[kind]}_sample.csv"
         response = _upload(auth_client, simulation, kind, path.read_bytes())
         assert b"not loaded" not in response.content
     se.initialize_interview(simulation)
@@ -194,5 +194,5 @@ def test_sample_files_work_together(auth_client, simulation):
 
 def test_upload_card_links_the_sample_files(auth_client, simulation):
     body = auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})).content.decode()
-    assert "samples/students_sample.csv" in body
-    assert "samples/schools_sample.csv" in body
+    assert "samples/applicants_sample.csv" in body
+    assert "samples/programs_sample.csv" in body

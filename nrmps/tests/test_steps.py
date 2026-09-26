@@ -34,7 +34,7 @@ def test_step_response_refreshes_every_card_and_the_stepper(auth_client, populat
 def test_recreating_applicants_updates_the_interview_card(auth_client, populated_simulation):
     """After a cascade delete the interview count shown is the real one (0), not the old one."""
     _post_step(auth_client, populated_simulation, "initialize-interviews")
-    body = _post_step(auth_client, populated_simulation, "create-students").content.decode()
+    body = _post_step(auth_client, populated_simulation, "create-applicants").content.decode()
     assert "<strong>Interviews:</strong> 0" in body
 
 
@@ -76,7 +76,7 @@ def test_step_buttons_disable_themselves_and_are_synchronised(auth_client, popul
 def test_non_owner_cannot_run_steps(client, other_user, populated_simulation):
     client.force_login(other_user)
     for name in (
-        "create-students",
+        "create-applicants",
         "initialize-interviews",
         "compute-pre-interview",
     ):

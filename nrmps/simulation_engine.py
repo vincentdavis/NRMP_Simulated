@@ -401,21 +401,3 @@ def compute_post_interview_scores_and_rankings(simulation: Simulation, rng: np.r
         _update_columns(Interview, pairs.ids, columns)
         simulation.set_stage("post_interview")
         return len(pairs.ids)
-
-
-def students_rank():
-    """Each student, using the post-interview rating, chooses which schools to rank and ranks them by rating.
-
-    1 is the highest rank
-    """
-    pass
-
-
-def schools_rank():
-    """Each school, using the post-interview rating, chooses which students to rank and ranks them by rating."""
-    pass
-
-
-def match():
-    """Run the NRMP match algorithm."""
-    pass

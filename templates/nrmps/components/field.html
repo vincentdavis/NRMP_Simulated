@@ -7,9 +7,13 @@
     <label class="flex items-center gap-2 cursor-pointer" for="{{ field.id_for_label }}">
       {{ widget_html }}
       <span class="font-medium">{{ label }}</span>
+      {% if planned %}<span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}
     </label>
   {% else %}
-    <legend class="fieldset-legend"><label for="{{ field.id_for_label }}">{{ label }}</label></legend>
+    <legend class="fieldset-legend">
+      <label for="{{ field.id_for_label }}">{{ label }}</label>
+      {% if planned %}<span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}
+    </legend>
     {{ widget_html }}
   {% endif %}
   {% if field.help_text %}

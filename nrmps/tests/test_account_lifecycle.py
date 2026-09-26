@@ -160,9 +160,9 @@ def test_data_export_contains_account_and_simulations(auth_client, populated_sim
     assert "account.json" in names
     assert json.loads(archive.read("account.json"))["username"] == "alice"
     folder = f"simulations/{populated_simulation.pk}-test-simulation"
-    for name in ("simulation.json", "students.csv", "schools.csv", "interviews.csv"):
+    for name in ("simulation.json", "applicants.csv", "programs.csv", "interviews.csv"):
         assert f"{folder}/{name}" in names
-    assert archive.read(f"{folder}/students.csv").decode().count("\n") == 21
+    assert archive.read(f"{folder}/applicants.csv").decode().count("\n") == 21
     assert archive.read(f"{folder}/interviews.csv").decode().count("\n") == 81
 
 
