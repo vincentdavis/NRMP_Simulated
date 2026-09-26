@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 
 from .models import Simulation
+from .presets import DEFAULT_PRESET, preset_choices
 
 User = get_user_model()
 
@@ -104,6 +105,23 @@ class SimulationForm(forms.ModelForm):
         model = Simulation
         fields = ("name", "public", "description")
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
+
+
+class NewSimulationForm(SimulationForm):
+    """The new-simulation form: the simulation's details and the preset its parameters start from."""
+
+    preset = forms.ChoiceField(
+        label="Start from",
+        choices=preset_choices,
+        initial=DEFAULT_PRESET,
+        required=False,
+        help_text="Every parameter can be changed afterwards.",
+        widget=forms.RadioSelect,
+    )
+
+    def clean_preset(self) -> str:
+        """Return the chosen preset, or the default one when none was chosen."""
+        return self.cleaned_data.get("preset") or DEFAULT_PRESET
 
 
 class PopulationUploadForm(forms.Form):

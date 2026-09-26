@@ -16,13 +16,15 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from django_htmx.http import trigger_client_event
 
 from .exceptions import SimulationError
-from .forms import PopulationUploadForm, SimulationForm
+from .forms import NewSimulationForm, PopulationUploadForm, SimulationForm
 from .limits import market_size_error, max_pairs
-from .models import PopulationUpload, Side, Simulation
+from .models import PopulationUpload, Side, Simulation, new_seed
 from .params import SimulationParams
 from .params_forms import IMPLEMENTED_SECTIONS, ParamsForm
 from .pipeline import get_pipeline, needs_run
 from .population_csv import MAX_UPLOAD_BYTES, MAX_UPLOAD_ROWS, columns, digest, parse_population_csv
+from .presets import PRESETS, preset_params
+from .previews import market_preview
 from .quotas import QuotaError, check_simulation_quota
 from .ratelimit import MESSAGE as RATE_MESSAGE
 from .ratelimit import over_limit, rate_limit
@@ -121,7 +123,7 @@ def simulation_list(request):
 def simulation_create(request):
     """Create a simulation for the current user; it starts with the default parameters and a fresh seed."""
     if request.method == "POST":
-        form = SimulationForm(request.POST)
+        form = NewSimulationForm(request.POST)
         try:
             check_simulation_quota(request.user)
         except QuotaError as exc:
@@ -129,12 +131,18 @@ def simulation_create(request):
         if form.is_valid():
             sim = form.save(commit=False)
             sim.owner = request.user
+            preset = form.cleaned_data["preset"]
+            sim.set_params(preset_params(preset, seed=new_seed()))
             sim.save()
-            messages.success(request, "Simulation created with the default parameters. Adjust them or run it.")
+            messages.success(
+                request,
+                f"Simulation created from the preset “{PRESETS[preset].title}”. Adjust the parameters or run it.",
+            )
             return redirect("nrmps:simulation_manage", pk=sim.pk)
     else:
-        form = SimulationForm()
-    return render(request, "nrmps/simulation_form.html", {"form": form, "create": True})
+        form = NewSimulationForm()
+    presets = [(key, preset, str(form["preset"].value()) == key) for key, preset in PRESETS.items()]
+    return render(request, "nrmps/simulation_form.html", {"form": form, "create": True, "presets": presets})
 
 
 def _size_error(params: SimulationParams, simulation: Simulation) -> str | None:
@@ -221,6 +229,23 @@ def simulation_manage(request, pk: int):
                     messages.success(request, "Parameters saved.")
                     return redirect(reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk}) + "#run")
             logger.info("Parameters invalid simulation_id=%s", sim.pk)
+        elif request.POST.get("form_id") == "preset":
+            key = request.POST.get("preset", "")
+            if key not in PRESETS:
+                messages.error(request, "Choose one of the presets.")
+                return redirect(reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk}) + "#parameters")
+            seed = current.run.seed if current.run.seed is not None else new_seed()
+            params = preset_params(key, seed=seed)
+            if message := _size_error(params, sim):
+                messages.error(request, f"The preset was not applied: {message}")
+            else:
+                sim.set_params(params)
+                sim.save(update_fields=["params", "updated_at"])
+                messages.success(
+                    request,
+                    f"Applied the preset “{PRESETS[key].title}”: every parameter now comes from it (the seed is kept).",
+                )
+            return redirect(reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk}) + "#parameters")
         else:
             form = SimulationForm(request.POST, instance=sim)
             if form.is_valid():
@@ -230,11 +255,30 @@ def simulation_manage(request, pk: int):
             logger.info("Simulation form invalid simulation_id=%s fields=%s", sim.pk, sorted(form.errors))
 
     context = manage_context(request, sim, form=form, params_form=params_form)
+    context["presets"] = PRESETS
+    context["preview"] = market_preview(current, sim.uploads_by_side())
     warnings = current.warnings() if not params_form.is_bound else []
     implemented = set(IMPLEMENTED_SECTIONS)
     context["param_warnings"] = [w for w in warnings if w.path.split(".")[0] in implemented]
     context["planned_warnings"] = [w for w in warnings if w.path.split(".")[0] not in implemented]
     return render(request, "nrmps/simulation_manage.html", context)
+
+
+@require_POST
+def params_preview(request, pk: int):
+    """The preview panel for the parameters as edited (HTMX, not saved): the market they give and its pictures."""
+    sim = get_owned_simulation(request, pk)
+    try:
+        current = sim.get_params()
+    except ValueError:
+        current = SimulationParams()
+    form = ParamsForm(request.POST, initial=current)
+    context: dict[str, Any] = {"simulation": sim, "preview": None, "preview_errors": []}
+    if form.is_valid() and form.params is not None:
+        context["preview"] = market_preview(form.params, sim.uploads_by_side())
+    else:
+        context["preview_errors"] = [f"{label}: {message}" for _anchor, label, message in form.error_summary()][:5]
+    return render(request, "nrmps/partials/_params_preview.html", context)
 
 
 def _run_and_redirect(request: HttpRequest, sim: Simulation) -> HttpResponse:

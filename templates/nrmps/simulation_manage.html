@@ -56,6 +56,20 @@
             {% endfor %}
           </div>
         </section>
+        <section class="card bg-base-100 shadow-xl lg:sticky lg:top-4" aria-labelledby="preview-title">
+          <div class="card-body">
+            <h2 id="preview-title" class="card-title">
+              What these parameters give
+              <span id="preview-updating" class="loading loading-dots loading-xs htmx-indicator" aria-hidden="true"></span>
+            </h2>
+            <p class="text-xs text-base-content/70">Updates as you edit the parameters; save them to keep the changes.</p>
+            <div id="params-preview" class="space-y-3" hx-indicator="#preview-updating"
+                 hx-post="{% url 'nrmps:params_preview' pk=simulation.pk %}" hx-include="#parameters"
+                 hx-trigger="input delay:600ms from:#parameters, change delay:100ms from:#parameters" hx-sync="this:replace">
+              {% include "nrmps/partials/_params_preview.html" %}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>

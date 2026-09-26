@@ -3,15 +3,29 @@
   The parameter editor, generated from the schema (nrmps.params_forms.ParamsForm): one section per parameter group,
   advanced options collapsed, list parameters as tables, and the parameters of planned features in a collapsed group.
 {% endcomment %}
-<form method="post" id="parameters" class="card bg-base-100 shadow-xl" novalidate>
-  {% csrf_token %}
-  <input type="hidden" name="form_id" value="params">
+<section class="card bg-base-100 shadow-xl" aria-labelledby="parameters-title">
   <div class="card-body">
-    <h2 class="card-title">Parameters</h2>
+    <h2 id="parameters-title" class="card-title">Parameters</h2>
     <p class="text-sm text-base-content/70">
       The <a class="link" href="{% url 'nrmps:help' %}#parameters">help page</a> explains every parameter and the
-      model behind them.
+      model behind them. The panel beside the form shows what the parameters give as you edit them.
     </p>
+    <form method="post" class="flex flex-wrap items-end gap-2"
+          data-confirm="Replace every parameter with the preset? The seed is kept; changes that are not saved are lost.">
+      {% csrf_token %}
+      <input type="hidden" name="form_id" value="preset">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend"><label for="preset-choice">Start again from a preset</label></legend>
+        <select id="preset-choice" name="preset" class="select select-sm w-72 max-w-full">
+          {% for key, preset in presets.items %}<option value="{{ key }}">{{ preset.title }}</option>{% endfor %}
+        </select>
+      </fieldset>
+      <button type="submit" class="btn btn-sm btn-outline mb-1">Apply preset</button>
+    </form>
+    <div class="divider my-1"></div>
+  <form method="post" id="parameters" novalidate data-dirty-guard>
+    {% csrf_token %}
+    <input type="hidden" name="form_id" value="params">
 
     {% if params_form.has_errors %}
       <div role="alert" class="alert alert-error">
@@ -90,9 +104,11 @@
       </div>
     </details>
 
-    <div class="card-actions justify-end mt-2">
+    <div class="card-actions justify-end items-center mt-2">
+      <span class="badge badge-warning" data-dirty-indicator hidden>Unsaved changes</span>
       <button type="submit" class="btn btn-outline">Save</button>
       <button type="submit" name="run" value="1" class="btn btn-primary">Save and run</button>
     </div>
+  </form>
   </div>
-</form>
+</section>

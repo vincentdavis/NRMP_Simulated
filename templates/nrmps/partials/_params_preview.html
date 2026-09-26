@@ -1,0 +1,43 @@
+{% load humanize %}
+{% comment %}
+  What the parameters give (plan step 4.2, nrmps.previews.market_preview): for the saved parameters when the page
+  loads, then for the parameters as edited after each change (HTMX from the parameter form, nothing saved).
+  Context: preview (or None) and preview_errors.
+{% endcomment %}
+{% if preview %}
+  <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+    <div><dt class="text-base-content/70">Applicants</dt><dd class="tabular-nums font-medium">{{ preview.applicants|intcomma }}{% if preview.sources.applicants == "uploaded" %} (uploaded){% endif %}</dd></div>
+    <div><dt class="text-base-content/70">Programs</dt><dd class="tabular-nums font-medium">{{ preview.programs|intcomma }}{% if preview.sources.programs == "uploaded" %} (uploaded){% endif %}</dd></div>
+    {% if preview.positions %}
+      <div><dt class="text-base-content/70">Positions</dt><dd class="tabular-nums font-medium">{{ preview.positions|intcomma }}</dd></div>
+      <div><dt class="text-base-content/70">Applicants per position</dt><dd class="tabular-nums font-medium">{{ preview.applicants_per_position|floatformat:3 }}</dd></div>
+      <div><dt class="text-base-content/70">Interview slots</dt><dd class="tabular-nums font-medium">{{ preview.interview_slots|intcomma }}</dd></div>
+    {% endif %}
+    <div><dt class="text-base-content/70">Applications each</dt><dd class="tabular-nums font-medium">{{ preview.applications|intcomma }}</dd></div>
+    <div><dt class="text-base-content/70">Signals each</dt><dd class="tabular-nums font-medium">{{ preview.signals|intcomma }}</dd></div>
+    <div><dt class="text-base-content/70">Interviews each (at most)</dt><dd class="tabular-nums font-medium">{{ preview.applicant_cap|intcomma }}</dd></div>
+  </dl>
+  <p class="text-sm {% if preview.size_error %}text-error{% else %}text-base-content/70{% endif %}">
+    {% if preview.size_error %}{{ preview.size_error }}{% else %}{{ preview.pairs|intcomma }} applicant–program pairs; the limit is {{ preview.max_pairs|intcomma }}.{% endif %}
+  </p>
+  {% for warning in preview.warnings %}
+    <div role="status" class="alert alert-warning text-sm py-2"><span>{{ warning.message }}</span></div>
+  {% endfor %}
+  {% for picture in preview.pictures %}
+    <figure class="block w-full min-w-0">
+      <figcaption class="text-sm font-medium">{{ picture.title }}</figcaption>
+      <svg viewBox="0 0 240 56" preserveAspectRatio="none" class="w-full h-14 text-primary" role="img" aria-label="{{ picture.description }}">
+        {% if picture.path %}<path d="{{ picture.path }}" fill="currentColor" fill-opacity="0.25" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke"/>{% endif %}
+        {% for bar in picture.bars %}<rect x="{{ bar.x }}" y="{{ bar.y }}" width="{{ bar.width }}" height="{{ bar.height }}" fill="currentColor" fill-opacity="0.6"/>{% endfor %}
+      </svg>
+      <div class="flex justify-between text-xs text-base-content/70 tabular-nums"><span>{{ picture.low }}</span><span>{{ picture.high }}</span></div>
+    </figure>
+  {% endfor %}
+{% else %}
+  <div role="status" class="alert alert-warning text-sm">
+    <div>
+      <p>Fix these to see what the parameters give:</p>
+      <ul class="list-disc ms-5">{% for error in preview_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+{% endif %}

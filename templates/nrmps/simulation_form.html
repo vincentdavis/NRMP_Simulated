@@ -18,6 +18,26 @@
       {% field_row form.name %}
       {% field_row form.description label="Description (optional)" %}
       {% field_row form.public %}
+      {% if presets %}
+        <fieldset class="fieldset" aria-describedby="preset-help">
+          <legend class="fieldset-legend">{{ form.preset.label }}</legend>
+          <p id="preset-help" class="text-sm text-base-content/70">{{ form.preset.help_text }}</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {% for key, preset, checked in presets %}
+              <label class="card card-border bg-base-100 cursor-pointer has-checked:border-primary has-checked:bg-base-200">
+                <span class="card-body p-4 gap-1">
+                  <span class="flex items-center gap-2">
+                    <input type="radio" name="preset" value="{{ key }}" class="radio radio-sm radio-primary"{% if checked %} checked{% endif %}>
+                    <span class="font-medium">{{ preset.title }}</span>
+                  </span>
+                  <span class="text-sm text-base-content/70">{{ preset.description }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          {% for error in form.preset.errors %}<p class="text-sm text-error">{{ error }}</p>{% endfor %}
+        </fieldset>
+      {% endif %}
       <div class="card-actions justify-end mt-4">
         <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Cancel</a>
         <button type="submit" class="btn btn-primary">{% if create %}Create{% else %}Save{% endif %}</button>

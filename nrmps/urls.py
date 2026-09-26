@@ -80,6 +80,7 @@ urlpatterns = [
         name="population_upload_remove",
     ),
     # Runs
+    path("simulations/<int:pk>/parameters/preview/", views.params_preview, name="params_preview"),
     path("simulations/<int:pk>/runs/", views.run_start, name="run_start"),
     path("simulations/<int:pk>/runs/status/", views.run_status, name="run_status"),
     path("simulations/<int:pk>/runs/<int:number>/", run_views.run_detail, name="run_detail"),

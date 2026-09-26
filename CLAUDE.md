@@ -119,7 +119,9 @@ stored.
 nrmps/
 ├── models.py             # domain models (above)
 ├── params.py             # SimulationParams: typed, versioned parameter schema (pydantic), the source of truth
-├── params_forms.py       # Django forms and formsets generated from the schema (the parameter editor)
+├── params_forms.py       # Django forms and formsets generated from the schema (the parameter editor, sliders)
+├── presets.py            # named parameter presets (changes from the defaults)
+├── previews.py           # the live "what these parameters give" panel beside the parameter form
 ├── engine/               # model 2.1, pure numpy, no Django: rng (streams, Philox), population, utility, rank,
 │                         #   metrics, applications, signals, invitations, interviews, rol, match (deferred
 │                         #   acceptance), outcomes, validate (checks of every match), pipeline (run_pipeline),
@@ -152,7 +154,7 @@ nrmps/
 templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/ (the run's tabs
                           #   extend runs/_layout.html), help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
-static/js/site.js         # toasts, confirmation dialog, HTMX error handling, theme toggle, list editors
+static/js/site.js         # toasts, confirmation dialog, HTMX errors, sliders, unsaved-changes guard, theme, list editors
 static/js/nrmp-charts.js  # draws [data-chart] elements with ECharts from json_script payloads (theme-aware)
 static/vendor/            # htmx, Alpine.js and ECharts by version (`npm run vendor` in theme/static_src)
 docs/                     # review, plan, status, deployment, model spec

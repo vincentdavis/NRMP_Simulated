@@ -7,6 +7,7 @@ pydantic checks the assembled parameters, and its errors are attached to the fie
 they concern. Nothing about a parameter is written twice: labels, help, limits and defaults all come from the schema.
 """
 
+import math
 import types
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -51,6 +52,19 @@ def _base_type(annotation: Any) -> tuple[Any, bool]:
     return annotation, False
 
 
+SLIDER_MAX_SPAN = 10  # bounded float parameters up to this wide get a slider next to their number input
+
+
+def slider_step(spec: ParamField) -> float | None:
+    """Return the slider step of a bounded float parameter (about a hundredth of its range), or None for no slider."""
+    if spec.minimum is None or spec.maximum is None or spec.exclusive_minimum:
+        return None
+    span = float(spec.maximum) - float(spec.minimum)
+    if not 0 < span <= SLIDER_MAX_SPAN:
+        return None
+    return float(10 ** math.floor(math.log10(span / 100)))
+
+
 def make_field(spec: ParamField) -> forms.Field:
     """Build the Django form field for one scalar parameter."""
     base, optional = _base_type(spec.field.annotation)
@@ -74,6 +88,8 @@ def make_field(spec: ParamField) -> forms.Field:
         float_field.widget.attrs["step"] = "any"
         if spec.exclusive_minimum and spec.minimum is not None:
             float_field.widget.attrs["min"] = spec.minimum
+        if (step := slider_step(spec)) is not None:
+            float_field.widget.attrs["data-slider"] = step  # static/js/site.js adds a slider next to the input
         return float_field
     if base is str:
         validators = [

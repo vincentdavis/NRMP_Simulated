@@ -1,4 +1,5 @@
-// Site-wide behaviour: toasts, the confirmation dialog, HTMX error reporting and the theme toggle.
+// Site-wide behaviour: toasts, the confirmation dialog, HTMX error reporting, sliders, the unsaved-changes guard and
+// the theme toggle.
 // Loaded on every page after htmx. Text is always inserted with textContent, never as HTML.
 (function () {
   "use strict";
@@ -84,6 +85,59 @@
     body.addEventListener("htmx:sendError", () => {
       showToast("error", "Could not reach the server. Check your connection and try again.");
     });
+  });
+
+  // --- Sliders ------------------------------------------------------------------------------------------------------
+  // Number inputs with data-slider="step" (bounded parameters, nrmps.params_forms.slider_step) get a range slider
+  // below them. The number input stays the labelled, keyboard-accessible control; the slider is a pointer
+  // convenience, hidden from assistive technology.
+  function addSliders(root) {
+    root.querySelectorAll("fieldset.fieldset input[type=number][data-slider]:not([data-slider-ready])").forEach((input) => {
+      input.dataset.sliderReady = "1";
+      const range = document.createElement("input");
+      range.type = "range";
+      range.className = "range range-xs range-primary w-full mt-2";
+      range.min = input.min;
+      range.max = input.max;
+      range.step = input.dataset.slider;
+      range.value = input.value === "" ? input.min : input.value;
+      range.tabIndex = -1;
+      range.setAttribute("aria-hidden", "true");
+      range.addEventListener("input", () => {
+        input.value = range.value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      input.addEventListener("input", () => {
+        if (input.value !== "") range.value = input.value;
+      });
+      input.insertAdjacentElement("afterend", range);
+    });
+  }
+  document.addEventListener("DOMContentLoaded", () => addSliders(document));
+  document.addEventListener("htmx:afterSettle", (event) => addSliders(event.target));
+
+  // --- Unsaved changes ------------------------------------------------------------------------------------------
+  // A form with data-dirty-guard shows its [data-dirty-indicator] once edited, and the browser asks before the page
+  // is left with the changes unsaved. A form submission that leaves the page ends the guard.
+  let leaving = false;
+  function markDirty(event) {
+    const form = event.target instanceof Element ? event.target.closest("form[data-dirty-guard]") : null;
+    if (!form || form.dataset.dirty) return;
+    form.dataset.dirty = "1";
+    form.querySelectorAll("[data-dirty-indicator]").forEach((element) => {
+      element.hidden = false;
+    });
+  }
+  document.addEventListener("input", markDirty);
+  document.addEventListener("change", markDirty);
+  // Registered after the confirmation handler: a submission it holds back, or one HTMX sends, does not leave.
+  document.addEventListener("submit", (event) => {
+    if (!event.defaultPrevented) leaving = true;
+  });
+  window.addEventListener("beforeunload", (event) => {
+    if (leaving || !document.querySelector("form[data-dirty-guard][data-dirty]")) return;
+    event.preventDefault();
+    event.returnValue = "";
   });
 
   // --- List editors (formsets) ---------------------------------------------------------------------------------
