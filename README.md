@@ -63,7 +63,7 @@ deploy and health-checks `/healthz`. `docker compose up --build` runs the produc
 - [docs/PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md): the project review and the phased plan.
 - [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md): what has been done, step by step.
 - [docs/DEPLOY.md](docs/DEPLOY.md): deployment and operations.
-- [docs/model_spec.md](docs/model_spec.md): the proposed model 2.0 for the next engine.
+- [docs/model_spec.md](docs/model_spec.md): the model 2.0 specification (normative since Phase 2).
 - [CLAUDE.md](CLAUDE.md): notes for AI coding assistants (commands, architecture, conventions).
 
 ## License

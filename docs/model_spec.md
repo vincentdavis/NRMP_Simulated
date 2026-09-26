@@ -1,16 +1,12 @@
 # NRMP Simulated: model specification 2.0
 
-> **Status in this repository: proposed, not implemented.** This spec was written alongside the lost Phase 2
-> implementation (see [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)); `nrmps/params.py` and `nrmps/engine/`
-> do not exist yet. It becomes normative when decision D1 adopts it at the start of Phase 2. The paragraph below
-> states its intended status.
-
-**Status: normative for `model_version = "2.0"`** (engine `2.0.x`, parameter schema v1 in `nrmps/params.py`).
-The Python engine (`nrmps/engine/`), the help formulas, presets and any browser port implement this document.
-Every run stores the `model_version` it used; any change to a formula, a stream ID or a draw recipe needs a new
-model version, because results are then no longer reproducible from (parameters, seed). The defects of the legacy
-v1 generator that motivated this model are described in [Appendix A §1](review/A-model-spec.md) of the project
-review.
+**Status: normative for `model_version = "2.0"`** (engine `2.0.x`, parameter schema v1 in `nrmps/params.py`),
+adopted by owner decision D1 on 2026-09-25. The Python engine (`nrmps/engine/`), the help formulas, presets and any
+browser port implement this document. Every run stores the `model_version` it used (§12.11); any change to a
+formula, a stream ID or a draw recipe needs a new model version, because results are then no longer reproducible
+from (parameters, seed). The defects of the legacy v1 generator that motivated this model are described in
+[Appendix A §1](review/A-model-spec.md) of the project review; by decision D3 the v1 generator and its results are
+removed rather than kept read-only.
 
 Implementation status: Phase 2 implements §3–6, the pre-interview ranks of §8 and the diagnostics of §10 that exist
 before applications. §7, rank order lists and the match are specified but not implemented; their parameters exist in
@@ -346,7 +342,8 @@ pair_normal   = sqrt(-2 * log(uniform(w0, w1))) * cos(6.283185307179586 * unifor
 - **Standardisation** $\operatorname{std}(x)=(x-\bar x)/s$ with the population SD $s$ (ddof = 0). A vector with
   $s\le10^{-12}\max(1,\max|x|)$ counts as constant and maps to zeros.
 - **Largest remainder** (Hamilton): entry $k$ gets $\lfloor T\,w_k/\sum w\rfloor$; the leftover units go to the largest
-  fractional parts, ties broken by index (groups, tiers) or by the `CAP` uniforms (capacities).
+  fractional parts, ties broken by index (groups, tiers: the lower index first) or by the `CAP` uniforms
+  (capacities: the smaller uniform first).
 - **Quantiles** $P_j$, $Q_i$: the 0-based ascending rank (ties by index) divided by $n-1$; the lowest value gets 0, the
   highest 1, and a single agent gets 1.
 - **Residualisation coefficient** $b_l=\operatorname{Cov}_j(y_l,C)/\operatorname{Var}_j(C)$ with population moments
@@ -410,3 +407,18 @@ and keys unique and matching `^[a-z][a-z0-9_]{0,39}$`; shapes and dtypes; no NaN
 Cross-field rules on implemented parameters are validation errors (group and tier shares sum to 1 within 10⁻⁶,
 unique names and keys, M ≤ P, $N\cdot M\le5\times10^7$); rules on planned stages are warnings
 (`SimulationParams.warnings()`).
+
+### 12.11 Version stamps
+
+Every run stores, next to its parameters and seed:
+
+| Stamp | Source | Changes when |
+|---|---|---|
+| `model_version` | `nrmps.engine.MODEL_VERSION` (`"2.0"`) | a formula, stream ID, draw recipe or numeric definition in this document changes |
+| `engine_version` | `nrmps.engine.ENGINE_VERSION` (`"2.0.x"`) | the engine code changes without changing results (the patch number), or with a new model version |
+| `schema_version` | `nrmps.params.SCHEMA_VERSION` (1) | the parameter schema changes incompatibly; older versions are upgraded on load |
+| `app_version` | `version` in `pyproject.toml` | a release |
+| `git_sha` | `GIT_SHA` or Railway's `RAILWAY_GIT_COMMIT_SHA` | every deploy (empty when unknown) |
+| `numpy_version`, `python_version` | the running interpreter | an upgrade; population draws use numpy's algorithms (§12.2) |
+
+Exports carry the same stamps, so a result can be traced to the code and model that produced it.

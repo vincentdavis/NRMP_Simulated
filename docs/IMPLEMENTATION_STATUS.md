@@ -66,7 +66,18 @@ on every page, in the light and dark themes; the dead-class check passes; no pag
 shows a spinner and a result toast; download → upload is lossless (tested, including a hypothesis property);
 password reset and account deletion work end to end.
 
-## Phases 2–8
+## Phase 2: Model spec, typed parameters, seeded engine, runs and background jobs
+
+| Step | Status | Notes |
+|---|---|---|
+| 2.0 Decisions and the model spec | Done | D1, D3, D5 and D7 decided (table above). [model_spec.md](model_spec.md) is normative for `model_version = "2.0"`; one ambiguity was settled while adopting it (the tie order of the largest-remainder rule, §12.5). The version-stamping scheme is §12.11: every run stores the model, engine, schema and app versions, the git SHA and the numpy and Python versions. **Legacy data (D3):** the v1 generator, its populations and interview rows are removed when the new tables arrive (step 2.3); simulations keep their owner, name and description, and their configuration is converted to model 2.0 parameters where a field has an equivalent (market size, attribute names). |
+| 2.1 Typed parameter schema | Not started | |
+| 2.2 Seeded engine | Not started | |
+| 2.3 Runs and storage | Not started | |
+| 2.4 Stage state machine | Not started | |
+| 2.5 Background jobs and operations | Not started | |
+
+## Phases 3–8
 
 Not started.
 

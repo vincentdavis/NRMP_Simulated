@@ -165,7 +165,7 @@ The project is being reworked according to a review and phased plan:
 - `docs/IMPLEMENTATION_STATUS.md`: what has been done so far, step by step, and open owner decisions.
 - `docs/review/`: appendices (model spec draft, stage spec, parameters, UX, visualization, help, engineering) and
   `FINDINGS.md`, the register of every finding (IDs such as SIM-1 or ENG-3) with evidence and recommendations.
-- `docs/model_spec.md`: the proposed model 2.0 for the Phase 2 engine (not implemented yet).
+- `docs/model_spec.md`: the normative model 2.0 specification that the Phase 2 engine implements.
 
 **Do not build `interview()`, `students_rank()`, `schools_rank()` or `match()` on the current per-row ORM engine in
 `simulation_engine.py`.** Phase 2 replaces it with a seeded, vectorised engine, and Phase 3 builds the remaining
