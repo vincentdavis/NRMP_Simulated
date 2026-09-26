@@ -17,6 +17,9 @@
           populations you generate or upload, and the computed ratings and rankings.</li>
         <li><strong>Uploads:</strong> CSV files are read in memory and not kept as files; only the rows they contain
           are stored, as the simulation's population.</li>
+        <li><strong>Failed sign-ins:</strong> to block password guessing, a failed sign-in records the username tried,
+          the IP address and the browser identification. The record is cleared when that username signs in
+          successfully. Successful sign-ins are not recorded.</li>
       </ul>
       <p class="mt-2">Everything is stored in the site's database, hosted by the cloud provider
         <a class="link" href="https://railway.com">Railway</a>. Only you can see your simulations.</p>

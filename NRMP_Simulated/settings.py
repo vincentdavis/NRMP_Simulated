@@ -10,6 +10,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -100,6 +101,7 @@ INSTALLED_APPS = [
     "tailwind",
     "theme",
     "django_htmx",
+    "axes",
 ]
 
 # Development-only apps (installed with the dev dependency group)
@@ -121,6 +123,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     ### Add ons
     "django_htmx.middleware.HtmxMiddleware",
+    # Last, as django-axes requires.
+    "axes.middleware.AxesMiddleware",
 ]
 
 # Development-only middleware
@@ -173,6 +177,24 @@ else:
         "DATABASE_URL must be set when DEBUG is off (use sqlite:///path/to/file.sqlite3 for a local SQLite database)."
     )
 
+
+# Authentication. django-axes comes first so it can refuse sign-ins from a locked-out client.
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+# Login throttling (django-axes): after 5 failed sign-ins for the same username from the same client, that pair is
+# locked out for 15 minutes. Successful sign-ins are not logged.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True
+AXES_DISABLE_ACCESS_LOG = True
+AXES_LOCKOUT_TEMPLATE = "registration/lockout.html"
+AXES_CLIENT_IP_CALLABLE = "nrmps.security.client_ip"
+# Reverse proxies in front of the app that append to X-Forwarded-For: Railway's edge in production, none locally.
+TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0" if DEBUG else "1"))
 
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators

@@ -1,20 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Account - NRMP Simulations{% endblock %}
 {% block content %}
-  <div class="py-4">
-    <h2>Account</h2>
-    <p class="text-muted">Manage your account details and preferences.</p>
+  <div class="py-4 max-w-2xl">
+    <h1 class="text-2xl font-bold mb-2">Account</h1>
+    <p class="text-base-content/70 mb-6">Your account details.</p>
     {% if request.user.is_authenticated %}
-      <ul class="menu bg-base-200 w-full rounded-box mb-4">
-        <li class="menu-item"><span>Username: {{ request.user.get_username }}</span></li>
-        <li class="menu-item"><span>Email: {{ request.user.email|default:"—" }}</span></li>
-        <li class="menu-item"><span>Is Staff: {{ request.user.is_staff }}</span></li>
-      </ul>
-      <a class="btn btn-outline" href="/admin/password_change/">Change password</a>
+      <dl class="bg-base-200 rounded-box p-4 mb-6 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
+        <dt class="font-medium">Username</dt><dd>{{ request.user.get_username }}</dd>
+        <dt class="font-medium">Full name</dt><dd>{{ request.user.full_name|default:"—" }}</dd>
+        <dt class="font-medium">Email</dt><dd>{{ request.user.email|default:"—" }}</dd>
+      </dl>
+      <div class="flex flex-wrap gap-2">
+        <a class="btn btn-outline" href="{% url 'nrmps:password_change' %}">Change password</a>
+        <a class="btn btn-outline" href="{% url 'nrmps:simulation_list' %}">Your simulations</a>
+      </div>
+      <p class="text-sm text-base-content/70 mt-6">
+        To delete your account and all its simulations, see the <a class="link" href="{% url 'nrmps:privacy' %}">privacy page</a>.
+      </p>
     {% else %}
-      <div class="alert alert-info">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        <span>You are not logged in. Please <a href="{% url 'nrmps:login' %}">log in</a> or <a href="{% url 'nrmps:signup' %}">create an account</a> to manage your account.</span>
+      <div role="alert" class="alert alert-info">
+        <span>You are not signed in. Please <a class="link" href="{% url 'nrmps:login' %}">log in</a> or
+          <a class="link" href="{% url 'nrmps:signup' %}">create an account</a>.</span>
       </div>
     {% endif %}
   </div>
