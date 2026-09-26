@@ -133,7 +133,8 @@ nrmps/
 ├── ratelimit.py          # rate limits counted in the database (sign-ups per IP, runs and uploads per account)
 ├── population_csv.py     # CSV format for population upload/download (one module for both directions)
 ├── views.py              # public pages, simulation list, the simulation page, runs and uploads (HTMX)
-├── run_views.py          # run page (match, funnel, checks, diagnostics), lists, one agent's stages, downloads
+├── run_views.py          # a run's tabs (summary, population, before interviews, applications with filters, match),
+│                         #   the applicant and program lists, one agent's stages, downloads
 ├── charts.py             # payloads of the run page's diagnostic charts (drawn by static/js/nrmp-charts.js)
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
 ├── help_views.py         # /help/ (reference generated from the schema) and the staff-only developer reference
@@ -148,7 +149,8 @@ nrmps/
 ├── management/commands/  # nrmp_run (the engine headless), nrmp_validate (validation report), seed_demo,
 │                         #   nrmp_worker (queued runs), nrmp_cleanup
 └── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link), format_tags (percent)
-templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/, help/
+templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/ (the run's tabs
+                          #   extend runs/_layout.html), help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
 static/js/site.js         # toasts, confirmation dialog, HTMX error handling, theme toggle, list editors
 static/js/nrmp-charts.js  # draws [data-chart] elements with ECharts from json_script payloads (theme-aware)

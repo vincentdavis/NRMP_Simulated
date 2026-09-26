@@ -1,0 +1,84 @@
+{% extends "nrmps/runs/_layout.html" %}
+{% load humanize list_tags %}
+{% block run_content %}
+  {% include "nrmps/runs/_stats.html" with items=stats %}
+  {% include "nrmps/runs/_funnel.html" %}
+
+  <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="applications-title">
+    <div class="card-body">
+      <h2 id="applications-title" class="card-title">Every application</h2>
+      <p class="text-sm text-base-content/70">
+        Each row is one application: the applicant's pre-interview rank of the program, the signal they sent, the
+        program's invitation (and its wave), whether the interview took place, where each side put the other on its
+        rank order list, and the match. Filter by stage, signal or name; names link to each agent's page.
+      </p>
+      <form method="get" class="flex flex-wrap items-end gap-3" aria-label="Filter the applications">
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <input type="hidden" name="order" value="{{ order }}">
+        <input type="hidden" name="page_size" value="{{ page_size }}">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><label for="filter-status">Stage reached</label></legend>
+          <select id="filter-status" name="status" class="select select-sm w-56">
+            {% for key, label in statuses.items %}<option value="{{ key }}"{% if filters.status == key %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><label for="filter-signal">Signal</label></legend>
+          <select id="filter-signal" name="signal" class="select select-sm w-36">
+            <option value=""{% if not filters.signal %} selected{% endif %}>Any</option>
+            <option value="yes"{% if filters.signal == "yes" %} selected{% endif %}>With a signal</option>
+            <option value="no"{% if filters.signal == "no" %} selected{% endif %}>Without</option>
+          </select>
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><label for="filter-applicant">Applicant name contains</label></legend>
+          <input id="filter-applicant" type="search" name="applicant" value="{{ filters.applicant }}" maxlength="100" class="input input-sm w-48" autocomplete="off">
+        </fieldset>
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend"><label for="filter-program">Program name contains</label></legend>
+          <input id="filter-program" type="search" name="program" value="{{ filters.program }}" maxlength="100" class="input input-sm w-48" autocomplete="off">
+        </fieldset>
+        <div class="flex gap-2 pb-1">
+          <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+          {% if filtered %}<a class="btn btn-sm btn-ghost" href="{% url 'nrmps:run_applications' pk=simulation.pk number=run.number %}#applications-title">Clear</a>{% endif %}
+        </div>
+      </form>
+      {% include "nrmps/components/page_size.html" %}
+      <div class="overflow-x-auto">
+        <table class="table table-zebra table-sm">
+          <thead>
+            <tr>
+              {% sort_th "applicant" "Applicant" %}
+              {% sort_th "program" "Program" %}
+              {% sort_th "pre_rank" "Applicant's pre-interview rank" "right" %}
+              <th scope="col">Signal</th>
+              <th scope="col">Invited</th>
+              <th scope="col">Interview</th>
+              {% sort_th "applicant_rank" "Applicant's list rank" "right" %}
+              {% sort_th "program_rank" "Program's list rank" "right" %}
+              <th scope="col">Match</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr{% if row.matched %} class="font-semibold"{% endif %}>
+                <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.applicant %}">{{ row.applicant_name }}</a></td>
+                <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.program %}">{{ row.program_name }}</a></td>
+                <td class="text-right tabular-nums">{{ row.pre_rank|intcomma }}</td>
+                <td>{{ row.signal }}</td>
+                <td class="whitespace-nowrap">{% if row.wave %}Wave {{ row.wave }}{% else %}<span class="text-base-content/70">No</span>{% endif %}</td>
+                <td>{% if row.interviewed %}Yes{% elif row.wave %}<span class="text-base-content/70">Declined</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ row.applicant_rank|default_if_none:"" }}</td>
+                <td class="text-right tabular-nums">{{ row.program_rank|default_if_none:"" }}</td>
+                <td>{% if row.matched %}<span class="badge badge-success badge-sm">Matched</span>{% endif %}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="9">No application matches these filters.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% include "nrmps/components/pagination.html" with label="Application pages" %}
+    </div>
+  </section>
+{% endblock %}

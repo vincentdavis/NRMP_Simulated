@@ -1,34 +1,15 @@
-{% extends "base.html" %}
-{% load humanize static %}
-{% block title %}Run {{ run.number }} - {{ simulation.name }}{% endblock %}
-{% block content %}
-<div class="mt-4">
-  {% include "nrmps/components/breadcrumbs.html" %}
-  <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold min-w-0 break-words">
-      Run {{ run.number }} {% include "nrmps/components/run_status.html" with status=run.status %}
-    </h1>
-    <div class="flex flex-wrap gap-2">
-      <a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}" class="btn btn-outline">Back to simulation</a>
-      {% if not run.is_active %}
-        <form method="post" action="{% url 'nrmps:run_delete' pk=simulation.pk number=run.number %}"
-              data-confirm="Delete run {{ run.number }} and its results? The parameters and seed are shown on this page if you want to repeat it later.">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-error">Delete run</button>
-        </form>
-      {% endif %}
-    </div>
-  </div>
-  <p class="text-sm text-base-content/70 mb-4">
-    Simulated from the assumptions below; not a prediction of any real applicant's or program's match.
-  </p>
-
-  {% if run.status == "failed" %}
-    <div role="alert" class="alert alert-error mb-4"><span>This run failed: {{ run.error }}</span></div>
-  {% elif run.is_active %}
-    {% include "nrmps/runs/_progress.html" %}
+{% extends "nrmps/runs/_layout.html" %}
+{% load humanize %}
+{% block run_actions %}
+  {% if not run.is_active %}
+    <form method="post" action="{% url 'nrmps:run_delete' pk=simulation.pk number=run.number %}"
+          data-confirm="Delete run {{ run.number }} and its results? The parameters and seed are shown on this page if you want to repeat it later.">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-error">Delete run</button>
+    </form>
   {% endif %}
-
+{% endblock %}
+{% block run_content %}
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
     <section class="card bg-base-100 shadow-xl lg:col-span-2" aria-labelledby="summary-title">
       <div class="card-body">
@@ -42,11 +23,16 @@
           <div><dt class="font-medium">Applicants</dt><dd>{{ run.n_applicants|intcomma }} ({{ run.population_source.applicants }})</dd></div>
           <div><dt class="font-medium">Programs</dt><dd>{{ run.n_programs|intcomma }} with {{ run.n_positions|intcomma }} positions ({{ run.population_source.programs }})</dd></div>
         </dl>
-        {% if run.status == "succeeded" %}
-          <div class="flex flex-wrap gap-2 mt-4">
-            <a class="btn btn-sm btn-primary" href="{% url 'nrmps:run_applicants' pk=simulation.pk number=run.number %}">Applicants</a>
-            <a class="btn btn-sm btn-primary" href="{% url 'nrmps:run_programs' pk=simulation.pk number=run.number %}">Programs</a>
-          </div>
+        {% if outcome_views %}
+          <p class="mt-4">
+            {% if outcome_views.passed %}
+              <span class="badge badge-success">Checks passed</span> The match is stable, within capacity and follows the
+              rank order lists.
+            {% else %}
+              <span class="badge badge-error">Checks failed</span> See the checks below; please report this run.
+            {% endif %}
+            <a class="link" href="{% url 'nrmps:run_match' pk=simulation.pk number=run.number %}">See the match</a>.
+          </p>
         {% endif %}
       </div>
     </section>
@@ -99,11 +85,13 @@
     </div>
   </section>
 
-  {% if outcomes %}
-    {% include "nrmps/runs/_outcomes.html" %}
-  {% endif %}
-  {% if metrics %}
-    {% include "nrmps/runs/_metrics.html" %}
+  {% if outcome_views %}
+    <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="checks-title">
+      <div class="card-body">
+        <h2 id="checks-title" class="card-title">Checks</h2>
+        {% include "nrmps/runs/_checks.html" %}
+      </div>
+    </section>
   {% endif %}
 
   <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="params-title">
@@ -136,11 +124,4 @@
       </details>
     </div>
   </section>
-</div>
-{% endblock %}
-{% block extra_js %}
-  {% if charts %}
-    <script src="{% static 'vendor/echarts/6.1.0/echarts.min.js' %}"></script>
-    <script src="{% static 'js/nrmp-charts.js' %}"></script>
-  {% endif %}
 {% endblock %}

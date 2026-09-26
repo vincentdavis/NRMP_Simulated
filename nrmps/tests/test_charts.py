@@ -113,21 +113,27 @@ def test_the_scatter_sample_repeats_and_is_bounded(finished_run):
     assert len(small["programs"]["pre"][0]) == 480
 
 
-def test_the_run_page_embeds_the_charts_and_their_numbers(auth_client, finished_run):
-    url = reverse("nrmps:run_detail", kwargs={"pk": finished_run.simulation_id, "number": finished_run.number})
+@pytest.mark.parametrize(
+    ("view", "kinds"),
+    [
+        ("run_population", {"strength", "quality", "capacity"}),
+        ("run_pre_interview", {"applicant-fidelity", "program-fidelity", "perception-applicants", "demand"}),
+        ("run_applications", {"funnel"}),
+    ],
+)
+def test_the_run_tabs_embed_their_charts_and_numbers(auth_client, finished_run, view, kinds):
+    url = reverse(f"nrmps:{view}", kwargs={"pk": finished_run.simulation_id, "number": finished_run.number})
     body = auth_client.get(url).content.decode()
-    for text in (
-        'data-chart="funnel"',
-        'id="chart-strength"',
-        'data-payload="chart-demand"',
-        "vendor/echarts/6.1.0/echarts.min.js",
-        "js/nrmp-charts.js",
-        "Where do applications drop out?",
-        'aria-describedby="chart-funnel-summary"',
-        "The numbers",
-    ):
+    for key in kinds:
+        assert f'id="chart-{key}"' in body, key
+        assert f'aria-describedby="chart-{key}-summary"' in body, key
+    for text in ("vendor/echarts/6.1.0/echarts.min.js", "js/nrmp-charts.js"):
         assert text in body, text
-    assert body.count("data-chart=") == 10
+
+
+def test_the_summary_tab_loads_no_chart_code(auth_client, finished_run):
+    url = reverse("nrmps:run_detail", kwargs={"pk": finished_run.simulation_id, "number": finished_run.number})
+    assert b"echarts" not in auth_client.get(url).content
 
 
 def test_runs_without_results_load_no_chart_code(auth_client, simulation, user, monkeypatch):

@@ -21,6 +21,10 @@ PRIVATE = [
     "/simulations/new/",
     "/simulations/{pk}/",
     "/simulations/{pk}/runs/1/",
+    "/simulations/{pk}/runs/1/population/",
+    "/simulations/{pk}/runs/1/before-interviews/",
+    "/simulations/{pk}/runs/1/applications/",
+    "/simulations/{pk}/runs/1/match/",
     "/simulations/{pk}/runs/1/applicants/",
     "/simulations/{pk}/runs/1/programs/",
     "/simulations/{pk}/runs/1/applicants/1/",
@@ -82,18 +86,18 @@ def test_private_pages_have_no_serious_accessibility_violations(logged_in_page, 
     assert _serious_violations(page) == []
 
 
-def test_the_run_page_draws_every_chart_without_script_errors(logged_in_page, live, worked_simulation):
+@pytest.mark.parametrize(("tab", "count"), [("population", 3), ("before-interviews", 6), ("applications", 1)])
+def test_the_run_tabs_draw_every_chart_without_script_errors(logged_in_page, live, worked_simulation, tab, count):
     """ECharts draws each diagnostic chart (plan step 3.8), and again after the theme changes."""
     page = logged_in_page
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/")
-    containers = page.locator("[data-chart]")
-    assert containers.count() == 10
-    page.wait_for_function("document.querySelectorAll('[data-chart] canvas').length === 10")
+    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/{tab}/")
+    assert page.locator("[data-chart]").count() == count
+    page.wait_for_function(f"document.querySelectorAll('[data-chart] canvas').length === {count}")
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     page.wait_for_timeout(200)
-    assert page.locator("[data-chart] canvas").count() == 10
+    assert page.locator("[data-chart] canvas").count() == count
     assert errors == []
     page.set_viewport_size(PHONE)
     page.wait_for_timeout(200)
@@ -111,7 +115,15 @@ def test_new_simulation_page_has_no_serious_accessibility_violations(logged_in_p
 
 @pytest.mark.parametrize(
     "path",
-    ["/", "/login/", "/simulations/{pk}/", "/simulations/{pk}/runs/1/", "/simulations/{pk}/runs/1/applicants/1/"],
+    [
+        "/",
+        "/login/",
+        "/simulations/{pk}/",
+        "/simulations/{pk}/runs/1/",
+        "/simulations/{pk}/runs/1/before-interviews/",
+        "/simulations/{pk}/runs/1/applications/",
+        "/simulations/{pk}/runs/1/applicants/1/",
+    ],
 )
 def test_dark_theme_has_no_serious_accessibility_violations(logged_in_page, live, worked_simulation, path):
     page = logged_in_page

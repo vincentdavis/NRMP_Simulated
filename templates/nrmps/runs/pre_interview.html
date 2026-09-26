@@ -1,0 +1,5 @@
+{% extends "nrmps/runs/_layout.html" %}
+{% block run_content %}
+  {% include "nrmps/runs/_stats.html" with items=stats %}
+  {% include "nrmps/runs/_before_interviews.html" %}
+{% endblock %}

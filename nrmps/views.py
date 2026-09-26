@@ -175,6 +175,7 @@ def manage_context(request: HttpRequest, sim: Simulation, **overrides) -> dict:
         "background": settings.TASK_BACKEND == "database",
         "active_run": sim.active_run(),
         "latest_run": sim.latest_run(),
+        "results_run": sim.latest_run(succeeded=True),
         "recent_runs": sim.runs.defer("params", "metrics", "fingerprints").annotate(
             match_rate=F("metrics__outcomes__match__match_rate")
         )[:RECENT_RUNS],

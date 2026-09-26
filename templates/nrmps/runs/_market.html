@@ -1,0 +1,83 @@
+{% load humanize %}
+{% comment %}The market as generated against the request. Context: metrics.{% endcomment %}
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="generation-title">
+  <div class="card-body">
+    <h2 id="generation-title" class="card-title">The market, as generated</h2>
+    <p class="text-sm text-base-content/70">
+      {{ metrics.market.n_applicants|intcomma }} applicants for {{ metrics.market.n_positions|intcomma }} positions in
+      {{ metrics.market.n_programs|intcomma }} programs: {{ metrics.market.applicants_per_position|floatformat:3 }}
+      applicants per position (requested {{ metrics.market.requested_applicants_per_position }}). Programs have
+      {{ metrics.market.capacity.min }} to {{ metrics.market.capacity.max }} positions (median
+      {{ metrics.market.capacity.median|floatformat:1 }}, mean {{ metrics.market.capacity.mean|floatformat:2 }}).
+      Requested values are shown where the population was generated.
+    </p>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Applicant groups</caption>
+          <thead><tr><th scope="col">Group</th><th scope="col" class="text-right">Share</th><th scope="col" class="text-right">Strength mean</th><th scope="col" class="text-right">Strength SD</th></tr></thead>
+          <tbody>
+            {% for name, group in metrics.generation.groups.items %}
+              <tr>
+                <th scope="row" class="font-normal">{{ name }}</th>
+                <td class="text-right tabular-nums">{{ group.share|floatformat:3 }}{% if group.requested_share is not None %} <span class="text-base-content/70">({{ group.requested_share }})</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ group.strength_mean|floatformat:2|default:"-" }}{% if group.requested_strength_mean is not None %} <span class="text-base-content/70">({{ group.requested_strength_mean }})</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ group.strength_sd|floatformat:2|default:"-" }}{% if group.requested_strength_sd is not None %} <span class="text-base-content/70">({{ group.requested_strength_sd }})</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Program tiers</caption>
+          <thead><tr><th scope="col">Tier</th><th scope="col" class="text-right">Share</th><th scope="col" class="text-right">Quality mean</th></tr></thead>
+          <tbody>
+            {% for name, tier in metrics.generation.tiers.items %}
+              <tr>
+                <th scope="row" class="font-normal">{{ name }}</th>
+                <td class="text-right tabular-nums">{{ tier.share|floatformat:3 }}{% if tier.requested_share is not None %} <span class="text-base-content/70">({{ tier.requested_share }})</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ tier.quality_mean|floatformat:2|default:"-" }}{% if tier.requested_quality_mean is not None %} <span class="text-base-content/70">({{ tier.requested_quality_mean }})</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Applicant attributes (what programs evaluate)</caption>
+          <thead><tr><th scope="col">Attribute</th><th scope="col" class="text-right">Correlation with strength</th><th scope="col" class="text-right">Mean weight from programs</th></tr></thead>
+          <tbody>
+            {% for key, attribute in metrics.generation.applicant_attributes.items %}
+              <tr>
+                <th scope="row" class="font-normal">{{ key }}</th>
+                <td class="text-right tabular-nums">{{ attribute.correlation_with_strength|floatformat:3|default:"-" }}{% if attribute.requested_correlation is not None %} <span class="text-base-content/70">({{ attribute.requested_correlation }})</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ attribute.mean_weight|floatformat:3 }}{% if attribute.requested_mean_weight is not None %} <span class="text-base-content/70">({{ attribute.requested_mean_weight|floatformat:3 }})</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Program attributes (what applicants evaluate)</caption>
+          <thead><tr><th scope="col">Attribute</th><th scope="col" class="text-right">Correlation with quality</th><th scope="col" class="text-right">Mean weight from applicants</th></tr></thead>
+          <tbody>
+            {% for key, attribute in metrics.generation.program_attributes.items %}
+              <tr>
+                <th scope="row" class="font-normal">{{ key }}</th>
+                <td class="text-right tabular-nums">{{ attribute.correlation_with_quality|floatformat:3|default:"-" }}{% if attribute.requested_correlation is not None %} <span class="text-base-content/70">({{ attribute.requested_correlation }})</span>{% elif key == "program_size" %} <span class="text-base-content/70">(from capacity)</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ attribute.mean_weight|floatformat:3 }}{% if attribute.requested_mean_weight is not None %} <span class="text-base-content/70">({{ attribute.requested_mean_weight|floatformat:3 }})</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="text-sm text-base-content/70 mt-2">
+      Share of the common view that the attributes add beyond latent quality:
+      {{ metrics.generation.attribute_share_of_common.applicants|floatformat:3|default:"-" }} for applicants,
+      {{ metrics.generation.attribute_share_of_common.programs|floatformat:3|default:"-" }} for programs.
+    </p>
+  </div>
+</section>

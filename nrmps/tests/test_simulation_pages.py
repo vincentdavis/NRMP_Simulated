@@ -13,6 +13,7 @@ from nrmps.engine.pipeline import run_pipeline
 from nrmps.models import RunArtifact, Simulation, SimulationRun
 from nrmps.params import SimulationParams, load_params
 from nrmps.params_forms import post_data
+from nrmps.runs import RunData
 
 from .conftest import SMALL_PARAMS
 
@@ -141,18 +142,120 @@ def test_other_users_cannot_see_or_run_the_simulation(client, other_user, simula
 # --- Run pages --------------------------------------------------------------------------------------------------------
 
 
-def test_run_page_shows_versions_stages_and_diagnostics(auth_client, finished_run):
+def test_run_summary_shows_versions_stages_and_checks(auth_client, finished_run):
     body = auth_client.get(_run_url(finished_run)).content.decode()
     for text in (
         "Run 1",
         f"Model {MODEL_VERSION}, engine {ENGINE_VERSION}",
         "Population",
         "Pre-interview",
-        "Agreement (true utilities)",
+        "applicant list entries",  # stage counts in words
+        "Checks passed",
+        "How this match was checked",
+        "The match: every applicant's result (CSV)",
+        "Parameters of this run",
     ):
         assert text in body, text
-    assert "Applicant groups" in body
-    assert "Distributions" in body
+
+
+RUN_TABS = ["run_detail", "run_population", "run_pre_interview", "run_applications", "run_match", "run_applicants"]
+RUN_TABS += ["run_programs"]
+
+
+@pytest.mark.parametrize("view", RUN_TABS)
+def test_every_run_tab_links_to_the_others(auth_client, finished_run, view):
+    response = auth_client.get(_run_url(finished_run, view))
+    assert response.status_code == 200
+    body = response.content.decode()
+    for other in RUN_TABS:
+        assert f'href="{_run_url(finished_run, other)}"' in body, other
+    assert f'tab-active" href="{_run_url(finished_run, view)}" aria-current="page"' in body
+
+
+def test_the_population_tab_compares_the_market_with_the_request(auth_client, finished_run):
+    body = auth_client.get(_run_url(finished_run, "run_population")).content.decode()
+    for text in (
+        "Applicant groups",
+        "Program tiers",
+        "Distributions",
+        "Did the generator produce",
+        "applicants per position",
+    ):
+        assert text in body, text
+
+
+def test_the_pre_interview_tab_shows_agreement_and_fidelity(auth_client, finished_run):
+    body = auth_client.get(_run_url(finished_run, "run_pre_interview")).content.decode()
+    for text in ("Agreement (true utilities)", "Applicant agreement", "How accurately do applicants see programs?"):
+        assert text in body, text
+
+
+def test_the_match_tab_shows_the_match_and_who_matched(auth_client, finished_run):
+    body = auth_client.get(_run_url(finished_run, "run_match")).content.decode()
+    match = finished_run.metrics["outcomes"]["match"]
+    for text in (
+        "The match",
+        "Match rate",
+        f"{match['match_rate'] * 100:.1f}%",
+        f"{match['matched']} of {match['certified']} applicants with a rank order list",
+        "Where matched applicants had ranked their program",
+        "How this match was checked",
+        "Blocking pairs: an applicant and a program",
+        "Who matched",
+        "By strength decile",
+        "Rank order lists",
+    ):
+        assert text in body, text
+    assert "Passed" in body
+
+
+def test_the_applications_tab_has_the_funnel_and_every_application(auth_client, finished_run):
+    response = auth_client.get(_run_url(finished_run, "run_applications"), {"page_size": 500})
+    body = response.content.decode()
+    for text in ("From applications to rank order lists", "No signals were sent", "Every application", "Stage reached"):
+        assert text in body, text
+    record = RunData(finished_run).stages
+    assert response.context["page_obj"].paginator.count == record.i.shape[0]
+    matched = int((record.match_program[record.i] == record.j).sum())
+    assert sum(row["matched"] for row in response.context["rows"]) == matched
+
+
+@pytest.mark.parametrize(
+    ("filters", "check"),
+    [
+        ({"status": "matched"}, lambda row: row["matched"]),
+        ({"status": "interviewed"}, lambda row: row["interviewed"]),
+        ({"status": "declined"}, lambda row: row["wave"] and not row["interviewed"]),
+        ({"status": "not_invited"}, lambda row: not row["wave"]),
+        ({"status": "ranked"}, lambda row: row["applicant_rank"]),
+        ({"signal": "no"}, lambda row: not row["signal"]),
+        ({"applicant": "applicant 7"}, lambda row: "applicant 7" in row["applicant_name"].lower()),
+        ({"program": "PROGRAM 3"}, lambda row: row["program_name"] == "Program 3"),
+    ],
+)
+def test_the_applications_can_be_filtered(auth_client, finished_run, filters, check):
+    response = auth_client.get(_run_url(finished_run, "run_applications"), filters | {"page_size": 500})
+    rows = response.context["rows"]
+    assert rows
+    assert all(check(row) for row in rows)
+    assert response.context["filtered"]
+
+
+def test_the_applications_sort_and_say_when_nothing_matches(auth_client, finished_run):
+    url = _run_url(finished_run, "run_applications")
+    ranks = [row["program_rank"] for row in auth_client.get(url, {"sort": "program_rank"}).context["rows"]]
+    ranked = [rank for rank in ranks if rank is not None]
+    assert ranked == sorted(ranked)
+    assert ranks[: len(ranked)] == ranked  # unranked last
+    assert auth_client.get(url, {"sort": "bogus", "status": "bogus"}).status_code == 200
+    body = auth_client.get(url, {"applicant": "nobody at all"}).content.decode()
+    assert "No application matches these filters." in body
+
+
+def test_the_stepper_links_each_stage_to_its_results(auth_client, finished_run, simulation):
+    body = auth_client.get(_manage(simulation)).content.decode()
+    for view in ("run_population", "run_pre_interview", "run_applications", "run_match"):
+        assert f'href="{_run_url(finished_run, view)}"' in body, view
 
 
 @pytest.mark.parametrize("name", ["run_applicants", "run_programs"])
@@ -208,29 +311,6 @@ def test_agent_pages_leave_out_the_other_sides_ranks_for_large_markets(auth_clie
     assert not response.context["has_their_ranks"]
     assert "too large to recompute them" in response.content.decode()
     assert auth_client.get(_run_url(finished_run, "run_download", name="pairs.csv")).status_code == 404
-
-
-def test_run_page_shows_the_match_the_funnel_and_the_checks(auth_client, finished_run):
-    body = auth_client.get(_run_url(finished_run)).content.decode()
-    match = finished_run.metrics["outcomes"]["match"]
-    for text in (
-        "The match",
-        "Match rate",
-        f"{match['match_rate'] * 100:.1f}%",
-        f"{match['matched']} of {match['certified']} applicants with a rank order list",
-        "Where matched applicants had ranked their program",
-        "How this match was checked",
-        "Blocking pairs: an applicant and a program",
-        "From applications to rank order lists",
-        "No signals were sent",
-        "Who matched",
-        "By strength decile",
-        "Rank order lists",
-        "applicant list entries",  # stage counts in words
-        "The match: every applicant's result (CSV)",
-    ):
-        assert text in body, text
-    assert "Passed" in body
 
 
 def test_run_summaries_show_the_match_rate(auth_client, finished_run, simulation, user):
@@ -322,8 +402,12 @@ def test_runs_from_before_the_match_still_open(auth_client, finished_run):
     del metrics["outcomes"]
     SimulationRun.objects.filter(pk=finished_run.pk).update(metrics=metrics)
     body = auth_client.get(_run_url(finished_run)).content.decode()
-    assert "The match" not in body
-    assert "Before interviews" in body
+    assert "Checks passed" not in body
+    assert f'href="{_run_url(finished_run, "run_pre_interview")}"' in body
+    assert f'href="{_run_url(finished_run, "run_match")}"' not in body
+    assert auth_client.get(_run_url(finished_run, "run_match")).status_code == 404
+    assert auth_client.get(_run_url(finished_run, "run_applications")).status_code == 404
+    assert auth_client.get(_run_url(finished_run, "run_pre_interview")).status_code == 200
     applicants = auth_client.get(_run_url(finished_run, "run_applicants"))
     assert not applicants.context["has_stages"]
     assert "Matched to" not in applicants.content.decode()

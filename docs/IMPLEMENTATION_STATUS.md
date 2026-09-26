@@ -110,7 +110,17 @@ there are no presets yet (Phase 4), so the default parameters and a 10,000 × 1,
 with largest requested-against-realised deviations of 1.4 to 2.6 standard errors (strength and quality), first-choice
 Gini 0.85–0.96, match rates 92–93%, fill rates 95–97% and every check passed.
 
-## Phases 4–8
+## Phase 4: Workspace UX and help system
+
+Appendix D was written for the legacy app, where every stage was a separate step the user ran. In the rebuilt app a
+run computes every stage at once (Phase 2), so the workspace is split in two: the simulation page (parameters,
+populations, runs, and the stepper with each stage's state) and the run's pages (the results of every stage).
+
+| Step | Status | Notes |
+|---|---|---|
+| 4.1 Simulation workspace | Done | The run page became tabbed pages (links, `tabs tabs-border`, `aria-current`): **Summary** (key numbers, the checks, downloads, stages, version stamps, parameters), **Population** (the market as generated against the request, distribution charts), **Before interviews** (agreement, fidelity, first choices, true against observed, first-choice demand), **Applications and interviews** (the funnel, signals, interview outcomes, and every application in a table with filters: stage reached, signal, applicant and program name, plus sorting and pagination; 55–82 ms per page for 600,000 applications), **Match** (headline numbers, where applicants matched on their lists, the comparison, the checks, who matched), **Applicants** and **Programs**. Each tab opens with its key numbers (daisyUI `stats`) and loads only its own charts. The stepper on the simulation page links every stage with results to its tab of the latest successful run. The rows-per-page selector keeps the filters. Tested: every tab links to the others, filters and sorting (a numpy casting overflow in the rank sort was caught by these tests), stepper links, runs from before the match (no Applications or Match tab), axe and phone width on every tab. **Deviations:** no "Next step" or "Run all remaining" buttons and no separate job bar: a run always computes every stage, the Run button is "run all", and the run panel already shows progress while a run is queued or running. The applicant and program detail pages already existed (step 3.7). |
+
+## Phases 5–8
 
 Not started.
 

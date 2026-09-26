@@ -1,0 +1,91 @@
+{% load humanize format_tags %}
+{% comment %}The match card (docs/model_spec.md §10). Context: run, outcomes, outcome_views.{% endcomment %}
+{% with match=outcomes.match funnel=outcomes.funnel %}
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="match-title">
+  <div class="card-body">
+    <h2 id="match-title" class="card-title">The match</h2>
+    <div class="stats stats-vertical sm:stats-horizontal bg-base-200 w-full">
+      <div class="stat">
+        <div class="stat-title">Match rate</div>
+        <div class="stat-value text-3xl tabular-nums">{{ match.match_rate|percent }}</div>
+        <div class="stat-desc whitespace-normal">{{ match.matched|intcomma }} of {{ match.certified|intcomma }} applicants with a rank order list</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Positions filled</div>
+        <div class="stat-value text-3xl tabular-nums">{{ match.fill_rate|percent }}</div>
+        <div class="stat-desc whitespace-normal">{{ match.unfilled_positions|intcomma }} unfilled, in {{ match.programs_unfilled|intcomma }} programs</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Matched to their first choice</div>
+        <div class="stat-value text-3xl tabular-nums">{{ match.first_choice_share|percent }}</div>
+        <div class="stat-desc whitespace-normal">of matched applicants; {{ match.top3_share|percent }} to one of their top 3</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Checks</div>
+        <div class="stat-value text-3xl">{% if outcome_views.passed %}Passed{% else %}<span class="text-error">Failed</span>{% endif %}</div>
+        <div class="stat-desc whitespace-normal">{{ match.blocking_pairs|intcomma }} blocking pairs: the match is {% if match.blocking_pairs %}not {% endif %}stable</div>
+      </div>
+    </div>
+    <p class="text-sm text-base-content/70">
+      {% if match.algorithm == "program_proposing" %}Program-proposing{% else %}Applicant-proposing{% endif %} deferred
+      acceptance{% if match.algorithm != "program_proposing" %}, the mechanism of the NRMP{% endif %}. The match rate
+      counts the applicants who submitted a rank order list, as NRMP reports do;
+      {{ funnel.applicants_without_interview|intcomma }} applicants had no interview and so no list.
+    </p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="overflow-x-auto" tabindex="0" role="region" aria-label="Where matched applicants had ranked their program">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Where matched applicants had ranked their program</caption>
+          <thead>
+            <tr>
+              <th scope="col">Choice</th>
+              <th scope="col" class="w-1/2"><span class="sr-only">Bar</span></th>
+              <th scope="col" class="text-right">Applicants</th>
+              <th scope="col" class="text-right">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rank in outcome_views.ranks %}
+              <tr>
+                <th scope="row" class="font-normal whitespace-nowrap">{% if rank.label == "11+" %}11th or lower{% else %}{{ rank.label|ordinal }}{% endif %}</th>
+                <td aria-hidden="true"><div class="h-3 rounded-sm bg-primary" style="width: {{ rank.width }}%"></div></td>
+                <td class="text-right tabular-nums">{{ rank.count|intcomma }}</td>
+                <td class="text-right tabular-nums">{{ rank.share|percent }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h3 class="font-semibold">Rank order lists</h3>
+        <dl class="mt-2 space-y-1 text-sm">
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Mean list length, matched applicants</dt><dd class="tabular-nums">{{ match.list_length_matched|floatformat:2|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Mean list length, unmatched applicants</dt><dd class="tabular-nums">{{ match.list_length_unmatched|floatformat:2|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Applicants with a list</dt><dd class="tabular-nums">{{ match.certified|intcomma }} of {{ run.n_applicants|intcomma }}</dd></div>
+        </dl>
+        {% if match.comparison %}
+          <h3 class="font-semibold mt-4">With the other side proposing</h3>
+          <p class="text-sm mt-1">
+            {{ match.comparison.differing_applicants|intcomma }} applicant{{ match.comparison.differing_applicants|pluralize }}
+            would get a different result.
+            {% if match.comparison.same_matched_applicants and match.comparison.same_fill_per_program %}
+              The same applicants match and every program fills the same number of positions, as the rural
+              hospitals theorem says.
+            {% else %}
+              <span class="text-error">The matched applicants or the positions filled differ, which the rural hospitals
+              theorem rules out.</span>
+            {% endif %}
+            {% if match.comparison.applicants_worse_off_when_applicants_propose %}
+              <span class="text-error">{{ match.comparison.applicants_worse_off_when_applicants_propose|intcomma }}
+              applicants do worse when applicants propose, which should not happen.</span>
+            {% else %}
+              No applicant does better when programs propose.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+    </div>
+    {% include "nrmps/runs/_checks.html" %}
+  </div>
+</section>
+{% endwith %}

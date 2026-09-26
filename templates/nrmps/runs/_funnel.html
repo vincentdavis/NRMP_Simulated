@@ -1,0 +1,61 @@
+{% load humanize format_tags %}
+{% comment %}From applications to rank order lists: the funnel, signals and interview outcomes. Context: run, outcomes, charts.{% endcomment %}
+{% with funnel=outcomes.funnel signals=outcomes.signals welfare=outcomes.welfare %}
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="funnel-title">
+  <div class="card-body">
+    <h2 id="funnel-title" class="card-title">From applications to rank order lists</h2>
+    {% if charts.funnel %}
+      {% include "nrmps/components/chart_figure.html" with chart=charts.funnel key="funnel" kind="funnel" title="Where do applications drop out?" table="funnel" height="h-80" %}
+    {% endif %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Per applicant, on average</caption>
+          <tbody>
+            <tr><th scope="row" class="font-normal">Applications</th><td class="text-right tabular-nums">{{ funnel.applications_per_applicant|floatformat:2 }}</td></tr>
+            <tr><th scope="row" class="font-normal">Signals</th><td class="text-right tabular-nums">{{ funnel.signals_per_applicant|floatformat:2 }}</td></tr>
+            <tr><th scope="row" class="font-normal">Interview invitations</th><td class="text-right tabular-nums">{{ funnel.invitations_per_applicant|floatformat:2 }}</td></tr>
+            <tr><th scope="row" class="font-normal">Interviews</th><td class="text-right tabular-nums">{{ funnel.interviews_per_applicant|floatformat:2 }}</td></tr>
+            <tr><th scope="row" class="font-normal">Rank order list entries</th><td class="text-right tabular-nums">{{ funnel.list_entries_per_applicant|floatformat:2 }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <dl class="text-sm space-y-1">
+        <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Interviews per position</dt><dd class="tabular-nums">{{ funnel.interviews_per_position|floatformat:2 }}</dd></div>
+        <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Interview slots offered</dt><dd class="tabular-nums">{{ funnel.interview_slots|intcomma }}</dd></div>
+        <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Invitations declined (or over the applicant's cap)</dt><dd class="tabular-nums">{{ funnel.declined_invitations|intcomma }}</dd></div>
+        <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Applicants with no interview</dt><dd class="tabular-nums">{{ funnel.applicants_without_interview|intcomma }}</dd></div>
+      </dl>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+      <div>
+        <h3 class="font-semibold">Signals</h3>
+        {% if signals.sent %}
+          <dl class="mt-2 text-sm space-y-1">
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Signals sent</dt><dd class="tabular-nums">{{ signals.sent|intcomma }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Programs that use signals</dt><dd class="tabular-nums">{{ signals.programs_using_signals|intcomma }} of {{ run.n_programs|intcomma }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Interview rate, applications with a signal</dt><dd class="tabular-nums">{{ signals.interview_rate_signalled|percent }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Interview rate, other applications</dt><dd class="tabular-nums">{{ signals.interview_rate_other|percent }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Signals that ended in a match</dt><dd class="tabular-nums">{{ signals.match_rate_signalled|percent }}</dd></div>
+          </dl>
+        {% else %}
+          <p class="text-sm mt-2">No signals were sent: there are no signal tiers in the parameters. Of all applications, {{ signals.interview_rate_other|percent }} led to an interview.</p>
+        {% endif %}
+      </div>
+      <div>
+        <h3 class="font-semibold">Interviews and outcomes for applicants</h3>
+        <dl class="mt-2 text-sm space-y-1">
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Where the match stands among the applicant's interviews, by realised utility (1 = the best)</dt><dd class="tabular-nums">{{ welfare.true_rank_mean|floatformat:2|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Regret: best interviewed program minus the match (SD)</dt><dd class="tabular-nums">{{ welfare.regret_mean|floatformat:3|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Post-interview fidelity, applicants</dt><dd class="tabular-nums">{{ welfare.applicant_post_fidelity|floatformat:3|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Post-interview fidelity, programs</dt><dd class="tabular-nums">{{ welfare.program_post_fidelity|floatformat:3|default:"-" }}</dd></div>
+        </dl>
+        <p class="text-xs text-base-content/70 mt-2">
+          The realised utility includes the fit an interview reveals. Post-interview fidelity is the correlation of
+          the realised utility and the post-interview view over all interviews (1 = interviews reveal everything).
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+{% endwith %}

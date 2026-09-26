@@ -1,0 +1,44 @@
+{% load humanize %}
+{% comment %}The pre-interview diagnostics (docs/model_spec.md §10). Context: metrics, charts.{% endcomment %}
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="diagnostics-title">
+  <div class="card-body">
+    <h2 id="diagnostics-title" class="card-title">Before interviews</h2>
+    <p class="text-sm text-base-content/70">
+      Agreement is the average correlation between two agents' true utilities (1 = everyone agrees). Fidelity is how
+      well the pre-interview view matches the truth: the correlation of true and observed utilities over all pairs,
+      and each agent's rank correlation between its true and its pre-interview ordering.
+    </p>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr><th scope="col">Measure</th><th scope="col" class="text-right">Applicants rating programs</th><th scope="col" class="text-right">Programs rating applicants</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row" class="font-normal">Agreement (true utilities)</th><td class="text-right tabular-nums">{{ metrics.applicants.consensus.true_utility_correlation|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.consensus.true_utility_correlation|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Agreement (true rankings, Spearman)</th><td class="text-right tabular-nums">{{ metrics.applicants.consensus.true_rank_correlation|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.consensus.true_rank_correlation|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Agreement (pre-interview views)</th><td class="text-right tabular-nums">{{ metrics.applicants.consensus.observed_utility_correlation|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.consensus.observed_utility_correlation|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Pre-interview noise (SD)</th><td class="text-right tabular-nums">{{ metrics.applicants.fidelity.noise_sd|floatformat:3 }}</td><td class="text-right tabular-nums">{{ metrics.programs.fidelity.noise_sd|floatformat:3 }}</td></tr>
+          <tr><th scope="row" class="font-normal">Fidelity, expected</th><td class="text-right tabular-nums">{{ metrics.applicants.fidelity.expected_correlation|floatformat:3 }}</td><td class="text-right tabular-nums">{{ metrics.programs.fidelity.expected_correlation|floatformat:3 }}</td></tr>
+          <tr><th scope="row" class="font-normal">Fidelity, realised (all pairs)</th><td class="text-right tabular-nums">{{ metrics.applicants.fidelity.pooled_correlation|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.fidelity.pooled_correlation|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Fidelity per agent (mean Spearman)</th><td class="text-right tabular-nums">{{ metrics.applicants.fidelity.spearman_mean|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.fidelity.spearman_mean|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Distinct first choices</th><td class="text-right tabular-nums">{{ metrics.applicants.first_choices.distinct|intcomma }}</td><td class="text-right tabular-nums">{{ metrics.programs.first_choices.distinct|intcomma }}</td></tr>
+          <tr><th scope="row" class="font-normal">Share whose first choice is the most popular</th><td class="text-right tabular-nums">{{ metrics.applicants.first_choices.most_popular_share|floatformat:3 }}</td><td class="text-right tabular-nums">{{ metrics.programs.first_choices.most_popular_share|floatformat:3 }}</td></tr>
+          <tr><th scope="row" class="font-normal">Share whose first choice is in the top 10</th><td class="text-right tabular-nums">{{ metrics.applicants.first_choices.top_10_share|floatformat:3 }}</td><td class="text-right tabular-nums">{{ metrics.programs.first_choices.top_10_share|floatformat:3 }}</td></tr>
+          <tr><th scope="row" class="font-normal">Agents with a taste term</th><td class="text-right tabular-nums">{{ metrics.applicants.agents_with_taste|intcomma }}</td><td class="text-right tabular-nums">{{ metrics.programs.agents_with_taste|intcomma }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    {% if charts %}
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-4">
+        {% if charts.applicant_fidelity %}{% include "nrmps/components/chart_figure.html" with chart=charts.applicant_fidelity key="applicant-fidelity" kind="histogram" title="How well does each applicant know their true order?" table="histogram" x_label="Rank correlation, true and pre-interview order" y_label="Applicants" %}{% endif %}
+        {% if charts.program_fidelity %}{% include "nrmps/components/chart_figure.html" with chart=charts.program_fidelity key="program-fidelity" kind="histogram" title="How well does each program know its true order?" table="histogram" x_label="Rank correlation, true and pre-interview order" y_label="Programs" %}{% endif %}
+        {% include "nrmps/components/chart_figure.html" with chart=charts.perception_applicants key="perception-applicants" kind="scatter" title="How accurately do applicants see programs?" height="h-72" %}
+        {% include "nrmps/components/chart_figure.html" with chart=charts.perception_programs key="perception-programs" kind="scatter" title="How accurately do programs see applicants?" height="h-72" %}
+        {% if charts.demand %}
+          {% include "nrmps/components/chart_figure.html" with chart=charts.demand key="demand" kind="demand" title="Is demand concentrated on a few programs?" table="demand" height="h-72" %}
+          {% include "nrmps/components/chart_figure.html" with chart=charts.lorenz key="lorenz" kind="lorenz" payload="chart-demand" title="How unequal is first-choice demand?" height="h-72" %}
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</section>

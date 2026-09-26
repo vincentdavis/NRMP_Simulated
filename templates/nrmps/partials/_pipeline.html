@@ -1,6 +1,7 @@
 {% comment %}
-  The pipeline stepper (plan step 2.4): one step per stage with its state from nrmps.pipeline.get_pipeline. HTMX
-  actions that change the state return it again out of band (oob).
+  The pipeline stepper (plan steps 2.4, 4.1): one step per stage with its state from nrmps.pipeline.get_pipeline;
+  a stage with results links to its tab of the latest successful run (results_run). HTMX actions that change the
+  state return it again out of band (oob).
 {% endcomment %}
 <div id="pipeline" class="mb-4"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
   <h2 class="sr-only">Pipeline</h2>
@@ -10,7 +11,11 @@
         <li class="step{% if stage.state == 'done' %} step-primary{% elif stage.state == 'stale' %} step-warning{% elif stage.state == 'failed' %} step-error{% elif stage.state == 'running' or stage.state == 'queued' %} step-info{% endif %}"
             data-content="{% if stage.state == 'done' %}✓{% elif stage.state == 'stale' %}!{% elif stage.state == 'failed' %}✕{% elif stage.state == 'planned' %}·{% else %}●{% endif %}">
           <span class="text-xs px-1">
-            <span class="font-medium">{{ stage.label }}</span><br>
+            {% if results_run and stage.has_results %}
+              <a class="link font-medium" href="{% url stage.results_url_name pk=simulation.pk number=results_run.number %}">{{ stage.label }}</a><br>
+            {% else %}
+              <span class="font-medium">{{ stage.label }}</span><br>
+            {% endif %}
             <span class="{% if stage.state == 'planned' %}text-base-content/70{% endif %}">{{ stage.state_label }}</span>
           </span>
         </li>

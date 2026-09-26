@@ -11,15 +11,16 @@ from django.contrib.humanize.templatetags.humanize import intcomma
 from django.core.paginator import Paginator
 from django.http import Http404, HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_POST
 
-from .charts import run_charts
+from .charts import TAB_CHARTS, run_charts
 from .engine.numeric import quantiles
+from .engine.persistence import StageRecord
 from .engine.pipeline import SideResult
-from .engine.population import PopulationError
 from .engine.validate import COUNT_CHECKS, FLAG_CHECKS
-from .models import SimulationRun
+from .models import RunArtifact, SimulationRun
 from .params_forms import ParamsForm
 from .population_csv import plain_csv_lines, population_csv_lines
 from .runs import (
@@ -61,7 +62,7 @@ def _page_size(request: HttpRequest) -> int:
     return size if size in PAGE_SIZES else 100
 
 
-def _paginate(request: HttpRequest, items: list[Any], page_size: int) -> dict[str, Any]:
+def _paginate(request: HttpRequest, items: list[Any] | np.ndarray, page_size: int) -> dict[str, Any]:
     """Return the page_obj and the elided page_range for a list page."""
     paginator = Paginator(items, page_size)
     page_obj = paginator.get_page(request.GET.get("page"))
@@ -169,35 +170,258 @@ def _outcomes(metrics: dict[str, Any]) -> dict[str, Any] | None:
     return {"ranks": ranks, "checks": rows, "passed": checks.get("passed"), "group_tables": group_tables}
 
 
-def _charts(run: SimulationRun) -> dict[str, Any]:
-    """Return the diagnostic charts of a successful run (none for other runs, or without a stored population)."""
-    if run.status != SimulationRun.Status.SUCCEEDED:
-        return {}
-    try:
-        return run_charts(RunData(run))
-    except PopulationError:
-        return {}
+def _number(value: float | None, digits: int) -> str:
+    """Return a number with `digits` decimals and thousands separators, or "-" when there is none."""
+    return "-" if value is None else f"{value:,.{digits}f}"
+
+
+def _source(label: str | None) -> str:
+    """Return where a side of the population comes from, in words."""
+    return "generated" if label in {None, "generated"} else f"uploaded ({label})"
+
+
+# The tabs of a run's pages: key, label and URL name.
+RUN_TABS = [
+    ("summary", "Summary", "nrmps:run_detail"),
+    ("population", "Population", "nrmps:run_population"),
+    ("pre_interview", "Before interviews", "nrmps:run_pre_interview"),
+    ("applications", "Applications and interviews", "nrmps:run_applications"),
+    ("match", "Match", "nrmps:run_match"),
+    ("applicants", "Applicants", "nrmps:run_applicants"),
+    ("programs", "Programs", "nrmps:run_programs"),
+]
+OUTCOME_TABS = {"applications", "match"}  # only for runs that went on to the match
+
+
+def _run_context(run: SimulationRun, tab: str, **extra: Any) -> dict[str, Any]:
+    """Return the context every page of a run shares: the run, its diagnostics and the tabs."""
+    metrics = run.metrics or {}
+    outcomes = metrics.get("outcomes")
+    kwargs = {"pk": run.simulation_id, "number": run.number}
+    labels = {key: label for key, label, _name in RUN_TABS}
+    tabs = []
+    if run.status == SimulationRun.Status.SUCCEEDED:
+        tabs = [
+            {"key": key, "label": label, "url": reverse(name, kwargs=kwargs)}
+            for key, label, name in RUN_TABS
+            if outcomes or key not in OUTCOME_TABS
+        ]
+    return {
+        "simulation": run.simulation,
+        "run": run,
+        "tab": tab,
+        "tab_label": "" if tab == "summary" else labels[tab],
+        "tabs": tabs,
+        "metrics": metrics,
+        "outcomes": outcomes,
+        **extra,
+    }
 
 
 @require_GET
 def run_detail(request, pk: int, number: int):
-    """A run: status, version stamps, the match and its funnel, the pre-interview diagnostics and the parameters."""
+    """A run's summary: status, key numbers, downloads, stages, checks, version stamps and parameters."""
+    run = get_run(request, pk, number)
+    context = _run_context(
+        run,
+        "summary",
+        stage_rows=_stage_rows(run),
+        outcome_views=_outcomes(run.metrics or {}),
+        param_groups=_param_groups(run),
+        pairs_download=run.n_pairs <= settings.NRMP_DRILLDOWN_MAX_PAIRS,
+        stage_downloads=run.artifacts.filter(kind=RunArtifact.Kind.STAGES).exists(),
+    )
+    return render(request, "nrmps/runs/run_detail.html", context)
+
+
+@require_GET
+def run_population(request, pk: int, number: int):
+    """The population of a run: the market as generated against the request, with its distributions."""
+    run = get_run(request, pk, number)
+    data, _applicants, _programs = _finished_data(run)
+    market = (run.metrics or {}).get("market") or {}
+    capacity = market.get("capacity") or {}
+    sources = run.population_source
+    stats = [
+        ("Applicants", intcomma(run.n_applicants), _source(sources.get("applicants"))),
+        ("Programs", intcomma(run.n_programs), _source(sources.get("programs"))),
+        (
+            "Positions",
+            intcomma(run.n_positions),
+            f"{_number(market.get('applicants_per_position'), 3)} applicants per position",
+        ),
+        (
+            "Positions per program",
+            _number(capacity.get("median"), 1),
+            f"median; {capacity.get('min', '-')} to {capacity.get('max', '-')}",
+        ),
+    ]
+    context = _run_context(run, "population", stats=stats, charts=run_charts(data, TAB_CHARTS["population"]))
+    return render(request, "nrmps/runs/population.html", context)
+
+
+@require_GET
+def run_pre_interview(request, pk: int, number: int):
+    """Before interviews: agreement, fidelity, first choices, true against observed, first-choice demand."""
+    run = get_run(request, pk, number)
+    data, _applicants, _programs = _finished_data(run)
+    metrics = run.metrics or {}
+    applicants, programs = metrics.get("applicants") or {}, metrics.get("programs") or {}
+    stats = [
+        (
+            "Applicant agreement",
+            _number((applicants.get("consensus") or {}).get("true_utility_correlation"), 3),
+            "how alike applicants' true preferences are",
+        ),
+        (
+            "Program agreement",
+            _number((programs.get("consensus") or {}).get("true_utility_correlation"), 3),
+            "how alike programs' true preferences are",
+        ),
+        (
+            "Applicants' fidelity",
+            _number((applicants.get("fidelity") or {}).get("pooled_correlation"), 3),
+            "true against pre-interview view",
+        ),
+        (
+            "Programs' fidelity",
+            _number((programs.get("fidelity") or {}).get("pooled_correlation"), 3),
+            "true against pre-interview view",
+        ),
+    ]
+    context = _run_context(run, "pre_interview", stats=stats, charts=run_charts(data, TAB_CHARTS["pre_interview"]))
+    return render(request, "nrmps/runs/pre_interview.html", context)
+
+
+@require_GET
+def run_applications(request, pk: int, number: int):
+    """Applications, signals, invitations and interviews: the funnel, and every application with filters."""
+    run = get_run(request, pk, number)
+    data, _applicants, _programs = _finished_data(run)
+    record = data.stages
+    if record is None or not (run.metrics or {}).get("outcomes"):
+        raise Http404("This run stopped before applications")
+    funnel = (run.metrics or {})["outcomes"]["funnel"]
+    stats = [
+        ("Applications", _number(funnel.get("applications_per_applicant"), 1), "per applicant"),
+        ("Invitations", _number(funnel.get("invitations_per_applicant"), 1), "per applicant"),
+        (
+            "Interviews",
+            _number(funnel.get("interviews_per_applicant"), 1),
+            f"per applicant; {_number(funnel.get('interviews_per_position'), 1)} per position",
+        ),
+        ("No interview", intcomma(funnel.get("applicants_without_interview", 0)), "applicants"),
+    ]
+    context = _run_context(
+        run,
+        "applications",
+        stats=stats,
+        charts=run_charts(data, TAB_CHARTS["applications"]),
+        **_application_table(request, data, record),
+    )
+    return render(request, "nrmps/runs/applications.html", context)
+
+
+@require_GET
+def run_match(request, pk: int, number: int):
+    """The match: headline numbers, where applicants matched on their lists, the checks and who matched."""
     run = get_run(request, pk, number)
     metrics = run.metrics or {}
-    context = {
-        "simulation": run.simulation,
-        "run": run,
-        "stage_rows": _stage_rows(run),
-        "metrics": metrics,
-        "outcomes": metrics.get("outcomes"),
-        "outcome_views": _outcomes(metrics),
-        "param_groups": _param_groups(run),
-        "stamps": run.stamps(),
-        "charts": _charts(run),
-        "pairs_download": run.n_pairs <= settings.NRMP_DRILLDOWN_MAX_PAIRS,
-        "stage_downloads": run.artifacts.filter(kind="stages").exists(),
+    if run.status != SimulationRun.Status.SUCCEEDED or not metrics.get("outcomes"):
+        raise Http404("This run has no match")
+    context = _run_context(run, "match", outcome_views=_outcomes(metrics))
+    return render(request, "nrmps/runs/match.html", context)
+
+
+# Filters of the applications table: key -> label.
+APPLICATION_STATUSES = {
+    "": "All applications",
+    "not_invited": "Not invited",
+    "invited": "Invited",
+    "declined": "Invited, no interview",
+    "interviewed": "Interviewed",
+    "ranked": "On the applicant's list",
+    "matched": "Matched",
+}
+APPLICATION_SORTS = ("applicant", "program", "pre_rank", "applicant_rank", "program_rank")
+
+
+def _name_matches(side: Any, text: str) -> np.ndarray:
+    """Return, per agent of a side, whether its name contains `text` (ignoring case)."""
+    names = np.array([side.name(k).casefold() for k in range(side.size)])
+    found: np.ndarray = np.char.find(names, text.casefold()) >= 0
+    return found
+
+
+def _application_table(request: HttpRequest, data: RunData, record: StageRecord) -> dict[str, Any]:
+    """Return the filtered, sorted and paginated applications of a run (its stage `record`), with the filters."""
+    applicants, programs = data.population.applicants, data.population.programs
+    matched = record.match_program[record.i] == record.j
+    invited = record.invite_wave > 0
+    masks = {
+        "not_invited": ~invited,
+        "invited": invited,
+        "declined": invited & ~record.accepted,
+        "interviewed": record.accepted,
+        "ranked": record.applicant_rank > 0,
+        "matched": matched,
     }
-    return render(request, "nrmps/runs/run_detail.html", context)
+    status = request.GET.get("status", "")
+    signal = request.GET.get("signal", "")
+    applicant_text = request.GET.get("applicant", "").strip()[:100]
+    program_text = request.GET.get("program", "").strip()[:100]
+    keep = masks.get(status, np.ones(record.i.shape[0], dtype=np.bool_))
+    if signal in {"yes", "no"}:
+        keep = keep & ((record.signal_tier >= 0) == (signal == "yes"))
+    if applicant_text:
+        keep = keep & _name_matches(applicants, applicant_text)[record.i]
+    if program_text:
+        keep = keep & _name_matches(programs, program_text)[record.j]
+    rows = np.flatnonzero(keep)
+    sort = request.GET.get("sort", "applicant")
+    sort = sort if sort in APPLICATION_SORTS else "applicant"
+    order = "desc" if request.GET.get("order") == "desc" else "asc"
+    unranked = np.iinfo(np.int64).max  # entries not on the list sort after every rank
+    applicant_rank, program_rank = record.applicant_rank.astype(np.int64), record.program_rank.astype(np.int64)
+    keys = {
+        "applicant": record.i.astype(np.int64),
+        "program": record.j.astype(np.int64),
+        "pre_rank": record.pre_rank.astype(np.int64),
+        "applicant_rank": np.where(applicant_rank > 0, applicant_rank, unranked),
+        "program_rank": np.where(program_rank > 0, program_rank, unranked),
+    }
+    values = keys[sort][rows]
+    rows = rows[np.lexsort((rows, -values if order == "desc" else values))]
+    context: dict[str, Any] = {
+        "sort": sort,
+        "order": order,
+        "filters": {"status": status, "signal": signal, "applicant": applicant_text, "program": program_text},
+        "statuses": APPLICATION_STATUSES,
+        "filtered": bool(status or signal in {"yes", "no"} or applicant_text or program_text),
+        **_paginate(request, rows, _page_size(request)),
+    }
+    tiers = [tier.name for tier in data.params.signals.tiers]
+    table = []
+    for pair in context["page_obj"].object_list.tolist():
+        i, j = int(record.i[pair]), int(record.j[pair])
+        tier, wave = int(record.signal_tier[pair]), int(record.invite_wave[pair])
+        table.append(
+            {
+                "applicant": i + 1,
+                "applicant_name": applicants.name(i),
+                "program": j + 1,
+                "program_name": programs.name(j),
+                "pre_rank": int(record.pre_rank[pair]),
+                "signal": tiers[tier] if 0 <= tier < len(tiers) else "",
+                "wave": wave,
+                "interviewed": bool(record.accepted[pair]),
+                "applicant_rank": int(record.applicant_rank[pair]) or None,
+                "program_rank": int(record.program_rank[pair]) or None,
+                "matched": bool(matched[pair]),
+            }
+        )
+    context["rows"] = table
+    return context
 
 
 @require_GET
@@ -247,14 +471,14 @@ def run_applicants(request, pk: int, number: int):
         keys["interviews"] = totals["interviews"].tolist()
         keys["match"] = np.where(totals["match_rank"] > 0, totals["match_rank"], UNRANKED).tolist()
     indices, sort, order = _order(request, keys, "index")
-    context = {
-        "simulation": run.simulation,
-        "run": run,
-        "sort": sort,
-        "order": order,
-        "has_stages": totals is not None,
+    context = _run_context(
+        run,
+        "applicants",
+        sort=sort,
+        order=order,
+        has_stages=totals is not None,
         **_paginate(request, indices, _page_size(request)),
-    }
+    )
     rows = []
     for i in context["page_obj"].object_list:
         row = {
@@ -307,14 +531,14 @@ def run_programs(request, pk: int, number: int):
         keys["interviews"] = totals["interviews"].tolist()
         keys["fill"] = (totals["filled"] / np.maximum(p.capacity, 1)).tolist()
     indices, sort, order = _order(request, keys, "index")
-    context = {
-        "simulation": run.simulation,
-        "run": run,
-        "sort": sort,
-        "order": order,
-        "has_stages": totals is not None,
+    context = _run_context(
+        run,
+        "programs",
+        sort=sort,
+        order=order,
+        has_stages=totals is not None,
         **_paginate(request, indices, _page_size(request)),
-    }
+    )
     rows = []
     for j in context["page_obj"].object_list:
         row = {

@@ -61,6 +61,18 @@ INPUT_TITLES = {
     "match": "the match settings",
 }
 
+# The run page tab that shows each stage's results (a URL name in nrmps/urls.py).
+RESULT_TABS = {
+    Stage.POPULATION: "nrmps:run_population",
+    Stage.PRE_INTERVIEW: "nrmps:run_pre_interview",
+    Stage.APPLICATIONS: "nrmps:run_applications",
+    Stage.SIGNALS: "nrmps:run_applications",
+    Stage.INVITATIONS: "nrmps:run_applications",
+    Stage.INTERVIEWS: "nrmps:run_applications",
+    Stage.RANK_LISTS: "nrmps:run_match",
+    Stage.MATCH: "nrmps:run_match",
+}
+
 # How a stale stage names a change in the stage before it.
 UPSTREAM_TITLES = {
     Stage.POPULATION: "the population",
@@ -91,6 +103,16 @@ class StageState:
     def implemented(self) -> bool:
         """Return True if the engine implements this stage."""
         return self.state != "planned"
+
+    @property
+    def results_url_name(self) -> str:
+        """Return the URL name of the run page tab with this stage's results."""
+        return RESULT_TABS[Stage(self.key)]
+
+    @property
+    def has_results(self) -> bool:
+        """Return True if the latest successful run has results for this stage (up to date or not)."""
+        return self.state in {"done", "stale"}
 
 
 def _changes(draft: SimulationParams, run: SimulationRun, stage: str) -> list[str]:

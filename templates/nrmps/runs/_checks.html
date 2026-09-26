@@ -1,0 +1,24 @@
+{% load humanize %}
+{% comment %}The checks of a run's match (nrmps/engine/validate.py). Context: outcome_views.{% endcomment %}
+    <details class="collapse collapse-arrow bg-base-200">
+      <summary class="collapse-title font-medium">How this match was checked</summary>
+      <div class="collapse-content overflow-x-auto" tabindex="0" role="region" aria-label="Checks of this match">
+        <table class="table table-sm">
+          <thead><tr><th scope="col">Check</th><th scope="col" class="text-right">Result</th></tr></thead>
+          <tbody>
+            {% for check in outcome_views.checks %}
+              <tr>
+                <th scope="row" class="font-normal">{{ check.title }}</th>
+                <td class="text-right tabular-nums whitespace-nowrap">
+                  {% if check.skipped %}<span class="text-base-content/70">not run</span>{% elif check.value is True %}yes{% elif check.value is False %}<span class="text-error">no</span>{% elif check.ok %}{{ check.value|intcomma }}{% else %}<span class="text-error">{{ check.value|intcomma|default:"missing" }}</span>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="text-xs text-base-content/70 mt-2">
+          The last two checks run when <em>Compare both sides proposing</em> is on in the match settings. The engine is
+          also checked on hundreds of random markets against an independent solver (docs/VALIDATION.md).
+        </p>
+      </div>
+    </details>

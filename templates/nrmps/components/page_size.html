@@ -1,8 +1,13 @@
-{% comment %}Rows-per-page selector for list pages (context: sort, order, page_size, page_sizes; view if any).{% endcomment %}
+{% comment %}
+  Rows-per-page selector for list pages (context: sort, order, page_size, page_sizes). The other query parameters
+  (filters, the view) are kept; the page starts again at 1.
+{% endcomment %}
 <form method="get" class="mb-4">
   <input type="hidden" name="sort" value="{{ sort }}">
   <input type="hidden" name="order" value="{{ order }}">
-  {% if view %}<input type="hidden" name="view" value="{{ view }}">{% endif %}
+  {% for key, value in request.GET.items %}
+    {% if key != "page" and key != "page_size" and key != "sort" and key != "order" %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}
+  {% endfor %}
   <fieldset class="fieldset">
     <legend class="fieldset-legend"><label for="page_size">Rows per page</label></legend>
     <select id="page_size" name="page_size" class="select select-sm w-32" onchange="this.form.submit()">

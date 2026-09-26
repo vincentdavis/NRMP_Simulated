@@ -1,0 +1,12 @@
+{% comment %}
+  The key numbers at the top of a run tab (plan step 4.1). Parameter: items, a list of (title, value, description).
+{% endcomment %}
+<div class="stats stats-vertical sm:stats-horizontal bg-base-100 shadow-xl w-full mb-6">
+  {% for title, value, description in items %}
+    <div class="stat">
+      <div class="stat-title whitespace-normal">{{ title }}</div>
+      <div class="stat-value text-3xl tabular-nums">{{ value }}</div>
+      {% if description %}<div class="stat-desc whitespace-normal">{{ description }}</div>{% endif %}
+    </div>
+  {% endfor %}
+</div>

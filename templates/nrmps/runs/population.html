@@ -1,0 +1,6 @@
+{% extends "nrmps/runs/_layout.html" %}
+{% block run_content %}
+  {% include "nrmps/runs/_stats.html" with items=stats %}
+  {% include "nrmps/runs/_market.html" %}
+  {% if charts %}{% include "nrmps/runs/_distributions.html" %}{% endif %}
+{% endblock %}

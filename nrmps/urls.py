@@ -85,6 +85,14 @@ urlpatterns = [
     path("simulations/<int:pk>/runs/<int:number>/", run_views.run_detail, name="run_detail"),
     path("simulations/<int:pk>/runs/<int:number>/delete/", run_views.run_delete, name="run_delete"),
     path("simulations/<int:pk>/runs/<int:number>/progress/", run_views.run_progress, name="run_progress"),
+    path("simulations/<int:pk>/runs/<int:number>/population/", run_views.run_population, name="run_population"),
+    path(
+        "simulations/<int:pk>/runs/<int:number>/before-interviews/",
+        run_views.run_pre_interview,
+        name="run_pre_interview",
+    ),
+    path("simulations/<int:pk>/runs/<int:number>/applications/", run_views.run_applications, name="run_applications"),
+    path("simulations/<int:pk>/runs/<int:number>/match/", run_views.run_match, name="run_match"),
     path("simulations/<int:pk>/runs/<int:number>/applicants/", run_views.run_applicants, name="run_applicants"),
     path(
         "simulations/<int:pk>/runs/<int:number>/applicants/<int:index>/",

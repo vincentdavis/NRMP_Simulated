@@ -242,43 +242,28 @@ def _perception_chart(payload: dict[str, Any], side: str) -> dict[str, Any]:
     return {"payload": payload, "summary": summary}
 
 
-def run_charts(data: RunData) -> dict[str, Any]:
-    """Return every chart of a finished run: payload, summary sentence and table rows (None without data)."""
-    run = data.run
-    metrics = run.metrics or {}
-    histograms = metrics.get("histograms") or {}
-    sources = {
-        side: "generated" if label == "generated" else "uploaded" for side, label in run.population_source.items()
-    }
-    charts: dict[str, Any] = {
-        "strength": _histogram_chart(
-            requested_histogram(metrics, data.params, sources, "applicants"), "Applicant strength", "applicants"
-        ),
-        "quality": _histogram_chart(
-            requested_histogram(metrics, data.params, sources, "programs"), "Program quality", "programs"
-        ),
-        "capacity": _histogram_chart(tightness(metrics), "Positions per program", "programs"),
-        "applicant_fidelity": _histogram_chart(
-            histograms.get("applicant_fidelity"), "Applicants' pre-interview fidelity", "applicants"
-        ),
-        "program_fidelity": _histogram_chart(
-            histograms.get("program_fidelity"), "Programs' pre-interview fidelity", "programs"
-        ),
-    }
-    perception = perception_samples(data)
-    charts["perception_applicants"] = _perception_chart(perception["applicants"], "applicants")
-    charts["perception_programs"] = _perception_chart(perception["programs"], "programs")
+# The charts of each run page tab.
+TAB_CHARTS = {
+    "population": ("strength", "quality", "capacity"),
+    "pre_interview": ("applicant_fidelity", "program_fidelity", "perception", "demand"),
+    "applications": ("funnel",),
+}
+
+
+def _demand_charts(data: RunData) -> dict[str, Any]:
     demand = first_choice_demand(data)
-    if demand is not None:
-        wanted, total = demand["programs_wanted"], len(demand["demand"])
-        top = demand["top_share"]
-        charts["demand"] = {
+    if demand is None:
+        return {}
+    wanted, total = demand["programs_wanted"], len(demand["demand"])
+    top = demand["top_share"]
+    gini_text = "-" if demand["gini"] is None else f"{demand['gini']:.3f}"
+    return {
+        "demand": {
             "payload": demand,
             "summary": (
                 f"First-choice demand: {wanted:,} of {total:,} programs are some applicant's first choice before "
-                f"interviews; the most wanted tenth of programs gets "
-                f"{'-' if top is None else f'{top * 100:.1f}%'} of first choices (Gini "
-                f"{'-' if demand['gini'] is None else f'{demand["gini"]:.3f}'})."
+                f"interviews; the most wanted tenth of programs gets {'-' if top is None else f'{top * 100:.1f}%'} of "
+                f"first choices (Gini {gini_text})."
             ),
             "rows": [
                 {"name": name, "demand": count, "positions": positions}
@@ -289,19 +274,25 @@ def run_charts(data: RunData) -> dict[str, Any]:
                     strict=True,
                 )
             ],
-        }
-        charts["lorenz"] = {
+        },
+        "lorenz": {
             "payload": None,
             "summary": (
                 "The Lorenz curve of first-choice demand: programs from the least to the most wanted against their "
                 "cumulative share of first choices; the dashed diagonal is equal demand, and the Gini coefficient "
-                f"({'-' if demand['gini'] is None else f'{demand["gini"]:.3f}'}) is twice the area between them."
+                f"({gini_text}) is twice the area between them."
             ),
-        }
-    counts = funnel(data.stages)
-    if counts is not None:
-        applied = counts["applied"] or 1
-        charts["funnel"] = {
+        },
+    }
+
+
+def _funnel_chart(record: StageRecord | None) -> dict[str, Any]:
+    counts = funnel(record)
+    if counts is None:
+        return {}
+    applied = counts["applied"] or 1
+    return {
+        "funnel": {
             "payload": counts,
             "summary": (
                 f"Of {counts['applied']:,} applications, {counts['invited']:,} led to an interview invitation, "
@@ -319,4 +310,45 @@ def run_charts(data: RunData) -> dict[str, Any]:
                 )
             ],
         }
+    }
+
+
+def run_charts(data: RunData, names: tuple[str, ...] | None = None) -> dict[str, Any]:
+    """Return the charts `names` (default: all) of a finished run: payload, summary sentence and table rows.
+
+    A chart the run has no data for is None or missing. "perception" gives perception_applicants and
+    perception_programs; "demand" gives demand and lorenz.
+    """
+    wanted = set(names) if names is not None else {name for tab in TAB_CHARTS.values() for name in tab}
+    run = data.run
+    metrics = run.metrics or {}
+    histograms = metrics.get("histograms") or {}
+    sources = {
+        side: "generated" if label == "generated" else "uploaded" for side, label in run.population_source.items()
+    }
+    charts: dict[str, Any] = {}
+    if "strength" in wanted:
+        payload = requested_histogram(metrics, data.params, sources, "applicants")
+        charts["strength"] = _histogram_chart(payload, "Applicant strength", "applicants")
+    if "quality" in wanted:
+        payload = requested_histogram(metrics, data.params, sources, "programs")
+        charts["quality"] = _histogram_chart(payload, "Program quality", "programs")
+    if "capacity" in wanted:
+        charts["capacity"] = _histogram_chart(tightness(metrics), "Positions per program", "programs")
+    if "applicant_fidelity" in wanted:
+        charts["applicant_fidelity"] = _histogram_chart(
+            histograms.get("applicant_fidelity"), "Applicants' pre-interview fidelity", "applicants"
+        )
+    if "program_fidelity" in wanted:
+        charts["program_fidelity"] = _histogram_chart(
+            histograms.get("program_fidelity"), "Programs' pre-interview fidelity", "programs"
+        )
+    if "perception" in wanted:
+        perception = perception_samples(data)
+        charts["perception_applicants"] = _perception_chart(perception["applicants"], "applicants")
+        charts["perception_programs"] = _perception_chart(perception["programs"], "programs")
+    if "demand" in wanted:
+        charts |= _demand_charts(data)
+    if "funnel" in wanted:
+        charts |= _funnel_chart(data.stages)
     return charts

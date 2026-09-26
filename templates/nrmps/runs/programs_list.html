@@ -1,16 +1,9 @@
-{% extends "base.html" %}
+{% extends "nrmps/runs/_layout.html" %}
 {% load list_tags humanize %}
-{% block title %}Programs - run {{ run.number }} - {{ simulation.name }}{% endblock %}
-{% block content %}
-<div class="mt-4">
-  {% include "nrmps/components/breadcrumbs.html" with current="Programs" %}
-  <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold min-w-0 break-words">Programs – run {{ run.number }}</h1>
-    <div class="flex flex-wrap gap-2">
-      <a href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='programs.csv' %}" class="btn btn-outline">Download CSV</a>
-      <a href="{% url 'nrmps:run_detail' pk=simulation.pk number=run.number %}" class="btn btn-outline">Back to run</a>
-    </div>
-  </div>
+{% block run_actions %}
+  <a href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='programs.csv' %}" class="btn btn-outline">Download CSV</a>
+{% endblock %}
+{% block run_content %}
   <p class="text-sm text-base-content/70 mb-4">
     Quality and attributes are on the model's z-scale; the percentile is the program's quality rank. Weights are how
     much each program values each applicant attribute.{% if has_stages %} <em>Applications</em> and
@@ -69,5 +62,4 @@
     </table>
   </div>
   {% include "nrmps/components/pagination.html" with label="Program pages" %}
-</div>
 {% endblock %}

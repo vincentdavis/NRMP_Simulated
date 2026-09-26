@@ -1,0 +1,41 @@
+{% load humanize format_tags %}
+{% comment %}Match rates by applicant group and strength decile. Context: outcome_views.{% endcomment %}
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="groups-title">
+  <div class="card-body">
+    <h2 id="groups-title" class="card-title">Who matched</h2>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      {% for title, rows, label in outcome_views.group_tables %}
+        <div class="overflow-x-auto" tabindex="0" role="region" aria-label="{{ title }}">
+          <table class="table table-sm">
+            <caption class="text-left font-semibold">{{ title }}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ label }}</th>
+                <th scope="col" class="text-right">Applicants</th>
+                <th scope="col" class="text-right">With a list</th>
+                <th scope="col" class="text-right">Match rate</th>
+                <th scope="col" class="text-right">Mean choice matched</th>
+                <th scope="col" class="text-right">Interviews (mean)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <th scope="row" class="font-normal">{{ row.name }}</th>
+                  <td class="text-right tabular-nums">{{ row.applicants|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.certified|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.match_rate|percent }}</td>
+                  <td class="text-right tabular-nums">{{ row.mean_matched_rank|floatformat:2|default:"-" }}</td>
+                  <td class="text-right tabular-nums">{{ row.interviews_mean|floatformat:2|default:"-" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="text-xs text-base-content/70">
+      Strength deciles group applicants by their latent strength: 1 is the weakest tenth, 10 the strongest.
+    </p>
+  </div>
+</section>
