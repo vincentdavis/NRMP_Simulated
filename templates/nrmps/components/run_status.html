@@ -1,0 +1,2 @@
+{% comment %}A run status badge (parameter: status, one of queued, running, succeeded, failed).{% endcomment %}
+{% if status == "succeeded" %}<span class="badge badge-success badge-sm">Finished</span>{% elif status == "failed" %}<span class="badge badge-error badge-sm">Failed</span>{% elif status == "running" %}<span class="badge badge-info badge-sm">Running</span>{% elif status == "queued" %}<span class="badge badge-outline badge-sm">Queued</span>{% endif %}

@@ -4,25 +4,30 @@
 {% block content %}
   <div class="mt-4">
     {% include "nrmps/components/breadcrumbs.html" %}
-    <div class="flex flex-wrap gap-2 justify-between items-center mb-6">
+    <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
       <h1 class="text-2xl font-bold min-w-0 break-words">{{ simulation.name }}</h1>
       <div class="flex flex-wrap gap-2">
         <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
         <form method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}"
-              data-confirm="Delete the simulation “{{ simulation.name }}” with its configuration, {{ counts.n_students }} applicants, {{ counts.n_schools }} programs and {{ counts.n_interviews }} interview rows? This cannot be undone.">
+              data-confirm="Delete the simulation “{{ simulation.name }}” with its parameters, uploaded files and {{ recent_runs|length }}{% if recent_runs|length >= 10 %} or more{% endif %} runs? This cannot be undone.">
           {% csrf_token %}
           <button type="submit" class="btn btn-error">Delete simulation</button>
         </form>
       </div>
     </div>
 
-    {% include "nrmps/partials/_workflow_steps.html" %}
+    {% include "nrmps/partials/_pipeline.html" %}
     <p class="text-sm text-base-content/70 mb-4">
-      Everything here is simulated from the assumptions in the configuration. Simulated outcomes are not predictions
-      of any real applicant's or program's match.
+      Everything here is simulated from the assumptions in the parameters. Simulated outcomes are not predictions of
+      any real applicant's or program's match.
     </p>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {% include "nrmps/partials/_run_panel.html" %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="min-w-0 lg:col-span-2">
+        {% include "nrmps/components/params_form.html" %}
+      </div>
       <div class="min-w-0 space-y-6">
         <form method="post" class="card bg-base-100 shadow-xl" novalidate>
           {% csrf_token %}
@@ -31,138 +36,27 @@
             <h2 class="card-title">Simulation</h2>
             {% field_row form.name %}
             {% field_row form.description label="Description (optional)" %}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {% field_row form.iterations %}
-              {% field_row form.public %}
-            </div>
+            {% field_row form.public %}
             <div class="card-actions justify-end">
               <button type="submit" class="btn btn-primary">Save</button>
             </div>
           </div>
         </form>
 
-        <form method="post" class="card bg-base-100 shadow-xl" novalidate>
-          {% csrf_token %}
-          <input type="hidden" name="form_id" value="config">
+        <section class="card bg-base-100 shadow-xl" aria-labelledby="populations-title">
           <div class="card-body">
-            <h2 class="card-title">Configuration</h2>
-            {% if config_form.errors %}
-              <div role="alert" class="alert alert-error">
-                <div>
-                  <p class="font-semibold">The configuration was not saved. Please fix:</p>
-                  <ul class="list-disc ml-5">
-                    {% for field in config_form %}
-                      {% if field.errors %}
-                        <li><a class="link" href="#{{ field.id_for_label }}">{{ field.label }}</a>: {{ field.errors.0 }}</li>
-                      {% endif %}
-                    {% endfor %}
-                    {% for error in config_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
-                  </ul>
-                </div>
-              </div>
-            {% endif %}
-
-            <h3 class="font-semibold mt-2">Market size</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-              {% field_row config_form.number_of_applicants %}
-              {% field_row config_form.number_of_schools %}
-            </div>
-
-            <div class="divider my-2"></div>
-            <h3 class="font-semibold">Applicants</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-              {% field_row config_form.applicant_score_mean %}
-              {% field_row config_form.applicant_score_stddev %}
-              {% field_row config_form.applicant_meta_scores_stddev %}
-              {% field_row config_form.applicant_meta_preference_stddev %}
-              {% field_row config_form.applicant_pre_interview_rating_error %}
-            </div>
-            {% include "nrmps/components/attribute_editor.html" with side="applicant" field=config_form.applicant_meta_preference items=meta_lists.applicant json=meta_json.applicant label="Program attributes applicants value" %}
-
-            <div class="divider my-2"></div>
-            <h3 class="font-semibold">Programs</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-              {% field_row config_form.school_score_mean %}
-              {% field_row config_form.school_score_stddev %}
-              {% field_row config_form.school_capacity_mean %}
-              {% field_row config_form.school_capacity_stddev %}
-              {% field_row config_form.school_meta_scores_stddev %}
-              {% field_row config_form.school_meta_preference_stddev %}
-              {% field_row config_form.school_pre_interview_rating_error %}
-            </div>
-            {% include "nrmps/components/attribute_editor.html" with side="school" field=config_form.school_meta_preference items=meta_lists.school json=meta_json.school label="Applicant attributes programs value" %}
-
-            <details class="collapse collapse-arrow bg-base-200 mt-2"{% if config_form.errors %} open{% endif %}>
-              <summary class="collapse-title font-semibold">Planned parameters (not used yet)</summary>
-              <div class="collapse-content">
-                <p class="text-sm text-base-content/70 mb-2">
-                  These belong to stages that are not implemented yet (invitations and interviews). Saving them has no
-                  effect on the results for now.
-                </p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
-                  {% field_row config_form.applicant_interview_limit %}
-                  {% field_row config_form.applicant_post_interview_rating_error %}
-                  {% field_row config_form.school_interview_limit %}
-                  {% field_row config_form.school_post_interview_rating_error %}
-                </div>
-              </div>
-            </details>
-
-            <div class="card-actions justify-end mt-2">
-              <button type="submit" class="btn btn-primary">Save configuration</button>
-            </div>
+            <h2 id="populations-title" class="card-title">Populations</h2>
+            <p class="text-sm text-base-content/70">
+              By default every run generates the applicants and programs from the parameters. You can upload your
+              own instead; runs then use the file (weights missing from the file are drawn by the model).
+            </p>
+            {% for side in sides %}
+              {% include "nrmps/partials/_population_side.html" %}
+              {% if not forloop.last %}<div class="divider my-1"></div>{% endif %}
+            {% endfor %}
           </div>
-        </form>
-      </div>
-
-      <div class="min-w-0">
-        {% include "nrmps/partials/_stage_cards.html" %}
+        </section>
       </div>
     </div>
   </div>
-{% endblock %}
-
-
-{% block extra_js %}
-  <script>
-      // Tag editor for an attribute list. The initial items come from a json_script element (never from markup),
-      // and names follow the server's rule: 1-40 lowercase letters, digits or underscores, at most 10 items.
-      window.metaEditor = function (initialId) {
-          const MAX_ITEMS = 10;
-
-          function normalize(val) {
-              return (val || "").toString().trim().toLowerCase().replace(/[\s-]+/g, "_").replace(/[^a-z0-9_]/g, "").slice(0, 40);
-          }
-
-          function clean(items) {
-              return items.map(normalize).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, MAX_ITEMS);
-          }
-
-          let initial = [];
-          try {
-              initial = JSON.parse(document.getElementById(initialId).textContent);
-          } catch (e) {
-              initial = [];
-          }
-          return {
-              items: clean(Array.isArray(initial) ? initial : []),
-              newItem: "",
-              dedupeAndNormalize() {
-                  this.items = clean(this.items);
-              },
-              addItem() {
-                  const v = normalize(this.newItem);
-                  if (!v) return;
-                  if (!this.items.includes(v) && this.items.length < MAX_ITEMS) this.items.push(v);
-                  this.newItem = "";
-              },
-              remove(index) {
-                  this.items.splice(index, 1);
-              },
-              jsonValue() {
-                  return JSON.stringify(clean(this.items));
-              }
-          }
-      }
-  </script>
 {% endblock %}

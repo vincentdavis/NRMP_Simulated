@@ -1,11 +1,13 @@
-"""The workflow runs in a real browser: HTMX step buttons, confirm dialogs and the Alpine tag editor."""
+"""The workflow in a real browser: HTMX runs and uploads, the stepper, dialogs and the Alpine list editors."""
 
 import re
+from pathlib import Path
 
 import pytest
+from django.conf import settings
 from playwright.sync_api import expect
 
-from nrmps.models import Interview, Simulation
+from nrmps.models import PopulationUpload, Simulation
 
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
 
@@ -15,58 +17,82 @@ def _confirm(page):
     page.get_by_role("dialog").get_by_role("button", name="Continue").click()
 
 
-def test_steps_run_from_the_page(logged_in_page, live):
-    page = logged_in_page
+def _stage(page, label: str):
+    return page.locator("#pipeline li", has_text=label)
 
+
+def test_a_new_simulation_runs_from_the_page(logged_in_page, live):
+    page = logged_in_page
     page.goto(f"{live}/simulations/new/")
     page.fill("#id_name", "Browser run")
     page.get_by_role("button", name="Create", exact=True).click()
     page.wait_for_url(re.compile(r"/simulations/\d+/$"))
     expect(page.locator("#toasts")).to_contain_text("Simulation created")
-    sim = Simulation.objects.get(name="Browser run")
+    expect(_stage(page, "Pre-interview")).to_contain_text("Ready")
 
-    # Make the market small so the steps are quick, through the real configuration form.
-    page.fill("#id_number_of_applicants", "30")
-    page.fill("#id_number_of_schools", "5")
-    page.get_by_role("button", name="Save configuration").click()
-    expect(page.locator("#toasts")).to_contain_text("Configuration saved")
-
-    cards = page.locator("#stage-cards")
-    page.locator("#stage-populations button", has_text="(re)Create").first.click()
-    _confirm(page)
-    expect(cards).to_contain_text("Applicants: 30")
-    expect(page.locator("#toasts")).to_contain_text("Created 30 applicants.")
-    page.locator("#stage-populations button", has_text="(re)Create").nth(1).click()
-    _confirm(page)
-    expect(cards).to_contain_text("Programs: 5")
-    page.get_by_role("button", name="(re)Initialize Interviews").click()
-    _confirm(page)
-    expect(cards).to_contain_text("Interviews: 150")
-    page.get_by_role("button", name="Compute Pre-Interview All").click()
-    expect(page.get_by_role("dialog")).to_contain_text("for the 150 interview rows")  # the question states counts
-    _confirm(page)
-    expect(page.locator("#workflow-steps .step-accent")).to_have_text("Pre-Interview")
-
-    assert Interview.objects.filter(simulation=sim, students_pre_rank_of_school__isnull=False).count() == 150
+    page.locator("#run-panel").get_by_role("button", name="Run", exact=True).click()
+    expect(page.locator("#toasts")).to_contain_text("Run 1 finished.")
+    expect(_stage(page, "Population")).to_contain_text("Done")
+    expect(_stage(page, "Pre-interview")).to_contain_text("Done")
+    page.locator("#run-panel").get_by_role("link", name="Results").click()
+    expect(page.get_by_role("heading", level=1)).to_contain_text("Run 1")
+    assert Simulation.objects.get(name="Browser run").runs.get().status == "succeeded"
 
 
-def test_cancelling_the_dialog_changes_nothing(logged_in_page, live, populated_simulation):
+def test_changing_noise_makes_only_the_pre_interview_stage_stale(logged_in_page, live, simulation, finished_run):
     page = logged_in_page
-    page.goto(f"{live}/simulations/{populated_simulation.pk}/")
-    page.locator("#stage-populations button", has_text="Delete").first.click()
+    page.goto(f"{live}/simulations/{simulation.pk}/")
+    page.get_by_label("Applicant pre-interview noise").fill("1.1")
+    page.locator("#parameters").get_by_role("button", name="Save", exact=True).click()
+    expect(page.locator("#toasts")).to_contain_text("Parameters saved.")
+    expect(_stage(page, "Population")).to_contain_text("Done")
+    expect(_stage(page, "Pre-interview")).to_contain_text("Out of date")
+    expect(page.locator("#pipeline")).to_contain_text("Changed since run 1: information (noise).")
+
+
+def test_list_editor_adds_a_row_and_saves_it(logged_in_page, live, simulation):
+    page = logged_in_page
+    page.goto(f"{live}/simulations/{simulation.pk}/")
+    editor = page.locator("#list-applicants__attributes")
+    expect(editor.locator("tbody tr")).to_have_count(3)
+    editor.get_by_role("button", name="Add row").click()
+    expect(editor.locator("tbody tr")).to_have_count(4)
+    editor.get_by_label("Attribute, new row").fill("step_2")
+    expect(editor.get_by_label("Correlation with strength, new row")).to_have_value("0.5")  # schema default
+    page.locator("#parameters").get_by_role("button", name="Save", exact=True).click()
+    expect(page.locator("#toasts")).to_contain_text("Parameters saved.")
+    keys = [a.key for a in Simulation.objects.get(pk=simulation.pk).get_params().applicants.attributes]
+    assert keys == ["board_scores", "research", "honors", "step_2"]
+
+
+def test_uploading_the_sample_file(logged_in_page, live, simulation):
+    page = logged_in_page
+    page.goto(f"{live}/simulations/{simulation.pk}/")
+    sample = Path(settings.BASE_DIR) / "static" / "samples" / "applicants_sample.csv"
+    card = page.locator("#population-applicants")
+    card.get_by_label("Applicants CSV file").set_input_files(str(sample))
+    card.get_by_role("button", name="Upload CSV").click()
+    expect(page.locator("#toasts")).to_contain_text("Loaded 12 applicants from the file.")
+    expect(page.locator("#population-applicants")).to_contain_text("applicants_sample.csv")
+    assert PopulationUpload.objects.get().rows == 12
+
+
+def test_cancelling_the_dialog_changes_nothing(logged_in_page, live, simulation):
+    page = logged_in_page
+    page.goto(f"{live}/simulations/{simulation.pk}/")
+    page.get_by_role("button", name="Delete simulation").click()
     dialog = page.get_by_role("dialog")
-    expect(dialog).to_contain_text("Delete all 20 applicants?")
+    expect(dialog).to_contain_text("Delete the simulation “Test simulation”")
     dialog.get_by_role("button", name="Cancel").click()
     expect(dialog).to_be_hidden()
-    assert populated_simulation.students.count() == 20
+    assert Simulation.objects.filter(pk=simulation.pk).exists()
 
 
-def test_a_server_error_is_reported_instead_of_ignored(logged_in_page, live, populated_simulation):
+def test_a_server_error_is_reported_instead_of_ignored(logged_in_page, live, simulation):
     page = logged_in_page
-    page.goto(f"{live}/simulations/{populated_simulation.pk}/")
-    page.route("**/initialize-interviews/", lambda route: route.fulfill(status=500, body="boom"))
-    page.get_by_role("button", name="(re)Initialize Interviews").click()
-    _confirm(page)
+    page.goto(f"{live}/simulations/{simulation.pk}/")
+    page.route("**/runs/", lambda route: route.fulfill(status=500, body="boom"))
+    page.locator("#run-panel").get_by_role("button", name="Run", exact=True).click()
     expect(page.locator("#toasts .alert-error")).to_contain_text("error 500")
 
 
@@ -78,17 +104,3 @@ def test_dark_mode_toggle_persists(logged_in_page, live):
     expect(page.locator("html")).to_have_attribute("data-theme", "dark")
     page.reload()
     expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-
-
-def test_attribute_editor_adds_and_saves_items(logged_in_page, live, simulation):
-    page = logged_in_page
-    page.goto(f"{live}/simulations/{simulation.pk}/")
-    editor = page.locator("[x-data^=metaEditor]").first
-    expect(editor.locator("input[aria-label^='Attribute']")).to_have_count(3)
-    editor.locator("input[aria-label^='New attribute']").fill("Class Size")
-    editor.locator("input[aria-label^='New attribute']").press("Enter")
-    expect(editor.locator("input[aria-label='Attribute 4']")).to_have_value("class_size")  # normalised
-    page.get_by_role("button", name="Save configuration").click()
-    page.wait_for_load_state()
-    saved = simulation.configs.get().applicant_meta_preference
-    assert saved == ["program_size", "reputation", "location", "class_size"]

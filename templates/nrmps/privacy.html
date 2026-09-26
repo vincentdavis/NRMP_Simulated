@@ -14,10 +14,10 @@
         <li><strong>Your account:</strong> username, password (stored only as a salted hash), email address (used only
           to confirm your account and to reset your password; never shown to other users) and the optional full
           name.</li>
-        <li><strong>Your simulations:</strong> their names and descriptions, configurations, the applicant and program
-          populations you generate or upload, and the computed ratings and rankings.</li>
+        <li><strong>Your simulations:</strong> their names, descriptions and parameters, and for each run the
+          parameters and seed it used, the applicants and programs, and the computed diagnostics.</li>
         <li><strong>Uploads:</strong> CSV files are read in memory and not kept as files; only the rows they contain
-          are stored, as the simulation's population.</li>
+          are stored, until you replace or remove the upload or delete the simulation.</li>
         <li><strong>Failed sign-ins:</strong> to block password guessing, a failed sign-in records the username tried,
           the IP address and the browser identification. The record is cleared when that username signs in
           successfully. Successful sign-ins are not recorded.</li>
@@ -48,7 +48,7 @@
     <section>
       <h2 class="text-lg font-semibold mb-2">How long data is kept, and deleting it</h2>
       <p>
-        Your data is kept until you delete it. Deleting a simulation deletes its configuration, populations and results.
+        Your data is kept until you delete it. Deleting a simulation deletes its parameters, uploads and runs.
         On your account page you can download everything stored for your account as a ZIP file, and delete your
         account together with all its simulations.
         {% if CONTACT_EMAIL %}For anything else, email <a class="link" href="mailto:{{ CONTACT_EMAIL }}">{{ CONTACT_EMAIL }}</a>.{% endif %}

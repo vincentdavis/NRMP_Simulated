@@ -12,10 +12,7 @@
       {% csrf_token %}
       {% field_row form.name %}
       {% field_row form.description label="Description (optional)" %}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {% field_row form.iterations %}
-        {% field_row form.public %}
-      </div>
+      {% field_row form.public %}
       <div class="card-actions justify-end mt-4">
         <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Cancel</a>
         <button type="submit" class="btn btn-primary">{% if create %}Create{% else %}Save{% endif %}</button>

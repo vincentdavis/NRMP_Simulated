@@ -1,0 +1,52 @@
+{% load form_tags %}
+{% comment %}
+  A list parameter (applicant groups, attributes, tiers ...) as an editable table (parameter: view, a FormsetView).
+  "Add row" copies the formset's empty form (Alpine `formsetRows` in static/js/site.js); a row is removed by ticking
+  Remove and saving.
+{% endcomment %}
+{% with help_id="list-"|add:view.prefix|add:"-help" %}
+<fieldset id="list-{{ view.prefix }}" class="fieldset mt-3" x-data="formsetRows('{{ view.prefix }}')"
+          aria-describedby="{{ help_id }}">
+  <legend class="fieldset-legend">{{ view.spec.title }}</legend>
+  <p class="text-sm text-base-content/70" id="{{ help_id }}">{{ view.spec.description }}</p>
+  {% for error in view.errors %}<p class="text-sm text-error" role="alert">{{ error }}</p>{% endfor %}
+  {% for error in view.formset.non_form_errors %}<p class="text-sm text-error" role="alert">{{ error }}</p>{% endfor %}
+  {{ view.formset.management_form }}
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          {% for column in view.spec.columns %}
+            <th scope="col" class="align-bottom">
+              {{ column.title }}{% if column.unit %} <span class="font-normal">({{ column.unit }})</span>{% endif %}
+              {% if not column.implemented and view.spec.implemented %}<span class="badge badge-outline badge-xs">Not used yet</span>{% endif %}
+            </th>
+          {% endfor %}
+          <th scope="col" class="align-bottom">Remove</th>
+        </tr>
+      </thead>
+      <tbody x-ref="rows">
+        {% for form in view.formset %}
+          <tr>
+            {% for field in form.visible_fields %}
+              {% if field.name != "DELETE" %}<td class="align-top">{% cell field forloop.parentloop.counter help_id %}</td>{% endif %}
+            {% endfor %}
+            <td class="align-top">{% cell form.DELETE forloop.counter help_id %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <template x-ref="empty">
+    <tr>
+      {% for field in view.formset.empty_form.visible_fields %}
+        {% if field.name != "DELETE" %}<td class="align-top">{% cell field "new row" help_id %}</td>{% endif %}
+      {% endfor %}
+      <td class="align-top">{% cell view.formset.empty_form.DELETE "new row" help_id %}</td>
+    </tr>
+  </template>
+  <div>
+    <button type="button" class="btn btn-sm btn-outline mt-1" @click="add()" :disabled="full">Add row</button>
+  </div>
+</fieldset>
+{% endwith %}

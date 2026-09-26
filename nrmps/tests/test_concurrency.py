@@ -1,8 +1,8 @@
-"""Concurrent steps on one simulation run one after the other (plan step 0.4, CRIT-1).
+"""Concurrent runs of one simulation cannot both start (plan steps 0.4 and 2.3, CRIT-1).
 
-Two simultaneous "(re)Create" requests used to double the population, and two "Initialize" requests ended in an
-IntegrityError. Steps now lock the simulation row first. These tests need real row locks, so they run on PostgreSQL
-only (set NRMP_TEST_DATABASE_URL); SQLite serialises writes differently.
+Starting a run locks the simulation row and a partial unique constraint allows one queued or running run per
+simulation. These tests need real row locks, so they run on PostgreSQL only (set NRMP_TEST_DATABASE_URL); SQLite
+serialises writes differently.
 """
 
 import threading
@@ -10,8 +10,8 @@ import threading
 import pytest
 from django.db import connection
 
-from nrmps import simulation_engine as se
-from nrmps.models import Interview, Simulation
+from nrmps.models import Simulation, SimulationRun
+from nrmps.runs import RunInProgressError, start_run
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),
@@ -41,14 +41,23 @@ def _run_concurrently(action, n: int = 2) -> list[Exception]:
     return errors
 
 
-def test_concurrent_population_creation_does_not_double_the_population(simulation):
-    simulation.configs.update(number_of_applicants=500)
-    errors = _run_concurrently(lambda: Simulation.objects.get(pk=simulation.pk).create_students())
-    assert errors == []
-    assert simulation.students.count() == 500
+def test_two_simultaneous_runs_start_only_one(simulation, user):
+    errors = _run_concurrently(lambda: start_run(Simulation.objects.get(pk=simulation.pk), user))
+    assert len(errors) == 1
+    assert isinstance(errors[0], RunInProgressError)
+    assert SimulationRun.objects.filter(simulation=simulation).count() == 1
 
 
-def test_concurrent_initialization_does_not_fail(populated_simulation):
-    errors = _run_concurrently(lambda: se.initialize_interview(Simulation.objects.get(pk=populated_simulation.pk)))
-    assert errors == []
-    assert Interview.objects.filter(simulation=populated_simulation).count() == 80
+def test_the_database_allows_one_active_run_per_simulation(simulation, user):
+    from django.db import IntegrityError, transaction
+
+    run = start_run(simulation, user)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        SimulationRun.objects.create(
+            simulation=simulation,
+            number=2,
+            params=run.params,
+            params_hash=run.params_hash,
+            seed=run.seed,
+            **run.stamps(),
+        )

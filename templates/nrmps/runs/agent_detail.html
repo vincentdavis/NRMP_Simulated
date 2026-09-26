@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load list_tags %}
+{% block title %}{{ name }} - run {{ run.number }} - {{ simulation.name }}{% endblock %}
+{% block content %}
+<div class="mt-4">
+  {% include "nrmps/components/breadcrumbs.html" with current=name %}
+  <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold min-w-0 break-words">{{ name }} – run {{ run.number }}</h1>
+    <a href="{% if applicant %}{% url 'nrmps:run_applicants' pk=simulation.pk number=run.number %}{% else %}{% url 'nrmps:run_programs' pk=simulation.pk number=run.number %}{% endif %}" class="btn btn-outline">
+      All {% if applicant %}applicants{% else %}programs{% endif %}
+    </a>
+  </div>
+  <p class="text-sm text-base-content/70 mb-4">
+    {% if applicant %}
+      How this applicant sees every program before interviews (true utility, the noisy pre-interview view and the
+      rankings they give), and how each program sees this applicant.
+    {% else %}
+      How this program sees every applicant before interviews (true utility, the noisy pre-interview view and the
+      rankings they give), and how each applicant sees this program.
+    {% endif %}
+    Rank 1 is the favourite. Utilities are in SD units.
+    {% if not has_their_ranks %}The other side's ranks are not shown: this market is too large to recompute them for a page.{% endif %}
+  </p>
+  {% include "nrmps/components/page_size.html" %}
+  <div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
+      <thead>
+        <tr>
+          {% sort_th "index" "#" "right" %}
+          {% sort_th "name" "Name" %}
+          <th scope="col" class="text-right">True utility</th>
+          <th scope="col" class="text-right">Pre-interview view</th>
+          {% sort_th "true_rank" "True rank" "right" %}
+          {% sort_th "pre_rank" "Pre-interview rank" "right" %}
+          <th scope="col" class="text-right">Their true utility</th>
+          <th scope="col" class="text-right">Their pre-interview view</th>
+          {% if has_their_ranks %}
+            {% sort_th "their_true_rank" "Their true rank of it" "right" %}
+            {% sort_th "their_pre_rank" "Their pre-interview rank of it" "right" %}
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="text-right tabular-nums">{{ row.number }}</td>
+            <td class="whitespace-nowrap"><a class="link" href="{% if applicant %}{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.number %}{% else %}{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.number %}{% endif %}">{{ row.name }}</a></td>
+            <td class="text-right tabular-nums">{{ row.true|floatformat:3 }}</td>
+            <td class="text-right tabular-nums">{{ row.observed|floatformat:3 }}</td>
+            <td class="text-right tabular-nums">{{ row.true_rank }}</td>
+            <td class="text-right tabular-nums">{{ row.pre_rank }}</td>
+            <td class="text-right tabular-nums">{{ row.their_true|floatformat:3 }}</td>
+            <td class="text-right tabular-nums">{{ row.their_observed|floatformat:3 }}</td>
+            {% if has_their_ranks %}
+              <td class="text-right tabular-nums">{{ row.their_true_rank }}</td>
+              <td class="text-right tabular-nums">{{ row.their_pre_rank }}</td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "nrmps/components/pagination.html" with label="Pages" %}
+</div>
+{% endblock %}

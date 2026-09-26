@@ -13,6 +13,7 @@
     <ul class="list-disc ml-5 space-y-1">
       <li><a class="link" href="#quick-start">Quick start</a></li>
       <li><a class="link" href="#model">How the simulation works</a></li>
+      <li><a class="link" href="#results">Reading the results</a></li>
       <li><a class="link" href="#parameters">Parameters</a></li>
       <li><a class="link" href="#csv">CSV files</a></li>
       <li><a class="link" href="#limitations">Current limitations</a></li>
@@ -24,121 +25,169 @@
     <h2 class="text-2xl font-bold mb-3">Quick start</h2>
     <ol class="list-decimal ml-6 space-y-2">
       <li>Create an account and open <strong>Simulations</strong>, then <strong>New simulation</strong>. It starts with
-        a working default configuration: 200 applicants and 10 programs with about 20 positions each.</li>
-      <li>On the simulation page, adjust the configuration if you like and save it.</li>
-      <li>Under <strong>Populations</strong>, create the applicants and the programs (or upload them as CSV).</li>
-      <li>Under <strong>Initialize Interviews</strong>, create one row per applicant-program pair.</li>
-      <li>Under <strong>Pre-Interview</strong>, compute the ratings and rankings.</li>
-      <li>Open <strong>View list</strong> to browse the results, or download them as CSV.</li>
+        working default parameters: {{ default_market.applicants|intcomma }} applicants for
+        {{ default_market.positions|intcomma }} positions in {{ default_market.programs|intcomma }} programs, and its
+        own random seed.</li>
+      <li>Press <strong>Run</strong>. The run generates the applicants and programs, their true preferences and their
+        noisy pre-interview views of each other, and ranks both sides.</li>
+      <li>Open the run to see the diagnostics, the applicants and programs, and any one applicant's or program's view
+        of the other side. Everything can be downloaded.</li>
+      <li>Change a parameter, press <strong>Save and run</strong>, and compare. The pipeline at the top of the page
+        says which stages the change makes out of date.</li>
     </ol>
-    <p class="mt-3">Every destructive action asks for confirmation and says what it will delete. Recreating a population
-      deletes the interview rows, because they belong to the old population.</p>
+    <p class="mt-3">A run is reproducible: the same parameters and seed always give exactly the same results, and
+      changing one parameter changes only what depends on it. With a blank seed every run draws a new one (the run
+      page shows which).</p>
   </section>
 
   <section id="model" class="mb-10 scroll-mt-4">
     <h2 class="text-2xl font-bold mb-3">How the simulation works</h2>
-    <p class="mb-3">The residency Match pairs applicants (medical students) with residency programs. In the real process
-      applicants apply, programs invite some of them to interview, both sides submit rank order lists, and the NRMP's
-      algorithm produces the match. This simulator currently models the part before applications: who would prefer
-      whom, and how accurately each side can tell.</p>
+    <p class="mb-3">The residency Match pairs applicants with residency programs. Applicants apply, programs invite
+      some of them to interview, both sides submit rank order lists, and the NRMP's algorithm produces the match.
+      This simulator (model {{ model_version }}) currently models the part before applications: who would prefer
+      whom, and how accurately each side can tell. Values such as strength, quality and utility are on a z-scale:
+      0 is average and 1 is one standard deviation above it.</p>
     <dl class="space-y-3">
       <div>
-        <dt class="font-semibold">Populations</dt>
-        <dd>Each applicant has a base score between 0 and 1 (overall strength) and one score per <em>applicant
-          attribute</em> that programs value (for example board_scores, research). Each program has a base score
-          (overall quality), a number of positions and one score per <em>program attribute</em> that applicants value
-          (for example reputation, location). Scores are drawn from Beta distributions with the configured means and
-          spreads; attribute scores are centred on the base score.</dd>
+        <dt class="font-semibold">Applicants and programs</dt>
+        <dd>Applicants belong to groups (for example US MD seniors or international graduates), each with its share
+          and a latent strength distribution. Programs have a latent quality (optionally in tiers) and a number of
+          positions. The number of positions follows from the applicants per position you choose, and positions are
+          spread over programs so that every program has at least one.</dd>
       </div>
       <div>
-        <dt class="font-semibold">Preferences</dt>
-        <dd>Every applicant weighs the program attributes, and every program weighs the applicant attributes. The
-          weights sum to 1. "Preference diversity" controls how much the weights differ between people: at 0 everyone
-          weighs the attributes the same way.</dd>
+        <dt class="font-semibold">Attributes</dt>
+        <dd>Each applicant has a value for every <em>applicant attribute</em> programs evaluate (for example
+          board_scores), and each program one for every <em>program attribute</em> applicants evaluate (for example
+          reputation). You set how closely each attribute follows overall strength or quality. The attribute
+          program_size is the program's number of positions.</dd>
+      </div>
+      <div>
+        <dt class="font-semibold">Weights</dt>
+        <dd>Everyone weighs the other side's attributes. You set the average weights; individual weights vary around
+          them, and the weight concentration sets how much (low: each agent cares mainly about one attribute).</dd>
       </div>
       <div>
         <dt class="font-semibold">True utility</dt>
-        <dd>An applicant's true utility for a program is the weighted sum of the program's attribute scores:
-          <code>U = Σ weight × attribute score</code>, between 0 and 1. Programs value applicants the same way.</dd>
+        <dd>An applicant's true utility for a program combines a view everyone shares (mostly the program's quality,
+          with some of its average-weighted attributes), the applicant's personal taste for the program's attributes
+          and a random personal fit:
+          <code class="break-all">u = √ρ·common + √(1−ρ)·(√τ·taste + √(1−τ)·fit)</code>.
+          ρ, the <em>agreement</em>, is the average correlation between two applicants' utilities: 1 means everyone
+          ranks programs the same way. τ is the share of the personal part that comes from taste rather than fit.
+          Programs value applicants the same way, with their own agreement.</dd>
       </div>
       <div>
-        <dt class="font-semibold">Pre-interview rating</dt>
-        <dd>Before interviews, each side sees the other only imperfectly: <code>rating = U + noise</code>, where the
-          noise is normally distributed with the configured standard deviation. A noise of 0 means perfect information.</dd>
+        <dt class="font-semibold">Pre-interview view</dt>
+        <dd>Before interviews each side sees the other with error: <code>view = u + σ·error</code>, where σ is the
+          noise in utility SD units (0 = perfect information; 0.5 keeps a correlation of about 0.89 with the truth).
+          Optionally less-known programs and applicants are seen with more error, and part of the error can be shared
+          by everyone judging the same program or applicant (herding).</dd>
       </div>
       <div>
         <dt class="font-semibold">Rankings</dt>
-        <dd>Each applicant ranks every program by rating (1 = highest), and each program ranks every applicant. Ties are
-          broken by the lower record number, so ranks are always 1, 2, 3 … with no gaps.</dd>
+        <dd>Each applicant ranks every program, and each program every applicant, by true utility and by the
+          pre-interview view (1 = favourite). Exact ties are broken by seeded random keys, so ranks are always 1, 2,
+          3 … with no gaps.</dd>
       </div>
     </dl>
-    <p class="mt-3">The interview table shows, for every pair, both true utilities, both ratings and both ranks, so you
-      can see how much the noise changes the orderings.</p>
+    <p class="mt-3">The full specification, with every formula and the random-number recipe, is
+      <code>docs/model_spec.md</code> in the <a class="link" href="{{ PROJECT_URL }}">project repository</a>.</p>
+  </section>
+
+  <section id="results" class="mb-10 scroll-mt-4">
+    <h2 class="text-2xl font-bold mb-3">Reading the results</h2>
+    <ul class="list-disc ml-6 space-y-1">
+      <li><strong>Agreement</strong>: the average correlation between two agents' true utilities; it should be close
+        to the agreement you set.</li>
+      <li><strong>Fidelity</strong>: how well the pre-interview view matches the truth, over all pairs and per agent
+        (rank correlation between its true and its pre-interview ordering).</li>
+      <li><strong>First choices</strong>: how concentrated the pre-interview first choices are: with high agreement
+        many applicants want the same few programs.</li>
+      <li><strong>The market, as generated</strong>: the realised group shares, attribute correlations and weights
+        next to what you asked for, to check the population.</li>
+    </ul>
   </section>
 
   <section id="parameters" class="mb-10 scroll-mt-4">
     <h2 class="text-2xl font-bold mb-3">Parameters</h2>
-    <p class="mb-3">Scores and utilities are on a 0-1 scale. Parameters marked <span class="badge badge-outline badge-sm">Not used yet</span>
-      belong to stages that are not implemented; they are saved but have no effect.</p>
-    <h3 class="text-lg font-semibold mt-4 mb-2">Configuration</h3>
-    <div class="overflow-x-auto">
-      <table class="table table-sm">
-        <thead>
-          <tr><th scope="col">Parameter</th><th scope="col">Meaning</th><th scope="col" class="text-right">Range</th><th scope="col" class="text-right">Default</th></tr>
-        </thead>
-        <tbody>
-          {% for p in config_parameters %}
-            <tr>
-              <td class="font-medium">{{ p.label }}{% if p.planned %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}</td>
-              <td>{{ p.help }}</td>
-              <td class="text-right tabular-nums whitespace-nowrap">{% if p.min != None or p.max != None %}{{ p.min|default_if_none:"" }}–{{ p.max|default_if_none:"" }}{% else %}-{% endif %}</td>
-              <td class="text-right tabular-nums">{{ p.default }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <p class="text-sm text-base-content/70 mt-2">A score standard deviation must also be below √(mean × (1 − mean)),
-      the largest spread a Beta distribution with that mean can have; the form says what the limit is. Applicants ×
-      programs is limited to {{ max_pairs|intcomma }} pairs.</p>
-    <h3 class="text-lg font-semibold mt-6 mb-2">Simulation</h3>
-    <div class="overflow-x-auto">
-      <table class="table table-sm">
-        <thead><tr><th scope="col">Field</th><th scope="col">Meaning</th></tr></thead>
-        <tbody>
-          {% for p in simulation_parameters %}
-            <tr>
-              <td class="font-medium">{{ p.label }}{% if p.planned %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}</td>
-              <td>{{ p.help }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <p class="mb-3">Parameters marked <span class="badge badge-outline badge-sm">Not used yet</span> belong to stages
+      that are not implemented; they are saved but have no effect. Applicants × programs is limited to
+      {{ max_pairs|intcomma }} pairs per run for now.</p>
+    {% for section in sections %}
+      <h3 class="text-lg font-semibold mt-6 mb-2">
+        {{ section.title }}{% if not section.implemented %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}
+      </h3>
+      {% if section.rows %}
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr><th scope="col">Parameter</th><th scope="col">Meaning</th><th scope="col" class="text-right">Range</th><th scope="col" class="text-right">Default</th></tr>
+            </thead>
+            <tbody>
+              {% for row in section.rows %}
+                <tr>
+                  <td class="font-medium">{{ row.title }}{% if not row.implemented and section.implemented %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}</td>
+                  <td>{{ row.description }}{% if row.unit %} <span class="text-base-content/70">({{ row.unit }})</span>{% endif %}</td>
+                  <td class="text-right tabular-nums">{{ row.limits }}</td>
+                  <td class="text-right tabular-nums">{{ row.default }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+      {% for table in section.tables %}
+        <h4 class="font-semibold mt-4">{{ table.title }}</h4>
+        <p class="text-sm mb-1">{{ table.description }}</p>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr><th scope="col">Column</th><th scope="col">Meaning</th><th scope="col" class="text-right">Range</th></tr>
+            </thead>
+            <tbody>
+              {% for column in table.columns %}
+                <tr>
+                  <td class="font-medium">{{ column.title }}{% if not column.implemented and section.implemented %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}</td>
+                  <td>{{ column.description }}</td>
+                  <td class="text-right tabular-nums">{{ column.limits }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if table.default %}
+          <p class="text-sm text-base-content/70">Default:
+            {% for item in table.default %}{% for key, value in item.items %}{% if value is not None %}{% if forloop.first %}<code>{{ value }}</code>{% else %} {{ value }}{% endif %}{% endif %}{% endfor %}{% if not forloop.last %}; {% endif %}{% endfor %}
+          </p>
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
   </section>
 
   <section id="csv" class="mb-10 scroll-mt-4">
     <h2 class="text-2xl font-bold mb-3">CSV files</h2>
-    <p class="mb-3">You can upload your own applicants and programs instead of generating them. A downloaded file can
-      be uploaded again unchanged. The whole file is checked first: if any row has a problem, nothing changes and the
-      problems are listed with their line and column.</p>
+    <p class="mb-3">You can upload your own applicants or programs (or both) instead of generating them; runs then use
+      the file. A run's downloaded applicants or programs can be uploaded again unchanged. The whole file is checked
+      first: if any row has a problem, nothing changes and the problems are listed with their line and column.</p>
     <ul class="list-disc ml-6 space-y-1 mb-3">
-      <li><strong>Applicants:</strong> <code class="break-all">{{ csv_columns.applicants|join:"," }}</code>
+      <li><strong>Applicants</strong> (default parameters): <code class="break-all">{{ csv_columns.applicants|join:"," }}</code>
         (<a class="link" href="{% static 'samples/applicants_sample.csv' %}" download>sample file</a>)</li>
-      <li><strong>Programs:</strong> <code class="break-all">{{ csv_columns.programs|join:"," }}</code>
+      <li><strong>Programs</strong> (default parameters): <code class="break-all">{{ csv_columns.programs|join:"," }}</code>
         (<a class="link" href="{% static 'samples/programs_sample.csv' %}" download>sample file</a>)</li>
     </ul>
     <ul class="list-disc ml-6 space-y-1">
-      <li>The first row must name the columns. <code>name</code> and <code>score</code> (and <code>capacity</code> for
-        programs) are required; the others may be left out.</li>
-      <li><code>score</code> is between 0 and 1; <code>capacity</code> is a whole number of positions.</li>
-      <li><code>score_meta</code> and <code>meta_preference</code> are JSON objects such as
-        <code>{"research": 0.5, "honors": 0.8}</code>. Attribute names use lowercase letters, digits and underscores.
-        Attribute scores are between 0 and 1; preference weights are 0 or more.</li>
-      <li>To rate, every applicant's weights must use attributes every program has a score for, and the other way
-        round. Uploaded populations without weights cannot be rated; the step says what is missing.</li>
-      <li>Files may be up to {{ max_upload_mb }} MB and {{ max_upload_rows|intcomma }} rows, in UTF-8 (Excel's
-        "CSV UTF-8" works).</li>
+      <li>The first row names the columns. The attribute columns are the attributes in your parameters, so the
+        simulation page lists the exact columns for your settings.</li>
+      <li><code>strength</code>, <code>quality</code> and the attributes are on the z-scale (0 = average).
+        <code>capacity</code> is a whole number of positions (1 or more); program_size is computed from it, so it is
+        not a column.</li>
+      <li><code>group</code> and <code>tier</code> are optional names made of lowercase letters, digits and
+        underscores.</li>
+      <li>The <code>weight:…</code> columns are optional; give all of them or none. Each row's weights are rescaled
+        to add up to 1. Without them the model draws the weights when the run starts.</li>
+      <li>Names must be unique within a file. Files may be up to {{ max_upload_mb }} MB and
+        {{ max_upload_rows|intcomma }} rows, in UTF-8 (Excel's "CSV UTF-8" works).</li>
     </ul>
     <p class="mt-3 text-sm">Please use made-up or anonymised data only (see the <a class="link" href="{% url 'nrmps:terms' %}">terms</a>).</p>
   </section>
@@ -146,11 +195,11 @@
   <section id="limitations" class="mb-10 scroll-mt-4">
     <h2 class="text-2xl font-bold mb-3">Current limitations</h2>
     <ul class="list-disc ml-6 space-y-1">
-      <li>Only the stages up to pre-interview rankings run. Applications, preference signals, interview invitations,
-        interviews, rank order lists and the match are being built.</li>
-      <li>The current generator draws preference weights that often sit at their limits, and applicants tend to agree
-        about which programs are best. A new model with explicit correlation settings replaces it.</li>
-      <li>Each step runs while you wait, so markets are limited to {{ max_pairs|intcomma }} applicant × program pairs.</li>
+      <li>Only the stages up to the pre-interview rankings run. Applications, preference signals, interview
+        invitations, interviews, rank order lists and the match are being built; their parameters are already in the
+        form, marked "Not used yet".</li>
+      <li>Runs execute while you wait, so markets are limited to {{ max_pairs|intcomma }} applicant × program pairs.
+        Background runs with larger limits are next.</li>
       <li>Results are simulations under the assumptions you set. They are not predictions of any real applicant's or
         program's match.</li>
     </ul>

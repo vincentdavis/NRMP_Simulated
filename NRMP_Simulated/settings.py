@@ -260,9 +260,15 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Largest applicants x programs product a single simulation step may process (decision D4). Steps run inside the web
-# request until background jobs exist, so this keeps every step well within the gunicorn timeout.
+# Largest applicants x programs product one run may have (decision D4). Runs execute inside the web request until
+# background jobs exist (plan step 2.5), so this keeps every run well within the gunicorn timeout.
 NRMP_MAX_PAIRS = int(os.environ.get("NRMP_MAX_PAIRS", "250000"))
+# Pairs the engine computes at a time: its memory use is about 100 bytes per block pair (docs/model_spec.md §12.7).
+# Results do not depend on it.
+NRMP_BLOCK_PAIRS = int(os.environ.get("NRMP_BLOCK_PAIRS", "250000"))
+# Largest market for which the detail pages compute the other side's ranks and the pairs CSV is offered: both need
+# every pair of the market to be recomputed during the request.
+NRMP_DRILLDOWN_MAX_PAIRS = int(os.environ.get("NRMP_DRILLDOWN_MAX_PAIRS", "2000000"))
 
 # Email (Django 6.1 MAILERS): SMTP when EMAIL_HOST is set (any provider: Postmark, SendGrid, Mailgun, SES ...);
 # otherwise messages are written to the log, which is enough for development.

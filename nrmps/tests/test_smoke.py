@@ -12,9 +12,11 @@ import pytest
 from django.conf import settings
 from django.urls import reverse
 
-from nrmps.models import Interview, Simulation
+from nrmps.models import Simulation
+from nrmps.params import load_params
+from nrmps.params_forms import post_data
 
-from .conftest import PASSWORD, SMALL_CONFIG
+from .conftest import PASSWORD, SMALL_PARAMS
 
 PUBLIC_PAGES = [
     "nrmps:index",
@@ -84,16 +86,6 @@ def test_signup_login_logout(client):
     assert response.status_code == 302
 
 
-def _config_post_data() -> dict:
-    """Form data for the configuration form built from SMALL_CONFIG."""
-    import json
-
-    data: dict[str, object] = {"form_id": "config"}
-    for key, value in SMALL_CONFIG.items():
-        data[key] = json.dumps(value) if isinstance(value, list) else value
-    return data
-
-
 def _body(response) -> bytes:
     """Return the body of a regular or streaming response."""
     return b"".join(response.streaming_content) if response.streaming else response.content
@@ -101,49 +93,38 @@ def _body(response) -> bytes:
 
 @pytest.mark.django_db
 def test_implemented_workflow_end_to_end(auth_client):
-    """New simulation, configuration, populations, interviews and pre-interview ranks work with DEBUG off."""
+    """New simulation, parameters, a run, its pages and downloads work with DEBUG off."""
     client = auth_client
     assert client.get(reverse("nrmps:simulation_list")).status_code == 200
 
-    response = client.post(
-        reverse("nrmps:simulation_create"), {"name": "Smoke", "description": "smoke", "iterations": 1}
-    )
+    response = client.post(reverse("nrmps:simulation_create"), {"name": "Smoke", "description": "smoke"})
     assert response.status_code == 302
     sim = Simulation.objects.get(name="Smoke")
     manage = reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk})
     assert client.get(manage).status_code == 200
 
-    assert client.post(manage, _config_post_data()).status_code == 302
-
-    def step(name: str):
-        url = reverse("nrmps:simulation_step", kwargs={"pk": sim.pk, "step": name})
-        response = client.post(url, headers={"hx-request": "true"})
-        assert response.status_code == 200, name
-        return response
-
-    step("create-applicants")
-    step("create-programs")
-    assert sim.students.count() == 20
-    assert sim.schools.count() == 4
-
-    for name in ("simulation_students", "simulation_schools"):
-        assert client.get(reverse(f"nrmps:{name}", kwargs={"pk": sim.pk})).status_code == 200
-    for name in ("simulation_download_students", "simulation_download_schools"):
-        response = client.get(reverse(f"nrmps:{name}", kwargs={"pk": sim.pk}))
-        assert response.status_code == 200
-        assert _body(response).startswith(b"name,")
-
-    step("initialize-interviews")
-    step("compute-pre-interview")
-    assert Interview.objects.filter(simulation=sim).count() == 80
-    assert not Interview.objects.filter(simulation=sim, students_pre_rank_of_school__isnull=True).exists()
-    assert not Interview.objects.filter(simulation=sim, schools_pre_rank_of_student__isnull=True).exists()
-
-    interviews = reverse("nrmps:simulation_interviews", kwargs={"pk": sim.pk})
-    assert client.get(interviews, {"sort": "student_pre_rank", "order": "desc"}).status_code == 200
-    response = client.get(reverse("nrmps:simulation_download_interviews", kwargs={"pk": sim.pk}))
+    assert client.post(manage, post_data(load_params(SMALL_PARAMS)) | {"form_id": "params"}).status_code == 302
+    response = client.post(reverse("nrmps:run_start", kwargs={"pk": sim.pk}), headers={"hx-request": "true"})
     assert response.status_code == 200
-    assert len(_body(response).splitlines()) == 81
+    run = sim.runs.get()
+    assert run.status == "succeeded", run.error
+    assert (run.n_applicants, run.n_programs) == (60, 8)
+
+    kwargs = {"pk": sim.pk, "number": run.number}
+    for name in ("run_detail", "run_applicants", "run_programs"):
+        assert client.get(reverse(f"nrmps:{name}", kwargs=kwargs)).status_code == 200, name
+    assert (
+        client.get(reverse("nrmps:run_applicants", kwargs=kwargs), {"sort": "fidelity", "order": "desc"}).status_code
+        == 200
+    )
+    assert client.get(reverse("nrmps:run_applicant", kwargs=kwargs | {"index": 1})).status_code == 200
+    assert client.get(reverse("nrmps:run_program", kwargs=kwargs | {"index": 1})).status_code == 200
+    for name, start in (("applicants.csv", b"name,"), ("programs.csv", b"name,"), ("pairs.csv", b"applicant,")):
+        response = client.get(reverse("nrmps:run_download", kwargs=kwargs | {"name": name}))
+        assert response.status_code == 200
+        assert _body(response).startswith(start)
+    response = client.get(reverse("nrmps:run_download", kwargs=kwargs | {"name": "pairs.csv"}))
+    assert len(_body(response).splitlines()) == 481
 
     assert client.post(reverse("nrmps:simulation_delete", kwargs={"pk": sim.pk})).status_code == 302
     assert not Simulation.objects.filter(pk=sim.pk).exists()

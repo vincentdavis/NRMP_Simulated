@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load list_tags humanize %}
+{% block title %}Applicants - run {{ run.number }} - {{ simulation.name }}{% endblock %}
+{% block content %}
+<div class="mt-4">
+  {% include "nrmps/components/breadcrumbs.html" with current="Applicants" %}
+  <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold min-w-0 break-words">Applicants – run {{ run.number }}</h1>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='applicants.csv' %}" class="btn btn-outline">Download CSV</a>
+      <a href="{% url 'nrmps:run_detail' pk=simulation.pk number=run.number %}" class="btn btn-outline">Back to run</a>
+    </div>
+  </div>
+  <p class="text-sm text-base-content/70 mb-4">
+    Strength and attributes are on the model's z-scale (0 = average, 1 = one standard deviation above); the
+    percentile is the applicant's strength rank among all applicants. Weights are how much each applicant values each
+    program attribute. <em>First choice</em> is the program the applicant would rank first before interviews;
+    <em>fidelity</em> is the rank correlation between the applicant's true and pre-interview orderings of programs.
+  </p>
+  {% include "nrmps/components/page_size.html" %}
+  <div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
+      <thead>
+        <tr>
+          {% sort_th "index" "#" "right" %}
+          {% sort_th "name" "Name" %}
+          {% sort_th "group" "Group" %}
+          {% sort_th "strength" "Strength" "right" %}
+          <th scope="col" class="text-right">Percentile</th>
+          <th scope="col">Attributes</th>
+          <th scope="col">Weights</th>
+          <th scope="col">First choice</th>
+          {% sort_th "fidelity" "Fidelity" "right" %}
+          {% sort_th "popularity" "Ranked first by" "right" %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="text-right tabular-nums">{{ row.number }}</td>
+            <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.number %}">{{ row.name }}</a></td>
+            <td>{{ row.group }}</td>
+            <td class="text-right tabular-nums">{{ row.strength|floatformat:3 }}</td>
+            <td class="text-right tabular-nums">{{ row.percentile|floatformat:0 }}</td>
+            <td>{% include "nrmps/components/chips.html" with items=row.attributes places=2 %}</td>
+            <td>{% include "nrmps/components/chips.html" with items=row.weights places=2 %}</td>
+            <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.first_choice %}">{{ row.first_choice_name }}</a></td>
+            <td class="text-right tabular-nums">{{ row.fidelity|floatformat:3 }}</td>
+            <td class="text-right tabular-nums">{{ row.popularity|intcomma }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "nrmps/components/pagination.html" with label="Applicant pages" %}
+</div>
+{% endblock %}

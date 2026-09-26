@@ -1,118 +1,44 @@
-import json
-import logging
-from collections.abc import Callable
-from dataclasses import dataclass
+"""Public pages, the simulation list and the simulation page: settings, parameters, populations and runs."""
 
+import logging
+from typing import Any
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
-from django.core.paginator import Paginator
 from django.db import DatabaseError, connection, transaction
-from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django_htmx.http import trigger_client_event
 
 from .exceptions import SimulationError
-from .forms import SchoolsUploadForm, SimulationConfigForm, SimulationForm, StudentsUploadForm
-from .models import Interview, Simulation, SimulationConfig
-from .population_csv import COLUMNS as POPULATION_COLUMNS
-from .population_csv import DISPLAY_NAMES, INTERVIEW_COLUMNS, csv_lines, parse_population_csv, plain_csv_lines
-from .simulation_engine import (
-    compute_post_interview_scores_and_rankings,
-    compute_pre_interview_scores_and_rankings,
-    initialize_interview,
-)
+from .forms import PopulationUploadForm, SimulationForm
+from .limits import market_size_error
+from .models import PopulationUpload, Side, Simulation
+from .params import SimulationParams
+from .params_forms import IMPLEMENTED_SECTIONS, ParamsForm
+from .pipeline import get_pipeline, needs_run
+from .population_csv import MAX_UPLOAD_BYTES, MAX_UPLOAD_ROWS, columns, digest, parse_population_csv
+from .runs import run_now
 
 logger = logging.getLogger(__name__)
 
-
-PAGE_SIZES = [25, 50, 100, 200, 500]
-
-
-def _render_stage_cards(
-    request,
-    simulation,
-    *,
-    error: str | None = None,
-    error_stage: str | None = None,
-    error_details: list[str] | None = None,
-):
-    """Render every stage card, plus an out-of-band swap of the workflow stepper.
-
-    Every HTMX step action returns this, so no card goes stale when a step changes another stage's data (for example
-    recreating applicants deletes all interview rows). `error` is shown in the card of `error_stage`.
-    """
-    simulation.refresh_from_db()
-    context = {
-        "simulation": simulation,
-        "stages": simulation.get_workflow_stages(),
-        "counts": _counts(simulation),
-        "error": error,
-        "error_stage": error_stage,
-        "error_details": error_details or [],
-    }
-    cards = render(request, "nrmps/partials/_stage_cards.html", context).content.decode()
-    stepper = render(request, "nrmps/partials/_workflow_steps.html", context | {"oob": True}).content.decode()
-    return HttpResponse(cards + stepper)
+RECENT_RUNS = 10
 
 
-def get_owned_simulation(request, pk: int) -> Simulation:
+def get_owned_simulation(request: HttpRequest, pk: int) -> Simulation:
     """Return the request user's simulation `pk`, or raise Http404 (also for other users' simulations)."""
     return get_object_or_404(Simulation.objects.owned_by(request.user), pk=pk)
 
 
-def _counts(simulation) -> dict[str, int]:
-    """Return the population and interview-row counts the stage cards show and quote in confirmations."""
-    return {
-        "n_students": simulation.students.count(),
-        "n_schools": simulation.schools.count(),
-        "n_interviews": simulation.interviews.count(),
-    }
+def _toast(response: HttpResponse, level: str, text: str) -> HttpResponse:
+    """Add a toast to an HTMX response (shown by static/js/site.js)."""
+    return trigger_client_event(response, "toast", {"level": level, "text": text})
 
 
-def _run_step(request, pk: int, stage: str, action, success: str):
-    """Run a simulation step for the owner and re-render the stage cards.
-
-    `action(sim)` does the work and may return a count, which `success` can use as `{count:,}`; that message is shown
-    as a toast. A SimulationError (a problem the user can fix) is shown in the card of `stage` instead; any other
-    exception is a bug and propagates (the page's HTMX error handler then shows a generic error toast).
-    """
-    sim = get_owned_simulation(request, pk)
-    try:
-        result = action(sim)
-    except SimulationError as exc:
-        logger.info("Simulation step failed simulation_id=%s stage=%s: %s", sim.pk, stage, exc)
-        details = getattr(exc, "details", None)
-        response = _render_stage_cards(request, sim, error=str(exc), error_stage=stage, error_details=details)
-        return trigger_client_event(response, "toast", {"level": "error", "text": str(exc)})
-    response = _render_stage_cards(request, sim)
-    return trigger_client_event(response, "toast", {"level": "success", "text": success.format(count=result or 0)})
-
-
-def _paginate(request, queryset, page_size: int) -> dict:
-    """Return the page_obj and the elided page_range for a list page."""
-    paginator = Paginator(queryset, page_size)
-    page_obj = paginator.get_page(request.GET.get("page"))
-    return {
-        "page_obj": page_obj,
-        "page_range": list(paginator.get_elided_page_range(page_obj.number, on_each_side=2, on_ends=1)),
-    }
-
-
-def _page_size(request) -> int:
-    """Return the requested page size if it is one of the offered sizes, else 100."""
-    try:
-        size = int(request.GET.get("page_size", 100))
-    except TypeError, ValueError:
-        return 100
-    return size if size in PAGE_SIZES else 100
-
-
-def _stream_csv(filename: str, header: list[str], rows) -> StreamingHttpResponse:
-    """Return a CSV download that is generated row by row instead of built in memory."""
-    response = StreamingHttpResponse(plain_csv_lines(header, rows), content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
+# --- Public pages -----------------------------------------------------------------------------------------------------
 
 
 @login_not_required
@@ -157,88 +83,140 @@ def terms(request):
     return render(request, "nrmps/terms.html")
 
 
+# --- Simulations ------------------------------------------------------------------------------------------------------
+
+
 @require_GET
 def simulation_list(request):
-    """List simulations for the authenticated user."""
-    sims = Simulation.objects.owned_by(request.user).with_counts().order_by("-id")
+    """List the user's simulations with their latest run."""
+    sims = Simulation.objects.owned_by(request.user).with_run_summary().order_by("-id")
     return render(request, "nrmps/simulations_list.html", {"simulations": sims})
 
 
 @require_http_methods(["GET", "POST"])
 def simulation_create(request):
-    """Create a new Simulation for the current user."""
+    """Create a simulation for the current user; it starts with the default parameters and a fresh seed."""
     if request.method == "POST":
         form = SimulationForm(request.POST)
         if form.is_valid():
-            # Every simulation starts with a valid default configuration, so the population steps work at once.
-            with transaction.atomic():
-                sim = form.save(commit=False)
-                sim.owner = request.user
-                sim.save()
-                SimulationConfig.objects.create(simulation=sim)
-            messages.success(request, "Simulation created with a default configuration. Generate the populations next.")
+            sim = form.save(commit=False)
+            sim.owner = request.user
+            sim.save()
+            messages.success(request, "Simulation created with the default parameters. Adjust them or run it.")
             return redirect("nrmps:simulation_manage", pk=sim.pk)
     else:
         form = SimulationForm()
     return render(request, "nrmps/simulation_form.html", {"form": form, "create": True})
 
 
+def _size_error(params: SimulationParams, simulation: Simulation) -> str | None:
+    """Return a message if the market these parameters give is above the size limit (uploads count as they are)."""
+    uploads = simulation.uploads_by_side()
+    n = uploads["applicants"].rows if "applicants" in uploads else params.market.n_applicants
+    m = uploads["programs"].rows if "programs" in uploads else params.n_programs(n)
+    return market_size_error(n, m)
+
+
+def manage_context(request: HttpRequest, sim: Simulation, **overrides) -> dict:
+    """Return the context of the simulation page (also used by its HTMX partials)."""
+    uploads = sim.uploads_by_side()
+    try:
+        params = sim.get_params()
+    except ValueError:
+        params = None
+    n = uploads["applicants"].rows if "applicants" in uploads else (params.market.n_applicants if params else 0)
+    m = uploads["programs"].rows if "programs" in uploads else (params.n_programs(n) if params else 0)
+    stages = get_pipeline(sim)
+    context: dict[str, Any] = {
+        "simulation": sim,
+        "stages": stages,
+        "needs_run": needs_run(stages),
+        "uploads": uploads,
+        "sides": [
+            {
+                "key": side.value,
+                "label": side.label,
+                "upload": uploads.get(side.value),
+                "columns": columns(params, side.value) if params else [],
+                "sample": f"samples/{side.value}_sample.csv",
+            }
+            for side in Side
+        ],
+        "market": {"applicants": n, "programs": m, "pairs": n * m},
+        "max_pairs": settings.NRMP_MAX_PAIRS,
+        "active_run": sim.active_run(),
+        "latest_run": sim.latest_run(),
+        "recent_runs": sim.runs.defer("params", "metrics", "fingerprints")[:RECENT_RUNS],
+        "max_upload_mb": MAX_UPLOAD_BYTES // (1024 * 1024),
+        "max_upload_rows": MAX_UPLOAD_ROWS,
+        "upload_errors": {},
+        "run_error": None,
+    }
+    context.update(overrides)
+    errors: dict[str, Any] = context["upload_errors"]
+    sides: list[dict[str, Any]] = context["sides"]
+    for side in sides:
+        side["error"] = errors.get(side["key"])
+    return context
+
+
 @require_http_methods(["GET", "POST"])
 def simulation_manage(request, pk: int):
-    """Manage a Simulation: edit its basic fields and configuration, and run the steps."""
+    """The simulation page: settings, parameters, populations, the pipeline and the runs."""
     sim = get_owned_simulation(request, pk)
-    config_instance = sim.configs.order_by("-id").first()
     form = SimulationForm(instance=sim)
-    config_form = SimulationConfigForm(instance=config_instance)
+    try:
+        current = sim.get_params()
+    except ValueError:
+        current = SimulationParams()
+    params_form = ParamsForm(initial=current)
 
     if request.method == "POST":
         # The page has two forms; each posts a hidden form_id.
-        if request.POST.get("form_id") == "config":
-            config_form = SimulationConfigForm(request.POST, instance=config_instance)
-            if config_form.is_valid():
-                config = config_form.save(commit=False)
-                config.simulation = sim
-                config.save()
-                messages.success(request, "Configuration saved. Regenerate the populations to use it.")
-                return redirect("nrmps:simulation_manage", pk=sim.pk)
-            logger.warning("Configuration form invalid simulation_id=%s fields=%s", sim.pk, sorted(config_form.errors))
+        if request.POST.get("form_id") == "params":
+            params_form = ParamsForm(request.POST, initial=current)
+            if params_form.is_valid() and params_form.params is not None:
+                if message := _size_error(params_form.params, sim):
+                    params_form.section_errors["market"].append(message)
+                else:
+                    sim.set_params(params_form.params)
+                    sim.save(update_fields=["params", "updated_at"])
+                    if "run" in request.POST:
+                        return _run_and_redirect(request, sim)
+                    messages.success(request, "Parameters saved.")
+                    return redirect(reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk}) + "#run")
+            logger.info("Parameters invalid simulation_id=%s", sim.pk)
         else:
             form = SimulationForm(request.POST, instance=sim)
             if form.is_valid():
                 form.save()
                 messages.success(request, "Simulation saved.")
                 return redirect("nrmps:simulation_manage", pk=sim.pk)
-            logger.warning("Simulation form invalid simulation_id=%s fields=%s", sim.pk, sorted(form.errors))
+            logger.info("Simulation form invalid simulation_id=%s fields=%s", sim.pk, sorted(form.errors))
 
-    meta_lists = {side: _attribute_list(config_form, f"{side}_meta_preference") for side in ("applicant", "school")}
-    context = {
-        "simulation": sim,
-        "form": form,
-        "config_form": config_form,
-        "students_upload_form": StudentsUploadForm(),
-        "schools_upload_form": SchoolsUploadForm(),
-        "stages": sim.get_workflow_stages(),
-        "counts": _counts(sim),
-        # The attribute-list editors read their items from json_script elements; the hidden inputs' fallback values
-        # (used without JavaScript) are autoescaped JSON. Nothing user-supplied is marked safe.
-        "meta_lists": meta_lists,
-        "meta_json": {side: json.dumps(items) for side, items in meta_lists.items()},
-    }
+    context = manage_context(request, sim, form=form, params_form=params_form)
+    warnings = current.warnings() if not params_form.is_bound else []
+    implemented = set(IMPLEMENTED_SECTIONS)
+    context["param_warnings"] = [w for w in warnings if w.path.split(".")[0] in implemented]
+    context["planned_warnings"] = [w for w in warnings if w.path.split(".")[0] not in implemented]
     return render(request, "nrmps/simulation_manage.html", context)
 
 
-def _attribute_list(form, name: str) -> list[str]:
-    """Return the attribute list a form field currently holds (submitted or initial) as a list of strings."""
-    value = form[name].value()
-    if isinstance(value, str):
-        try:
-            value = json.loads(value)
-        except ValueError:
-            return []
-    return [str(item) for item in value] if isinstance(value, list) else []
+def _run_and_redirect(request: HttpRequest, sim: Simulation) -> HttpResponse:
+    """Run the simulation (no JavaScript, or "Save and run") and redirect to the result."""
+    try:
+        run = run_now(sim, request.user)
+    except SimulationError as exc:
+        messages.error(request, str(exc))
+        return redirect(reverse("nrmps:simulation_manage", kwargs={"pk": sim.pk}) + "#run")
+    if run.status == run.Status.SUCCEEDED:
+        messages.success(request, f"Run {run.number} finished.")
+    else:
+        messages.error(request, f"Run {run.number} failed: {run.error}")
+    return redirect("nrmps:run_detail", pk=sim.pk, number=run.number)
 
 
-@require_http_methods(["POST"])
+@require_POST
 def simulation_delete(request, pk: int):
     """Delete a simulation with everything in it."""
     sim = get_owned_simulation(request, pk)
@@ -248,205 +226,94 @@ def simulation_delete(request, pk: int):
     return redirect("nrmps:simulation_list")
 
 
-# --- HTMX population actions ---
-# Each returns all stage cards (see _render_stage_cards). Replacing or deleting a population deletes every interview
-# row by cascade; the model methods reset the pipeline stage accordingly.
+# --- Runs (HTMX from the simulation page) -----------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class Step:
-    """A simulation step: the stage its errors belong to, the work, and the success message."""
-
-    stage: str
-    action: Callable[[Simulation], int | None]
-    success: str
-
-
-STEPS: dict[str, Step] = {
-    "create-applicants": Step("populations", lambda sim: sim.create_students(), "Created {count:,} applicants."),
-    "create-programs": Step("populations", lambda sim: sim.create_schools(), "Created {count:,} programs."),
-    "delete-applicants": Step("populations", lambda sim: sim.delete_students(), "Deleted all applicants."),
-    "delete-programs": Step("populations", lambda sim: sim.delete_schools(), "Deleted all programs."),
-    "initialize-interviews": Step("initialized", initialize_interview, "Created {count:,} interview rows."),
-    "compute-pre-interview": Step(
-        "pre_interview",
-        compute_pre_interview_scores_and_rankings,
-        "Computed pre-interview ratings and ranks for {count:,} pairs.",
-    ),
-    "compute-post-interview": Step(
-        "post_interview",
-        compute_post_interview_scores_and_rankings,
-        "Computed post-interview ratings and ranks for {count:,} pairs.",
-    ),
-}
+def _run_panel(request: HttpRequest, sim: Simulation, **overrides) -> HttpResponse:
+    """Render the run panel and, out of band, the stepper."""
+    context = manage_context(request, sim, **overrides)
+    panel = render(request, "nrmps/partials/_run_panel.html", context).content.decode()
+    stepper = render(request, "nrmps/partials/_pipeline.html", context | {"oob": True}).content.decode()
+    return HttpResponse(panel + stepper)
 
 
 @require_POST
-def simulation_step(request, pk: int, step: str):
-    """Run one step of the owner's simulation (see STEPS) and return the refreshed stage cards."""
-    spec = STEPS.get(step)
-    if spec is None:
-        raise Http404("Unknown step")
-    return _run_step(request, pk, spec.stage, spec.action, spec.success)
+def run_start(request, pk: int):
+    """Run the simulation with its saved parameters (in this request until background jobs exist)."""
+    sim = get_owned_simulation(request, pk)
+    if not request.htmx:
+        return _run_and_redirect(request, sim)
+    try:
+        run = run_now(sim, request.user)
+    except SimulationError as exc:
+        return _toast(_run_panel(request, sim, run_error=str(exc)), "error", str(exc))
+    if run.status == run.Status.SUCCEEDED:
+        return _toast(_run_panel(request, sim), "success", f"Run {run.number} finished.")
+    return _toast(_run_panel(request, sim), "error", f"Run {run.number} failed: {run.error}")
 
 
-def _upload(request, pk: int, form_class, kind: str):
-    """Replace a population with an uploaded CSV, validated in memory before anything is deleted."""
+# --- Uploads (HTMX from the simulation page) --------------------------------------------------------------------------
 
-    def action(sim):
-        form = form_class(request.POST, request.FILES)
+
+def _population_card(request: HttpRequest, sim: Simulation, side: str, **overrides) -> HttpResponse:
+    """Render one side's population card and, out of band, the stepper."""
+    context = manage_context(request, sim, **overrides)
+    context["side"] = next(entry for entry in context["sides"] if entry["key"] == side)
+    card = render(request, "nrmps/partials/_population_side.html", context).content.decode()
+    stepper = render(request, "nrmps/partials/_pipeline.html", context | {"oob": True}).content.decode()
+    return HttpResponse(card + stepper)
+
+
+def _side(side: str) -> str:
+    if side not in Side.values:
+        raise Http404("Unknown side")
+    return side
+
+
+@require_POST
+def population_upload(request, pk: int, side: str):
+    """Replace one side's population with an uploaded CSV, validated in memory before anything is stored."""
+    sim = get_owned_simulation(request, pk)
+    side = _side(side)
+    label = Side(side).label.lower()
+    form = PopulationUploadForm(request.POST, request.FILES)
+    try:
         if not form.is_valid():
             raise SimulationError("Choose a CSV file to upload.")
-        rows = parse_population_csv(form.cleaned_data["file"], kind)
-        if kind == "students":
-            return sim.upload_students(rows)
-        return sim.upload_schools(rows)
+        params = sim.get_params()
+        upload = parse_population_csv(form.cleaned_data["file"], side, params)
+        other = "programs" if side == "applicants" else "applicants"
+        others = sim.uploads_by_side().get(other)
+        n = upload.rows if side == "applicants" else (others.rows if others else params.market.n_applicants)
+        m = upload.rows if side == "programs" else (others.rows if others else params.n_programs(n))
+        if message := market_size_error(n, m):
+            raise SimulationError(message)
+    except SimulationError as exc:
+        details = getattr(exc, "details", [])
+        response = _population_card(request, sim, side, upload_errors={side: {"message": str(exc), "details": details}})
+        return _toast(response, "error", str(exc))
+    data = upload.to_npz()
+    with transaction.atomic():
+        sim.lock()
+        PopulationUpload.objects.update_or_create(
+            simulation=sim,
+            side=side,
+            defaults={
+                "filename": form.cleaned_data["file"].name[:255],
+                "rows": upload.rows,
+                "data": data,
+                "digest": digest(data),
+            },
+        )
+    response = _population_card(request, sim, side)
+    return _toast(response, "success", f"Loaded {upload.rows:,} {label} from the file. Runs now use them.")
 
-    return _run_step(request, pk, "populations", action, f"Loaded {{count:,}} {DISPLAY_NAMES[kind]} from the file.")
 
-
-@require_http_methods(["POST"])
-def simulation_upload_students(request, pk: int):
-    """Replace the applicants with an uploaded CSV."""
-    return _upload(request, pk, StudentsUploadForm, "students")
-
-
-@require_http_methods(["POST"])
-def simulation_upload_schools(request, pk: int):
-    """Replace the programs with an uploaded CSV."""
-    return _upload(request, pk, SchoolsUploadForm, "schools")
-
-
-# --- CSV downloads ---
-
-
-def _download_population(request, pk: int, kind: str):
-    """Stream a population in the CSV format that the upload accepts."""
+@require_POST
+def population_upload_remove(request, pk: int, side: str):
+    """Go back to generating one side's population from the parameters."""
     sim = get_owned_simulation(request, pk)
-    queryset = sim.students if kind == "students" else sim.schools
-    records = queryset.order_by("id").values_list(*POPULATION_COLUMNS[kind]).iterator(chunk_size=2000)
-    response = StreamingHttpResponse(csv_lines(kind, records), content_type="text/csv; charset=utf-8")
-    response["Content-Disposition"] = f'attachment; filename="simulation_{sim.id}_{DISPLAY_NAMES[kind]}.csv"'
-    return response
-
-
-@require_GET
-def simulation_download_students(request, pk: int):
-    """Download the applicants as CSV (the format the upload accepts)."""
-    return _download_population(request, pk, "students")
-
-
-@require_GET
-def simulation_download_schools(request, pk: int):
-    """Download the programs as CSV (the format the upload accepts)."""
-    return _download_population(request, pk, "schools")
-
-
-@require_GET
-def simulation_students(request, pk: int):
-    """List students for a simulation with sorting and pagination (default 100)."""
-    sim = get_owned_simulation(request, pk)
-
-    # Sorting
-    sort = request.GET.get("sort", "id").lower()
-    order = request.GET.get("order", "asc").lower()
-    allowed = {
-        "id": "id",
-        "name": "name",
-        "score": "score",
-    }
-    sort_field = allowed.get(sort, "id")
-    ordering = [sort_field if order != "desc" else f"-{sort_field}", "id"]
-
-    page_size = _page_size(request)
-    qs = sim.students.all().order_by(*ordering)
-    context = {
-        "simulation": sim,
-        **_paginate(request, qs, page_size),
-        "sort": sort,
-        "order": order,
-        "page_size": page_size,
-        "page_sizes": PAGE_SIZES,
-    }
-    return render(request, "nrmps/students_list.html", context)
-
-
-@require_GET
-def simulation_schools(request, pk: int):
-    """List schools for a simulation with sorting and pagination (default 100)."""
-    sim = get_owned_simulation(request, pk)
-
-    sort = request.GET.get("sort", "id").lower()
-    order = request.GET.get("order", "asc").lower()
-    allowed = {
-        "id": "id",
-        "name": "name",
-        "capacity": "capacity",
-        "score": "score",
-    }
-    sort_field = allowed.get(sort, "id")
-    ordering = [sort_field if order != "desc" else f"-{sort_field}", "id"]
-
-    page_size = _page_size(request)
-    qs = sim.schools.all().order_by(*ordering)
-    context = {
-        "simulation": sim,
-        **_paginate(request, qs, page_size),
-        "sort": sort,
-        "order": order,
-        "page_size": page_size,
-        "page_sizes": PAGE_SIZES,
-    }
-    return render(request, "nrmps/schools_list.html", context)
-
-
-# --- Interview section ---
-
-
-@require_GET
-def simulation_interviews(request, pk: int):
-    """List interviews for a simulation with sorting and pagination (default 100)."""
-    sim = get_owned_simulation(request, pk)
-
-    # Sorting
-    sort = request.GET.get("sort", "id").lower()
-    order = request.GET.get("order", "asc").lower()
-    allowed = {
-        "id": "id",
-        "student": "student__name",
-        "school": "school__name",
-        "status": "status",
-        "student_pre_score": "student_pre_observed_score_of_school",
-        "school_pre_score": "school_pre_observed_score_of_student",
-        "student_true": "student_true_score_of_school",
-        "school_true": "school_true_score_of_student",
-        "student_pre_rank": "students_pre_rank_of_school",
-        "school_pre_rank": "schools_pre_rank_of_student",
-    }
-    sort_field = allowed.get(sort, "id")
-    ordering = [sort_field if order != "desc" else f"-{sort_field}", "id"]
-
-    page_size = _page_size(request)
-    qs = Interview.objects.filter(simulation=sim).select_related("student", "school").order_by(*ordering)
-    context = {
-        "simulation": sim,
-        **_paginate(request, qs, page_size),
-        "sort": sort,
-        "order": order,
-        "page_size": page_size,
-        "page_sizes": PAGE_SIZES,
-    }
-    return render(request, "nrmps/interviews_list.html", context)
-
-
-@require_GET
-def simulation_download_interviews(request, pk: int):
-    """Download the interview rows (scores and ranks for every applicant-program pair) as CSV."""
-    sim = get_owned_simulation(request, pk)
-    rows = (
-        Interview.objects.filter(simulation=sim)
-        .order_by("id")
-        .values_list("student__name", "school__name", *INTERVIEW_COLUMNS)
-        .iterator(chunk_size=2000)
-    )
-    return _stream_csv(f"simulation_{sim.id}_interviews.csv", ["student", "school", *INTERVIEW_COLUMNS], rows)
+    side = _side(side)
+    sim.uploads.filter(side=side).delete()
+    response = _population_card(request, sim, side)
+    return _toast(response, "success", f"Runs now generate the {Side(side).label.lower()} from the parameters.")

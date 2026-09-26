@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Run {{ run.number }} - {{ simulation.name }}{% endblock %}
+{% block content %}
+<div class="mt-4">
+  {% include "nrmps/components/breadcrumbs.html" %}
+  <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold min-w-0 break-words">
+      Run {{ run.number }} {% include "nrmps/components/run_status.html" with status=run.status %}
+    </h1>
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}" class="btn btn-outline">Back to simulation</a>
+      {% if not run.is_active %}
+        <form method="post" action="{% url 'nrmps:run_delete' pk=simulation.pk number=run.number %}"
+              data-confirm="Delete run {{ run.number }} and its results? The parameters and seed are shown on this page if you want to repeat it later.">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-error">Delete run</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  <p class="text-sm text-base-content/70 mb-4">
+    Simulated from the assumptions below; not a prediction of any real applicant's or program's match.
+  </p>
+
+  {% if run.status == "failed" %}
+    <div role="alert" class="alert alert-error mb-4"><span>This run failed: {{ run.error }}</span></div>
+  {% elif run.is_active %}
+    <div role="status" class="alert alert-info mb-4"><span>This run is {{ run.get_status_display|lower }} ({{ run.progress_percent }}%).</span></div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+    <section class="card bg-base-100 shadow-xl lg:col-span-2" aria-labelledby="summary-title">
+      <div class="card-body">
+        <h2 id="summary-title" class="card-title">Summary</h2>
+        {% if run.status == "succeeded" %}{% include "nrmps/components/run_summary.html" %}{% endif %}
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mt-3 text-sm">
+          {% if run.status != "succeeded" or run.seed_was_drawn %}
+            <div><dt class="font-medium">Seed</dt><dd class="tabular-nums break-all">{{ run.seed }}{% if run.seed_was_drawn %} (drawn for this run){% endif %}</dd></div>
+          {% endif %}
+          <div><dt class="font-medium">Started</dt><dd>{{ run.created_at|date:"Y-m-d H:i:s" }}{% if run.created_by %} by {{ run.created_by }}{% endif %}</dd></div>
+          <div><dt class="font-medium">Applicants</dt><dd>{{ run.n_applicants|intcomma }} ({{ run.population_source.applicants }})</dd></div>
+          <div><dt class="font-medium">Programs</dt><dd>{{ run.n_programs|intcomma }} with {{ run.n_positions|intcomma }} positions ({{ run.population_source.programs }})</dd></div>
+        </dl>
+        {% if run.status == "succeeded" %}
+          <div class="flex flex-wrap gap-2 mt-4">
+            <a class="btn btn-sm btn-primary" href="{% url 'nrmps:run_applicants' pk=simulation.pk number=run.number %}">Applicants</a>
+            <a class="btn btn-sm btn-primary" href="{% url 'nrmps:run_programs' pk=simulation.pk number=run.number %}">Programs</a>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-xl" aria-labelledby="downloads-title">
+      <div class="card-body">
+        <h2 id="downloads-title" class="card-title">Downloads</h2>
+        <ul class="space-y-1">
+          {% if run.status == "succeeded" %}
+            <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='applicants.csv' %}">Applicants (CSV)</a> – uploads back unchanged</li>
+            <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='programs.csv' %}">Programs (CSV)</a> – uploads back unchanged</li>
+            {% if pairs_download %}
+              <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='pairs.csv' %}">Every applicant–program pair (CSV)</a></li>
+            {% endif %}
+          {% endif %}
+          <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='metrics.json' %}">Diagnostics and versions (JSON)</a></li>
+          <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='params.json' %}">Parameters with the seed (JSON)</a></li>
+        </ul>
+        <p class="text-xs text-base-content/70 mt-2">
+          Model {{ run.model_version }}, engine {{ run.engine_version }}, app {{ run.app_version }}{% if run.git_sha %}
+          ({{ run.git_sha|slice:":7" }}){% endif %}, numpy {{ run.numpy_version }}, Python {{ run.python_version }}.
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="stages-title">
+    <div class="card-body">
+      <h2 id="stages-title" class="card-title">Stages</h2>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead><tr><th scope="col">Stage</th><th scope="col">Status</th><th scope="col" class="text-right">Time</th><th scope="col">Result</th></tr></thead>
+          <tbody>
+            {% for stage in stages %}
+              <tr>
+                <td>{{ stage.get_stage_display }}</td>
+                <td>{% include "nrmps/components/run_status.html" with status=stage.status %}</td>
+                <td class="text-right tabular-nums">{% if stage.duration_ms is not None %}{{ stage.duration_ms|intcomma }} ms{% endif %}</td>
+                <td>{% if stage.error %}{{ stage.error }}{% else %}{% for key, value in stage.counts.items %}{{ value|intcomma }} {{ key }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  {% if metrics %}
+    {% include "nrmps/runs/_metrics.html" %}
+  {% endif %}
+
+  <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="params-title">
+    <div class="card-body">
+      <h2 id="params-title" class="card-title">Parameters of this run</h2>
+      <details class="collapse collapse-arrow bg-base-200">
+        <summary class="collapse-title font-medium">Show the parameters</summary>
+        <div class="collapse-content">
+          {% for group in param_groups %}
+            <h3 class="font-semibold mt-3">{{ group.title }}</h3>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 text-sm">
+              {% for label, value in group.scalars %}
+                <div class="flex justify-between gap-2 border-b border-base-300 py-1"><dt>{{ label }}</dt><dd class="tabular-nums">{{ value|default_if_none:"blank" }}</dd></div>
+              {% endfor %}
+            </dl>
+            {% for table in group.lists %}
+              {% if table.rows %}
+                <div class="overflow-x-auto">
+                  <table class="table table-xs mt-2">
+                    <caption class="text-left text-sm">{{ table.title }}</caption>
+                    <thead><tr>{% for column in table.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr></thead>
+                    <tbody>{% for row in table.rows %}<tr>{% for value in row %}<td class="tabular-nums">{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+                  </table>
+                </div>
+              {% endif %}
+            {% endfor %}
+          {% endfor %}
+          <p class="text-xs text-base-content/70 mt-3 break-all">Parameter hash {{ run.params_hash }}; population digest {{ run.population_digest }}.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+</div>
+{% endblock %}

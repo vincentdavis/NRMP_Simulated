@@ -1,0 +1,136 @@
+{% load humanize %}
+{% comment %}The pre-interview diagnostics of a run (docs/model_spec.md §10). Context: metrics, histograms.{% endcomment %}
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="diagnostics-title">
+  <div class="card-body">
+    <h2 id="diagnostics-title" class="card-title">Before interviews</h2>
+    <p class="text-sm text-base-content/70">
+      Agreement is the average correlation between two agents' true utilities (1 = everyone agrees). Fidelity is how
+      well the pre-interview view matches the truth: the correlation of true and observed utilities over all pairs,
+      and each agent's rank correlation between its true and its pre-interview ordering.
+    </p>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr><th scope="col">Measure</th><th scope="col" class="text-right">Applicants rating programs</th><th scope="col" class="text-right">Programs rating applicants</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row" class="font-normal">Agreement (true utilities)</th><td class="text-right tabular-nums">{{ metrics.applicants.consensus.true_utility_correlation|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.consensus.true_utility_correlation|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Agreement (true rankings, Spearman)</th><td class="text-right tabular-nums">{{ metrics.applicants.consensus.true_rank_correlation|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.consensus.true_rank_correlation|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Agreement (pre-interview views)</th><td class="text-right tabular-nums">{{ metrics.applicants.consensus.observed_utility_correlation|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.consensus.observed_utility_correlation|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Pre-interview noise (SD)</th><td class="text-right tabular-nums">{{ metrics.applicants.fidelity.noise_sd|floatformat:3 }}</td><td class="text-right tabular-nums">{{ metrics.programs.fidelity.noise_sd|floatformat:3 }}</td></tr>
+          <tr><th scope="row" class="font-normal">Fidelity, expected</th><td class="text-right tabular-nums">{{ metrics.applicants.fidelity.expected_correlation|floatformat:3 }}</td><td class="text-right tabular-nums">{{ metrics.programs.fidelity.expected_correlation|floatformat:3 }}</td></tr>
+          <tr><th scope="row" class="font-normal">Fidelity, realised (all pairs)</th><td class="text-right tabular-nums">{{ metrics.applicants.fidelity.pooled_correlation|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.fidelity.pooled_correlation|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Fidelity per agent (mean Spearman)</th><td class="text-right tabular-nums">{{ metrics.applicants.fidelity.spearman_mean|floatformat:3|default:"-" }}</td><td class="text-right tabular-nums">{{ metrics.programs.fidelity.spearman_mean|floatformat:3|default:"-" }}</td></tr>
+          <tr><th scope="row" class="font-normal">Distinct first choices</th><td class="text-right tabular-nums">{{ metrics.applicants.first_choices.distinct|intcomma }}</td><td class="text-right tabular-nums">{{ metrics.programs.first_choices.distinct|intcomma }}</td></tr>
+          <tr><th scope="row" class="font-normal">Share whose first choice is the most popular</th><td class="text-right tabular-nums">{{ metrics.applicants.first_choices.most_popular_share|floatformat:3 }}</td><td class="text-right tabular-nums">{{ metrics.programs.first_choices.most_popular_share|floatformat:3 }}</td></tr>
+          <tr><th scope="row" class="font-normal">Share whose first choice is in the top 10</th><td class="text-right tabular-nums">{{ metrics.applicants.first_choices.top_10_share|floatformat:3 }}</td><td class="text-right tabular-nums">{{ metrics.programs.first_choices.top_10_share|floatformat:3 }}</td></tr>
+          <tr><th scope="row" class="font-normal">Agents with a taste term</th><td class="text-right tabular-nums">{{ metrics.applicants.agents_with_taste|intcomma }}</td><td class="text-right tabular-nums">{{ metrics.programs.agents_with_taste|intcomma }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="generation-title">
+  <div class="card-body">
+    <h2 id="generation-title" class="card-title">The market, as generated</h2>
+    <p class="text-sm text-base-content/70">
+      {{ metrics.market.n_applicants|intcomma }} applicants for {{ metrics.market.n_positions|intcomma }} positions in
+      {{ metrics.market.n_programs|intcomma }} programs: {{ metrics.market.applicants_per_position|floatformat:3 }}
+      applicants per position (requested {{ metrics.market.requested_applicants_per_position }}). Programs have
+      {{ metrics.market.capacity.min }} to {{ metrics.market.capacity.max }} positions (median
+      {{ metrics.market.capacity.median|floatformat:1 }}, mean {{ metrics.market.capacity.mean|floatformat:2 }}).
+      Requested values are shown where the population was generated.
+    </p>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Applicant groups</caption>
+          <thead><tr><th scope="col">Group</th><th scope="col" class="text-right">Share</th><th scope="col" class="text-right">Strength mean</th><th scope="col" class="text-right">Strength SD</th></tr></thead>
+          <tbody>
+            {% for name, group in metrics.generation.groups.items %}
+              <tr>
+                <th scope="row" class="font-normal">{{ name }}</th>
+                <td class="text-right tabular-nums">{{ group.share|floatformat:3 }}{% if group.requested_share is not None %} <span class="text-base-content/70">({{ group.requested_share }})</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ group.strength_mean|floatformat:2|default:"-" }}{% if group.requested_strength_mean is not None %} <span class="text-base-content/70">({{ group.requested_strength_mean }})</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ group.strength_sd|floatformat:2|default:"-" }}{% if group.requested_strength_sd is not None %} <span class="text-base-content/70">({{ group.requested_strength_sd }})</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Program tiers</caption>
+          <thead><tr><th scope="col">Tier</th><th scope="col" class="text-right">Share</th><th scope="col" class="text-right">Quality mean</th></tr></thead>
+          <tbody>
+            {% for name, tier in metrics.generation.tiers.items %}
+              <tr>
+                <th scope="row" class="font-normal">{{ name }}</th>
+                <td class="text-right tabular-nums">{{ tier.share|floatformat:3 }}{% if tier.requested_share is not None %} <span class="text-base-content/70">({{ tier.requested_share }})</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ tier.quality_mean|floatformat:2|default:"-" }}{% if tier.requested_quality_mean is not None %} <span class="text-base-content/70">({{ tier.requested_quality_mean }})</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Applicant attributes (what programs evaluate)</caption>
+          <thead><tr><th scope="col">Attribute</th><th scope="col" class="text-right">Correlation with strength</th><th scope="col" class="text-right">Mean weight from programs</th></tr></thead>
+          <tbody>
+            {% for key, attribute in metrics.generation.applicant_attributes.items %}
+              <tr>
+                <th scope="row" class="font-normal">{{ key }}</th>
+                <td class="text-right tabular-nums">{{ attribute.correlation_with_strength|floatformat:3|default:"-" }}{% if attribute.requested_correlation is not None %} <span class="text-base-content/70">({{ attribute.requested_correlation }})</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ attribute.mean_weight|floatformat:3 }}{% if attribute.requested_mean_weight is not None %} <span class="text-base-content/70">({{ attribute.requested_mean_weight|floatformat:3 }})</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Program attributes (what applicants evaluate)</caption>
+          <thead><tr><th scope="col">Attribute</th><th scope="col" class="text-right">Correlation with quality</th><th scope="col" class="text-right">Mean weight from applicants</th></tr></thead>
+          <tbody>
+            {% for key, attribute in metrics.generation.program_attributes.items %}
+              <tr>
+                <th scope="row" class="font-normal">{{ key }}</th>
+                <td class="text-right tabular-nums">{{ attribute.correlation_with_quality|floatformat:3|default:"-" }}{% if attribute.requested_correlation is not None %} <span class="text-base-content/70">({{ attribute.requested_correlation }})</span>{% elif key == "program_size" %} <span class="text-base-content/70">(from capacity)</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ attribute.mean_weight|floatformat:3 }}{% if attribute.requested_mean_weight is not None %} <span class="text-base-content/70">({{ attribute.requested_mean_weight|floatformat:3 }})</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="text-sm text-base-content/70 mt-2">
+      Share of the common view that the attributes add beyond latent quality:
+      {{ metrics.generation.attribute_share_of_common.applicants|floatformat:3|default:"-" }} for applicants,
+      {{ metrics.generation.attribute_share_of_common.programs|floatformat:3|default:"-" }} for programs.
+    </p>
+  </div>
+</section>
+
+{% if histograms %}
+  <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="histograms-title">
+    <div class="card-body">
+      <h2 id="histograms-title" class="card-title">Distributions</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {% for histogram in histograms %}
+          <figure class="block w-full min-w-0">
+            <figcaption class="font-medium mb-1">{{ histogram.title }}</figcaption>
+            <div class="flex items-end gap-px h-24 border-b border-base-300" role="img"
+                 aria-label="{{ histogram.title }}: {{ histogram.bins|length }} bins from {{ histogram.low|floatformat:2 }} to {{ histogram.high|floatformat:2 }}; the fullest bin has {{ histogram.peak|intcomma }}.">
+              {% for bin in histogram.bins %}
+                <div class="flex-1 bg-primary" style="height: {{ bin.height }}%" title="{{ bin.low|floatformat:2 }} to {{ bin.high|floatformat:2 }}: {{ bin.count|intcomma }}"></div>
+              {% endfor %}
+            </div>
+            <div class="flex justify-between text-xs text-base-content/70 tabular-nums"><span>{{ histogram.low|floatformat:2 }}</span><span>{{ histogram.high|floatformat:2 }}</span></div>
+          </figure>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+{% endif %}

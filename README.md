@@ -12,17 +12,22 @@ Live site: <https://nrmp-simulated.heteroskedastic.org>
 
 ## What works today
 
-1. Create a simulation; it starts with a working default configuration.
-2. Generate applicant and program populations, or upload them as CSV (a download uploads back unchanged; sample
-   files are linked in the app).
-3. Create one interview row per applicant-program pair.
-4. Compute true utilities, noisy pre-interview ratings and strict pre-interview ranks for both sides.
-5. Browse, sort and download the results.
+1. Create a simulation; it starts with working default parameters (model 2.0: NRMP-like applicant groups, 1.08
+   applicants per position, moderate agreement on both sides) and its own random seed.
+2. Adjust the parameters: market size and tightness, applicant groups, the attributes each side evaluates and how
+   much they agree, and the pre-interview noise. The parameter editor and the help page are generated from one typed
+   schema.
+3. Run it: applicants and programs are generated (or taken from uploaded CSV files), with true preferences, noisy
+   pre-interview views and strict rankings on both sides. The same parameters and seed always give the same results,
+   and the pipeline shows which stages a change makes out of date.
+4. Explore the run: diagnostics (agreement, fidelity, first choices, the realised population against the request),
+   applicants and programs, and one applicant's or program's view of the other side. Download everything as CSV or
+   JSON; a downloaded population uploads back unchanged.
 
 Applications, signals, invitations, interviews, rank order lists and the match itself are being built: see the
 [phased plan](docs/PROJECT_REVIEW.md#9-phased-implementation-plan) and
 [implementation status](docs/IMPLEMENTATION_STATUS.md). The in-app help page (`/help/`) explains the model, every
-parameter and the CSV formats.
+parameter and the CSV formats; `docs/model_spec.md` is the full specification.
 
 ## Development
 
@@ -49,6 +54,9 @@ uv run pytest                                         # tests (production settin
 NRMP_TEST_DATABASE_URL=postgres://... uv run pytest   # the same tests on PostgreSQL
 uv run pytest -m e2e                                  # browser tests: Playwright + axe (needs the built CSS)
 ```
+
+The engine also runs without the web interface: `uv run python manage.py nrmp_run --seed 42 --out results/` writes
+the parameters, population, per-agent results and diagnostics; `manage.py seed_demo` creates a demo simulation.
 
 CI runs all of these, builds the Docker image and checks its health endpoint. `uvx pre-commit install` runs the fast
 checks before each commit.

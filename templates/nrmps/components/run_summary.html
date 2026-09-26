@@ -1,0 +1,38 @@
+{% load humanize %}
+{% comment %}Key numbers of a finished run (parameter: run).{% endcomment %}
+{% with m=run.metrics %}
+  <dl class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+    <div>
+      <dt class="text-xs text-base-content/70">Market</dt>
+      <dd class="tabular-nums">{{ run.n_applicants|intcomma }} × {{ run.n_programs|intcomma }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-base-content/70">Applicants per position</dt>
+      <dd class="tabular-nums">{{ m.market.applicants_per_position|floatformat:3 }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-base-content/70">Applicant agreement</dt>
+      <dd class="tabular-nums">{{ m.applicants.consensus.true_utility_correlation|floatformat:3|default:"-" }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-base-content/70">Pre-interview fidelity</dt>
+      <dd class="tabular-nums">{{ m.applicants.fidelity.pooled_correlation|floatformat:3|default:"-" }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-base-content/70">Seed</dt>
+      <dd class="tabular-nums break-all">{{ run.seed }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-base-content/70">Program agreement</dt>
+      <dd class="tabular-nums">{{ m.programs.consensus.true_utility_correlation|floatformat:3|default:"-" }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-base-content/70">Distinct first choices</dt>
+      <dd class="tabular-nums">{{ m.applicants.first_choices.distinct|intcomma }} of {{ run.n_programs|intcomma }}</dd>
+    </div>
+    <div>
+      <dt class="text-xs text-base-content/70">Time</dt>
+      <dd class="tabular-nums">{{ run.duration_ms|intcomma }} ms</dd>
+    </div>
+  </dl>
+{% endwith %}

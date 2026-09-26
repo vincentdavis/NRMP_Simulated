@@ -1,0 +1,7 @@
+{% comment %}A compact table-cell input with its errors (rendered by {% cell field row %} in form_tags).{% endcomment %}
+{{ widget_html }}
+{% if field.errors %}
+  <div class="text-xs text-error whitespace-normal max-w-40" id="{{ field.auto_id }}_error">
+    {% for error in field.errors %}<p>{{ error }}</p>{% endfor %}
+  </div>
+{% endif %}

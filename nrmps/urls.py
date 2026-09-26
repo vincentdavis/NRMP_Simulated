@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
-from . import account_views, help_views, views
+from . import account_views, help_views, run_views, views
 
 app_name = "nrmps"
 
@@ -67,36 +67,32 @@ urlpatterns = [
     path("help/", help_views.help_index, name="help"),
     path("help/developer/", help_views.developer_reference, name="developer_reference"),
     path("documentation/", help_views.documentation_redirect, name="documentation"),
-    # Simulations CRUD & actions
+    # Simulations
     path("simulations/", views.simulation_list, name="simulation_list"),
     path("simulations/new/", views.simulation_create, name="simulation_create"),
     path("simulations/<int:pk>/", views.simulation_manage, name="simulation_manage"),
     path("simulations/<int:pk>/delete/", views.simulation_delete, name="simulation_delete"),
-    # Steps (HTMX): create/delete populations, initialize interviews, compute ratings (see views.STEPS)
-    path("simulations/<int:pk>/steps/<slug:step>/", views.simulation_step, name="simulation_step"),
-    # Actions (HTMX)
+    path("simulations/<int:pk>/upload/<str:side>/", views.population_upload, name="population_upload"),
     path(
-        "simulations/<int:pk>/upload-applicants/", views.simulation_upload_students, name="simulation_upload_students"
+        "simulations/<int:pk>/upload/<str:side>/remove/",
+        views.population_upload_remove,
+        name="population_upload_remove",
     ),
-    path("simulations/<int:pk>/upload-programs/", views.simulation_upload_schools, name="simulation_upload_schools"),
-    # (Re)Create actions
-    # Downloads
+    # Runs
+    path("simulations/<int:pk>/runs/", views.run_start, name="run_start"),
+    path("simulations/<int:pk>/runs/<int:number>/", run_views.run_detail, name="run_detail"),
+    path("simulations/<int:pk>/runs/<int:number>/delete/", run_views.run_delete, name="run_delete"),
+    path("simulations/<int:pk>/runs/<int:number>/applicants/", run_views.run_applicants, name="run_applicants"),
     path(
-        "simulations/<int:pk>/download-applicants/",
-        views.simulation_download_students,
-        name="simulation_download_students",
+        "simulations/<int:pk>/runs/<int:number>/applicants/<int:index>/",
+        run_views.run_applicant,
+        name="run_applicant",
     ),
+    path("simulations/<int:pk>/runs/<int:number>/programs/", run_views.run_programs, name="run_programs"),
+    path("simulations/<int:pk>/runs/<int:number>/programs/<int:index>/", run_views.run_program, name="run_program"),
     path(
-        "simulations/<int:pk>/download-programs/", views.simulation_download_schools, name="simulation_download_schools"
+        "simulations/<int:pk>/runs/<int:number>/download/<str:name>",
+        run_views.run_download,
+        name="run_download",
     ),
-    path(
-        "simulations/<int:pk>/download-interviews/",
-        views.simulation_download_interviews,
-        name="simulation_download_interviews",
-    ),
-    # Lists
-    path("simulations/<int:pk>/applicants/", views.simulation_students, name="simulation_students"),
-    path("simulations/<int:pk>/programs/", views.simulation_schools, name="simulation_schools"),
-    path("simulations/<int:pk>/interviews/", views.simulation_interviews, name="simulation_interviews"),
-    # Interview actions
 ]

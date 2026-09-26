@@ -8,14 +8,14 @@ import zipfile
 from django.conf import settings
 from django.core import signing
 from django.core.mail import send_mail
-from django.forms.models import model_to_dict
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
-from .models import Interview, User
-from .population_csv import COLUMNS, DISPLAY_NAMES, INTERVIEW_COLUMNS, csv_lines, plain_csv_lines
+from .engine.persistence import population_from_npz
+from .models import RunArtifact, User
+from .population_csv import UploadedSide, population_csv_lines, uploaded_csv_lines
 
 VERIFY_SALT = "nrmps.accounts.verify-email"
 
@@ -60,8 +60,10 @@ def send_verification_email(request, user: User) -> None:
 def export_user_data(user: User):
     """Return a file object with a ZIP of everything stored for `user`, positioned at the start.
 
-    The archive holds account.json and, per simulation, simulation.json (fields and configuration), applicants.csv,
-    programs.csv (the upload format) and interviews.csv.
+    The archive holds account.json and, per simulation: simulation.json (fields and draft parameters), the uploaded
+    populations as CSV, and per run run.json (parameters with the seed, versions, status, diagnostics). The latest
+    successful run's applicants and programs are included as CSV; other runs can be reproduced from their parameters
+    and seed.
     """
     archive = tempfile.SpooledTemporaryFile(max_size=20 * 1024 * 1024)  # noqa: SIM115 (returned to the caller)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -76,28 +78,44 @@ def export_user_data(user: User):
         zf.writestr("account.json", json.dumps(account, indent=2))
         for sim in user.simulations.order_by("id"):
             folder = f"simulations/{sim.pk}-{slugify(sim.name) or 'simulation'}"
-            config = sim.configs.order_by("-id").first()
             info = {
                 "name": sim.name,
                 "description": sim.description,
-                "iterations": sim.iterations,
                 "public": sim.public,
-                "stage": sim.status,
                 "created_at": sim.created_at.isoformat(),
-                "configuration": model_to_dict(config, exclude=["id", "simulation"]) if config else None,
+                "params": sim.params,
             }
             zf.writestr(f"{folder}/simulation.json", json.dumps(info, indent=2))
-            for kind, queryset in (("students", sim.students), ("schools", sim.schools)):
-                records = queryset.order_by("id").values_list(*COLUMNS[kind]).iterator(chunk_size=2000)
-                _write_lines(zf, f"{folder}/{DISPLAY_NAMES[kind]}.csv", csv_lines(kind, records))
-            rows = (
-                Interview.objects.filter(simulation=sim)
-                .order_by("id")
-                .values_list("student__name", "school__name", *INTERVIEW_COLUMNS)
-                .iterator(chunk_size=2000)
-            )
-            lines = plain_csv_lines(["student", "school", *INTERVIEW_COLUMNS], rows)
-            _write_lines(zf, f"{folder}/interviews.csv", lines)
+            for upload in sim.uploads.all():
+                lines = uploaded_csv_lines(UploadedSide.from_npz(bytes(upload.data)))
+                _write_lines(zf, f"{folder}/uploaded-{upload.side}.csv", lines)
+            latest = sim.latest_run(succeeded=True)
+            for run in sim.runs.order_by("number"):
+                record = {
+                    "number": run.number,
+                    "status": run.status,
+                    "created_at": run.created_at.isoformat(),
+                    "seed": run.seed,
+                    "params": run.params,
+                    "population_source": run.population_source,
+                    "stamps": run.stamps(),
+                    "duration_ms": run.duration_ms,
+                    "error": run.error,
+                    "metrics": run.metrics,
+                }
+                zf.writestr(f"{folder}/runs/{run.number}/run.json", json.dumps(record, indent=2))
+                if latest is not None and run.pk == latest.pk:
+                    data = run.artifact(RunArtifact.Kind.POPULATION)
+                    if data is not None:
+                        population = population_from_npz(data)
+                        _write_lines(
+                            zf,
+                            f"{folder}/runs/{run.number}/applicants.csv",
+                            population_csv_lines(population.applicants),
+                        )
+                        _write_lines(
+                            zf, f"{folder}/runs/{run.number}/programs.csv", population_csv_lines(population.programs)
+                        )
     archive.seek(0)
     return archive
 

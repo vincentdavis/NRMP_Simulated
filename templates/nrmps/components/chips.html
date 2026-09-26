@@ -1,6 +1,6 @@
-{% comment %}An attribute dict (name -> number) as small labelled chips, e.g. research 0.53.{% endcomment %}
+{% comment %}Named numbers as small labelled chips, e.g. research 0.53 (parameters: items, a list of (name, value); places).{% endcomment %}
 <div class="flex flex-wrap gap-1">
-  {% for key, value in values.items %}
+  {% for key, value in items %}
     <span class="badge badge-outline badge-sm whitespace-nowrap">{{ key }} <span class="tabular-nums">{{ value|floatformat:places }}</span></span>
   {% empty %}
     <span class="text-base-content/70">-</span>

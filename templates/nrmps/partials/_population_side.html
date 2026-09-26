@@ -1,0 +1,54 @@
+{% load humanize static %}
+{% comment %}
+  One side's population source: generated or an uploaded CSV, with the upload form (parameter: side, an entry of
+  `sides` from views.manage_context). Upload and removal post with HTMX and get this block back.
+{% endcomment %}
+<div id="population-{{ side.key }}">
+  <h3 class="font-semibold">{{ side.label }}</h3>
+  {% if side.upload %}
+    <p class="mb-2">
+      Uploaded: <strong class="break-all">{{ side.upload.filename|default:"file" }}</strong>,
+      {{ side.upload.rows|intcomma }} rows ({{ side.upload.uploaded_at|date:"Y-m-d H:i" }}). Runs use this file.
+    </p>
+    <form hx-post="{% url 'nrmps:population_upload_remove' pk=simulation.pk side=side.key %}"
+          hx-target="#population-{{ side.key }}" hx-swap="outerHTML" hx-disabled-elt="find button"
+          hx-confirm="Stop using the uploaded {{ side.label|lower }}? Runs will generate them from the parameters again, and the file is discarded."
+          class="mb-2">
+      <button type="submit" class="btn btn-sm btn-outline">
+        <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
+        Generate from the parameters instead
+      </button>
+    </form>
+  {% else %}
+    <p class="mb-2">Generated from the parameters.</p>
+  {% endif %}
+
+  {% if side.error %}
+    <div role="alert" class="alert alert-error mb-2">
+      <div>
+        <p class="font-semibold">{{ side.error.message }}</p>
+        {% if side.error.details %}
+          <ul class="list-disc ml-5 text-sm">{% for line in side.error.details %}<li>{{ line }}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <form hx-post="{% url 'nrmps:population_upload' pk=simulation.pk side=side.key %}"
+        hx-target="#population-{{ side.key }}" hx-swap="outerHTML" hx-encoding="multipart/form-data"
+        hx-disabled-elt="find button" hx-sync="this:drop"
+        {% if side.upload %}hx-confirm="Replace the uploaded {{ side.label|lower }} with the rows in the new file? If the file has problems, nothing changes."{% endif %}
+        class="flex flex-wrap items-center gap-2">
+    <label class="sr-only" for="{{ side.key }}-csv">{{ side.label }} CSV file</label>
+    <input id="{{ side.key }}-csv" type="file" name="file" accept=".csv,text/csv" class="file-input file-input-sm flex-1 min-w-0" required>
+    <button type="submit" class="btn btn-sm btn-primary">
+      <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
+      Upload CSV
+    </button>
+  </form>
+  <p class="text-xs text-base-content/70 mt-1">
+    Columns for the current parameters: <code class="break-all">{{ side.columns|join:"," }}</code>. The weight
+    columns are optional. Up to {{ max_upload_mb }} MB and {{ max_upload_rows|intcomma }} rows; the file is checked
+    first and nothing changes if it has problems. <a class="link" href="{% static side.sample %}" download>Sample file</a>.
+  </p>
+</div>

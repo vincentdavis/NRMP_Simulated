@@ -1,4 +1,4 @@
-"""The help guide and the developer reference (plan step 1.10: HELP-5, UX-12, HELP-22, CRIT-15)."""
+"""The help guide and the developer reference (plan steps 1.10 and 2.3: HELP-5, UX-12, HELP-22, CRIT-15)."""
 
 import pytest
 from django.urls import reverse
@@ -6,17 +6,22 @@ from django.urls import reverse
 pytestmark = pytest.mark.django_db
 
 
-def test_help_page_is_public_and_generated_from_the_forms(client):
+def test_help_page_is_public_and_generated_from_the_schema(client):
     body = " ".join(client.get(reverse("nrmps:help")).content.decode().split())
     for text in (
         "Quick start",
         "How the simulation works",
-        "Applicant score SD",
-        "Positions per program (mean)",
+        "model 2.0",
+        "1,000 applicants for 926 positions in 142 programs",
+        "Applicant agreement",
+        "Mean positions per program",
+        "Applicant groups",
+        "Correlation with strength",
         "samples/applicants_sample.csv",
-        "name,capacity,score,score_meta,meta_preference",
+        "name,group,strength,board_scores,research,honors,weight:reputation,weight:program_size,weight:location",
+        "name,tier,quality,capacity,reputation,location",
     ):
-        assert text in body
+        assert text in body, text
     assert "Not used yet" in body  # planned parameters are marked
 
 
@@ -33,7 +38,8 @@ def test_developer_reference_is_for_staff_only(client, auth_client, django_user_
     staff = django_user_model.objects.create_user("staff", email="staff@example.com", password="x", is_staff=True)
     client.force_login(staff)
     body = client.get(url).content.decode()
-    assert "compute_pre_interview_scores_and_rankings" in body
+    for text in ("engine.pipeline.run_pre_interview", "runs.start_run", "SimulationRun", "engine.rng.philox4x32"):
+        assert text in body, text
     assert "check_password" not in body  # no inherited auth internals
     assert "set_password" not in body
 

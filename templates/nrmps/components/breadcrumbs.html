@@ -1,10 +1,20 @@
-{% comment %}Breadcrumbs: Simulations › simulation name › current page (parameter: current, optional).{% endcomment %}
+{% comment %}
+  Breadcrumbs: Simulations › simulation › (run) › current page. Parameters: current (optional), run (optional; the
+  run page itself when current is empty).
+{% endcomment %}
 <nav class="breadcrumbs text-sm mb-2" aria-label="Breadcrumbs">
   <ul>
     <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
-    {% if current %}
+    {% if current or run %}
       <li><a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}">{{ simulation.name }}</a></li>
-      <li><span aria-current="page">{{ current }}</span></li>
+      {% if run and current %}
+        <li><a href="{% url 'nrmps:run_detail' pk=simulation.pk number=run.number %}">Run {{ run.number }}</a></li>
+        <li><span aria-current="page">{{ current }}</span></li>
+      {% elif run %}
+        <li><span aria-current="page">Run {{ run.number }}</span></li>
+      {% else %}
+        <li><span aria-current="page">{{ current }}</span></li>
+      {% endif %}
     {% else %}
       <li><span aria-current="page">{{ simulation.name }}</span></li>
     {% endif %}

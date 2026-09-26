@@ -37,6 +37,9 @@ The multi-stage `Dockerfile`:
 `GUNICORN_TIMEOUT` (seconds, default 30) and `MIGRATE_ON_START=1` to run migrations at start-up instead of in the
 pre-deploy command (docker-compose does this).
 
+Every run stores the commit it ran on (docs/model_spec.md §12.11): Railway provides `RAILWAY_GIT_COMMIT_SHA`;
+elsewhere build with `docker build --build-arg GIT_SHA=$(git rev-parse HEAD) .`.
+
 CI builds the image on every push, starts it with SQLite and checks `/healthz` and the home page.
 
 ## Checklist before the first deploy of this version (decision D0)
@@ -65,6 +68,19 @@ off`, `DATABASE_URL must be set when DEBUG is off`).
 
 Create an admin account from a Railway shell on the web service: `python manage.py createsuperuser`.
 
+**Phase 2 data change (decision D3).** The deploy that brings model 2.0 (migrations `0013`–`0015`) converts each
+simulation's configuration to the new parameters where a field has an equivalent and **deletes the legacy
+populations, interview rows and matches**, which the pre-fix model produced. Simulations, their names and owners stay.
+Take a backup first if you want to keep the old rows (see [Backups and restore](#backups-and-restore)).
+
+## Size and memory settings
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `NRMP_MAX_PAIRS` | 250000 | Largest applicants × programs of one run. Runs execute inside the web request until step 2.5, so keep this well within the gunicorn timeout (the engine takes about 0.1 s at 250k pairs). |
+| `NRMP_BLOCK_PAIRS` | 250000 | Pairs the engine computes at a time: about 100 bytes each, so 25 MB by default. Results do not depend on it. |
+| `NRMP_DRILLDOWN_MAX_PAIRS` | 2000000 | Largest market for which one agent's page shows the other side's ranks and the pairs CSV is offered (both recompute every pair). |
+
 ## HTTPS
 
 Railway terminates TLS and forwards `X-Forwarded-Proto`. With `DEBUG` off the app:
@@ -84,8 +100,9 @@ SendGrid, Mailgun, SES…):
 - `EMAIL_HOST`, `EMAIL_PORT` (587), `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` (True);
 - `DEFAULT_FROM_EMAIL`, on a domain the provider may send for.
 
-Without `EMAIL_HOST`, emails are written to the log instead. Check delivery with
-`python manage.py sendtestemail you@example.com`.
+Without `EMAIL_HOST`, emails are written to the log instead: fine for development, but then nobody receives
+confirmation or password-reset links, and Django 6.1's `check --deploy` reports it as an error (mail.E001; CI sets a
+placeholder host for that check). Check delivery with `python manage.py sendtestemail you@example.com`.
 
 ## Background jobs, clean-up and operations (*Planned*, step 2.5)
 

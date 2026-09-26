@@ -34,11 +34,19 @@ def test_aria_references_resolve_on_form_pages(auth_client, simulation):
 
 def test_aria_references_resolve_when_forms_show_errors(auth_client, simulation):
     """With errors, Django also points aria-describedby at "<id>_error"; those elements must exist too."""
+    from nrmps.params_forms import post_data
+
     manage = reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})
-    html = auth_client.post(manage, {"form_id": "config", "number_of_applicants": "-1"}).content.decode()
-    assert "The configuration was not saved" in html
+    data = post_data(simulation.get_params()) | {
+        "form_id": "params",
+        "market__n_applicants": "-1",
+        "applicants__groups-1-share": "abc",
+        "prefs__weight_concentration": "0",
+    }
+    html = auth_client.post(manage, data).content.decode()
+    assert "The parameters were not saved" in html
     assert _dangling_references(html) == []
-    html = auth_client.post(reverse("nrmps:simulation_create"), {"name": "", "iterations": 500}).content.decode()
+    html = auth_client.post(reverse("nrmps:simulation_create"), {"name": ""}).content.decode()
     assert _dangling_references(html) == []
 
 

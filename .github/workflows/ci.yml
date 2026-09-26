@@ -22,6 +22,9 @@ jobs:
       SECRET_KEY: ci-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz-ABCDEFGH
       DATABASE_URL: sqlite:///ci.sqlite3
       LOGFIRE_SEND_TO_LOGFIRE: "false"
+      # Django 6.1's deploy check (mail.E001) requires a real email backend; production needs one for password
+      # reset and confirmation links. Nothing is sent from CI.
+      EMAIL_HOST: smtp.invalid
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6

@@ -1,0 +1,94 @@
+{% load humanize %}
+{% comment %}
+  The run panel: the Run button, the latest run's summary and the recent runs. The Run button posts with HTMX and
+  gets this panel back (and the stepper, out of band); without JavaScript it posts normally and redirects.
+{% endcomment %}
+<section id="run-panel" class="card bg-base-100 shadow-xl mb-6" aria-labelledby="run-title">
+  <div class="card-body" id="run">
+    <div class="flex flex-wrap gap-2 justify-between items-center">
+      <h2 id="run-title" class="card-title">Runs</h2>
+      <form method="post" action="{% url 'nrmps:run_start' pk=simulation.pk %}"
+            hx-post="{% url 'nrmps:run_start' pk=simulation.pk %}" hx-target="#run-panel" hx-swap="outerHTML"
+            hx-disabled-elt="find button" hx-sync="this:drop">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary"{% if active_run %} disabled{% endif %}>
+          <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
+          {% if latest_run and not needs_run %}Run again{% else %}Run{% endif %}
+        </button>
+      </form>
+    </div>
+    <p class="text-sm text-base-content/70">
+      A run uses the saved parameters: {{ market.applicants|intcomma }} applicants and {{ market.programs|intcomma }}
+      programs ({{ market.pairs|intcomma }} pairs; the limit is {{ max_pairs|intcomma }}). The same parameters and
+      seed always give the same results.
+    </p>
+    {% if run_error %}
+      <div role="alert" class="alert alert-error"><span>{{ run_error }}</span></div>
+    {% endif %}
+    {% if active_run %}
+      <div role="status" class="alert alert-info">
+        <span>Run {{ active_run.number }} is {{ active_run.get_status_display|lower }} ({{ active_run.progress_percent }}%).</span>
+      </div>
+    {% endif %}
+
+    {% if latest_run %}
+      {% with run=latest_run %}
+        <div class="rounded-box border border-base-300 p-4">
+          <div class="flex flex-wrap gap-2 justify-between items-center">
+            <h3 class="font-semibold">
+              Latest: <a class="link" href="{% url 'nrmps:run_detail' pk=simulation.pk number=run.number %}">run {{ run.number }}</a>
+              {% include "nrmps/components/run_status.html" with status=run.status %}
+            </h3>
+            <span class="text-sm text-base-content/70">{{ run.created_at|naturaltime }}</span>
+          </div>
+          {% if run.status == "failed" %}
+            <p class="text-error mt-2">{{ run.error }}</p>
+          {% elif run.status == "succeeded" %}
+            {% include "nrmps/components/run_summary.html" %}
+            <div class="flex flex-wrap gap-2 mt-3">
+              <a class="btn btn-sm btn-primary" href="{% url 'nrmps:run_detail' pk=simulation.pk number=run.number %}">Results</a>
+              <a class="btn btn-sm btn-outline" href="{% url 'nrmps:run_applicants' pk=simulation.pk number=run.number %}">Applicants</a>
+              <a class="btn btn-sm btn-outline" href="{% url 'nrmps:run_programs' pk=simulation.pk number=run.number %}">Programs</a>
+            </div>
+          {% endif %}
+        </div>
+      {% endwith %}
+    {% else %}
+      <p>No runs yet. Adjust the parameters if you like, then press <strong>Run</strong>.</p>
+    {% endif %}
+
+    {% if recent_runs|length > 1 %}
+      <details class="collapse collapse-arrow bg-base-200 mt-2">
+        <summary class="collapse-title font-semibold">Recent runs</summary>
+        <div class="collapse-content overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th scope="col">Run</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="text-right">Seed</th>
+                <th scope="col" class="text-right">Applicants</th>
+                <th scope="col" class="text-right">Programs</th>
+                <th scope="col" class="text-right">Time</th>
+                <th scope="col">Started</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for run in recent_runs %}
+                <tr>
+                  <td><a class="link" href="{% url 'nrmps:run_detail' pk=simulation.pk number=run.number %}">{{ run.number }}</a></td>
+                  <td>{% include "nrmps/components/run_status.html" with status=run.status %}</td>
+                  <td class="text-right tabular-nums">{{ run.seed }}</td>
+                  <td class="text-right tabular-nums">{{ run.n_applicants|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ run.n_programs|intcomma }}</td>
+                  <td class="text-right tabular-nums">{% if run.duration_ms is not None %}{{ run.duration_ms|intcomma }} ms{% else %}-{% endif %}</td>
+                  <td class="whitespace-nowrap">{{ run.created_at|date:"Y-m-d H:i" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    {% endif %}
+  </div>
+</section>

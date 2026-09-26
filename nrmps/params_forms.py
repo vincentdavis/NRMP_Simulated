@@ -13,11 +13,12 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from django import forms
+from django.core.validators import RegexValidator
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
-from pydantic_core import ErrorDetails
+from pydantic_core import ErrorDetails, PydanticUndefined
 
-from .params import ParamField, SimulationParams, iter_fields, list_fields
+from .params import KEY_HELP, ParamField, SimulationParams, iter_fields, list_fields
 
 SEP = "__"
 
@@ -54,6 +55,9 @@ def make_field(spec: ParamField) -> forms.Field:
     """Build the Django form field for one scalar parameter."""
     base, optional = _base_type(spec.field.annotation)
     options: dict[str, Any] = {"label": spec.title, "help_text": spec.description, "required": not optional}
+    if spec.default is not None and spec.default is not PydanticUndefined and not isinstance(spec.default, list | dict):
+        # New rows of the list editors start from the schema defaults.
+        options["initial"] = spec.default
     if spec.choices:
         return forms.TypedChoiceField(choices=[(c, choice_label(c)) for c in spec.choices], **options)
     if base is bool:
@@ -72,7 +76,14 @@ def make_field(spec: ParamField) -> forms.Field:
             float_field.widget.attrs["min"] = spec.minimum
         return float_field
     if base is str:
-        return forms.CharField(max_length=40, empty_value=None if optional else "", strip=True, **options)
+        validators = [
+            RegexValidator(pattern, message=f"Use {KEY_HELP}.")
+            for pattern in (getattr(constraint, "pattern", None) for constraint in spec.field.metadata)
+            if pattern
+        ]
+        return forms.CharField(
+            max_length=40, empty_value=None if optional else "", strip=True, validators=validators, **options
+        )
     raise TypeError(f"No form field for {spec.path} ({spec.field.annotation!r})")
 
 
@@ -93,6 +104,16 @@ def _form_class(name: str, model: type[BaseModel]) -> type[SchemaForm]:
 
 
 ScalarForm = _form_class("ScalarForm", SimulationParams)
+
+
+class ParamsFormSet(forms.BaseFormSet):
+    """A formset for a list of parameter groups; its delete checkbox is labelled "Remove"."""
+
+    def add_fields(self, form: forms.Form, index: int | None) -> None:
+        """Add the delete checkbox with the label the table header uses."""
+        super().add_fields(form, index)
+        if "DELETE" in form.fields:
+            form.fields["DELETE"].label = "Remove"
 
 
 @dataclass
@@ -118,7 +139,12 @@ def _list_specs() -> dict[str, ListSpec]:
         max_length = next((m.max_length for m in schema_field.metadata if hasattr(m, "max_length")), 10)
         item_form = _form_class(f"{item_model.__name__}Form", item_model)
         formset_class = forms.formset_factory(
-            item_form, extra=0, can_delete=True, max_num=max_length, absolute_max=max_length + 5
+            item_form,
+            formset=ParamsFormSet,
+            extra=0,
+            can_delete=True,
+            max_num=max_length,
+            absolute_max=max_length + 5,
         )
         specs[path] = ListSpec(
             path=path,
@@ -184,6 +210,20 @@ class Section:
     advanced_fields: list[forms.BoundField] = field(default_factory=list)
     lists: list[FormsetView] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+    @property
+    def has_advanced_errors(self) -> bool:
+        """Return True if an advanced field has an error (its group is then shown open)."""
+        return any(bound.errors for bound in self.advanced_fields)
+
+    @property
+    def has_errors(self) -> bool:
+        """Return True if anything in the section has an error."""
+        return bool(
+            self.errors
+            or any(bound.errors for bound in self.fields + self.advanced_fields)
+            or any(view.errors or view.formset.total_error_count() for view in self.lists)
+        )
 
 
 @dataclass
@@ -300,6 +340,16 @@ class ParamsForm:
             title = LISTS[path].title if path in LISTS else _section_title(path.split(".")[0]) if path else "Parameters"
             summary.extend((anchor, title, message) for message in messages)
         return summary
+
+    @property
+    def planned_sections(self) -> list[Section]:
+        """Return the sections of parameters the engine does not use yet."""
+        return self.sections(planned=True)
+
+    @property
+    def planned_has_errors(self) -> bool:
+        """Return True if a planned parameter has an error (the planned group is then shown open)."""
+        return any(section.has_errors for section in self.planned_sections)
 
     def sections(self, planned: bool = False) -> list[Section]:
         """Return the page sections: implemented parameters, or (planned=True) the ones not used yet."""

@@ -1,0 +1,25 @@
+{% comment %}
+  The pipeline stepper (plan step 2.4): one step per stage with its state from nrmps.pipeline.get_pipeline. HTMX
+  actions that change the state return it again out of band (oob).
+{% endcomment %}
+<div id="pipeline" class="mb-4"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
+  <h2 class="sr-only">Pipeline</h2>
+  <div class="overflow-x-auto">
+    <ul class="steps steps-horizontal w-full min-w-max">
+      {% for stage in stages %}
+        <li class="step{% if stage.state == 'done' %} step-primary{% elif stage.state == 'stale' %} step-warning{% elif stage.state == 'failed' %} step-error{% elif stage.state == 'running' or stage.state == 'queued' %} step-info{% endif %}"
+            data-content="{% if stage.state == 'done' %}✓{% elif stage.state == 'stale' %}!{% elif stage.state == 'failed' %}✕{% elif stage.state == 'planned' %}·{% else %}●{% endif %}">
+          <span class="text-xs px-1">
+            <span class="font-medium">{{ stage.label }}</span><br>
+            <span class="{% if stage.state == 'planned' %}text-base-content/70{% endif %}">{{ stage.state_label }}</span>
+          </span>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% for stage in stages %}
+    {% if stage.state == "stale" or stage.state == "failed" or stage.state == "blocked" %}
+      <p class="text-sm mt-1"><span class="font-medium">{{ stage.label }}:</span> {{ stage.reason }}</p>
+    {% endif %}
+  {% endfor %}
+</div>

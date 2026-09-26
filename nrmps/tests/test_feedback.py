@@ -9,36 +9,30 @@ pytestmark = pytest.mark.django_db
 
 
 def _toast(response) -> dict:
-    """Return the toast event a step response asks the page to show (HX-Trigger header)."""
+    """Return the toast event an HTMX response asks the page to show (HX-Trigger header)."""
     return json.loads(response.headers["HX-Trigger"])["toast"]
 
 
-def _post(client, sim, step):
-    return client.post(
-        reverse("nrmps:simulation_step", kwargs={"pk": sim.pk, "step": step}), headers={"hx-request": "true"}
-    )
+def _run(client, sim):
+    return client.post(reverse("nrmps:run_start", kwargs={"pk": sim.pk}), headers={"hx-request": "true"})
 
 
-def test_successful_step_sends_a_success_toast(auth_client, simulation):
-    response = _post(auth_client, simulation, "create-applicants")
-    assert _toast(response) == {"level": "success", "text": "Created 20 applicants."}
+def test_successful_run_sends_a_success_toast(auth_client, simulation):
+    assert _toast(_run(auth_client, simulation)) == {"level": "success", "text": "Run 1 finished."}
 
 
-def test_failed_step_sends_an_error_toast(auth_client, populated_simulation):
-    response = _post(auth_client, populated_simulation, "compute-pre-interview")
-    assert _toast(response) == {"level": "error", "text": "Initialize the interviews first."}
+def test_refused_run_sends_an_error_toast(auth_client, simulation, settings):
+    settings.NRMP_MAX_PAIRS = 1
+    assert _toast(_run(auth_client, simulation))["level"] == "error"
 
 
-def test_saving_the_configuration_shows_a_message(auth_client, simulation):
-    from django.forms.models import model_to_dict
+def test_saving_the_parameters_shows_a_message(auth_client, simulation):
+    from nrmps.params_forms import post_data
 
     manage = reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})
-    data = {
-        key: json.dumps(value) if isinstance(value, list) else value
-        for key, value in model_to_dict(simulation.configs.get(), exclude=["id", "simulation"]).items()
-    }
-    response = auth_client.post(manage, data | {"form_id": "config"}, follow=True)
-    assert "Configuration saved" in response.content.decode()
+    data = post_data(simulation.get_params()) | {"form_id": "params"}
+    response = auth_client.post(manage, data, follow=True)
+    assert "Parameters saved." in response.content.decode()
 
 
 def test_deleting_a_simulation_shows_a_message(auth_client, simulation):
@@ -46,17 +40,14 @@ def test_deleting_a_simulation_shows_a_message(auth_client, simulation):
     assert "Deleted the simulation “Test simulation”." in response.content.decode()
 
 
-def test_confirmations_state_what_will_be_deleted(auth_client, populated_simulation):
-    from nrmps.simulation_engine import initialize_interview
-
-    initialize_interview(populated_simulation)
-    body = auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": populated_simulation.pk})).content.decode()
-    assert "This replaces the 20 current applicants and deletes all 80 interview rows" in body
-    assert "Delete all 4 programs? This also deletes all 80 interview rows" in body
-    assert "with its configuration, 20 applicants, 4 programs and 80 interview rows? This cannot be undone." in body
+def test_confirmations_state_what_will_be_deleted(auth_client, finished_run, simulation):
+    body = auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})).content.decode()
+    assert "with its parameters, uploaded files and 1 runs? This cannot be undone." in body
+    run_page = auth_client.get(reverse("nrmps:run_detail", kwargs={"pk": simulation.pk, "number": 1})).content
+    assert "Delete run 1 and its results?" in run_page.decode()
 
 
-def test_step_buttons_show_a_spinner_while_running(auth_client, simulation):
+def test_action_buttons_show_a_spinner_while_running(auth_client, simulation):
     body = auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})).content.decode()
     assert body.count("htmx-indicator") >= body.count("hx-post=")
 
@@ -84,11 +75,3 @@ def test_theme_is_not_forced_to_light(client):
     body = client.get(reverse("nrmps:index")).content.decode()
     assert 'data-theme="light"' not in body
     assert "data-theme-toggle" in body
-
-
-def test_tables_show_rounded_numbers_and_attribute_chips(auth_client, populated_simulation):
-    body = auth_client.get(reverse("nrmps:simulation_students", kwargs={"pk": populated_simulation.pk})).content
-    student = populated_simulation.students.order_by("id").first()
-    assert f"{student.score:.3f}".encode() in body
-    assert repr(student.score).encode() not in body or len(repr(student.score)) <= 5
-    assert b"{&#x27;" not in body  # no Python dict reprs

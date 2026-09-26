@@ -1,0 +1,98 @@
+{% load form_tags humanize %}
+{% comment %}
+  The parameter editor, generated from the schema (nrmps.params_forms.ParamsForm): one section per parameter group,
+  advanced options collapsed, list parameters as tables, and the parameters of planned stages in a collapsed group.
+{% endcomment %}
+<form method="post" id="parameters" class="card bg-base-100 shadow-xl" novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="form_id" value="params">
+  <div class="card-body">
+    <h2 class="card-title">Parameters</h2>
+    <p class="text-sm text-base-content/70">
+      The <a class="link" href="{% url 'nrmps:help' %}#parameters">help page</a> explains every parameter and the
+      model behind them.
+    </p>
+
+    {% if params_form.has_errors %}
+      <div role="alert" class="alert alert-error">
+        <div>
+          <p class="font-semibold">The parameters were not saved. Please fix:</p>
+          <ul class="list-disc ml-5">
+            {% for anchor, label, message in params_form.error_summary %}
+              <li>{% if anchor %}<a class="link" href="#{{ anchor }}">{{ label }}</a>{% else %}{{ label }}{% endif %}: {{ message }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+    {% endif %}
+    {% for warning in param_warnings %}
+      <div role="status" class="alert alert-warning"><span>{{ warning.message }}</span></div>
+    {% endfor %}
+
+    {% for section in params_form.sections %}
+      <section id="section-{{ section.key }}" class="mt-2" aria-labelledby="section-{{ section.key }}-title">
+        <h3 id="section-{{ section.key }}-title" class="font-semibold text-lg">{{ section.title }}</h3>
+        {% for error in section.errors %}
+          <div role="alert" class="alert alert-error my-2"><span>{{ error }}</span></div>
+        {% endfor %}
+        {% if section.fields %}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+            {% for field in section.fields %}{% field_row field %}{% endfor %}
+          </div>
+        {% endif %}
+        {% for view in section.lists %}
+          {% if view.spec.level == "basic" %}{% include "nrmps/components/formset_table.html" %}{% endif %}
+        {% endfor %}
+        {% if section.advanced_fields %}
+          <details class="collapse collapse-arrow bg-base-200 mt-2"{% if section.has_advanced_errors %} open{% endif %}>
+            <summary class="collapse-title font-medium">More {{ section.title|lower }} options</summary>
+            <div class="collapse-content">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                {% for field in section.advanced_fields %}{% field_row field %}{% endfor %}
+              </div>
+              {% for view in section.lists %}
+                {% if view.spec.level == "advanced" %}{% include "nrmps/components/formset_table.html" %}{% endif %}
+              {% endfor %}
+            </div>
+          </details>
+        {% else %}
+          {% for view in section.lists %}
+            {% if view.spec.level == "advanced" %}{% include "nrmps/components/formset_table.html" %}{% endif %}
+          {% endfor %}
+        {% endif %}
+        {% if section.key == "market" %}
+          <p class="text-sm text-base-content/70 mt-1">
+            With the saved parameters: {{ market.applicants|intcomma }} applicants, {{ market.programs|intcomma }}
+            programs, {{ market.pairs|intcomma }} applicant–program pairs (the limit is {{ max_pairs|intcomma }}).
+          </p>
+        {% endif %}
+      </section>
+      <div class="divider my-1"></div>
+    {% endfor %}
+
+    <details class="collapse collapse-arrow bg-base-200"{% if params_form.planned_has_errors %} open{% endif %}>
+      <summary class="collapse-title font-semibold">Planned parameters (not used yet)</summary>
+      <div class="collapse-content">
+        <p class="text-sm text-base-content/70 mb-2">
+          These belong to stages that are not implemented yet (applications, signals, invitations, interviews, rank
+          order lists and the match). They are saved with the simulation but have no effect on the results for now.
+        </p>
+        {% for warning in planned_warnings %}
+          <div role="status" class="alert alert-warning my-2"><span>{{ warning.message }}</span></div>
+        {% endfor %}
+        {% for section in params_form.planned_sections %}
+          <h3 class="font-semibold mt-3">{{ section.title }}</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+            {% for field in section.fields %}{% field_row field %}{% endfor %}
+          </div>
+          {% for view in section.lists %}{% include "nrmps/components/formset_table.html" %}{% endfor %}
+        {% endfor %}
+      </div>
+    </details>
+
+    <div class="card-actions justify-end mt-2">
+      <button type="submit" class="btn btn-outline">Save</button>
+      <button type="submit" name="run" value="1" class="btn btn-primary">Save and run</button>
+    </div>
+  </div>
+</form>

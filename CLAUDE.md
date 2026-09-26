@@ -86,49 +86,55 @@ Deployment (Railway) is described in `docs/DEPLOY.md`.
 
 ## Architecture Overview
 
-A Django app that simulates the residency Match (NRMP) between applicants and residency programs. The interface says
-"applicant" and "program"; the code keeps the original model names `Student` and `School`.
+A Django app that simulates the residency Match (NRMP) between applicants and residency programs, implementing
+model 2.0 (`docs/model_spec.md`). The interface says "applicant" and "program".
 
 ### Core Domain Models (`nrmps/models.py`)
 
-- **Simulation**: owned by a `User`; `Simulation.objects.owned_by(user)` for access, `.with_counts()` for sizes.
-  `status` is the pipeline stage (`setup` → `populations` → `initialized` → `pre_interview` → …); `set_stage()` moves
-  it exactly (re-running a step invalidates later stages). Population methods (`create_*`, `upload_*`, `delete_*`)
-  run in one transaction after `lock()` (a row lock) and reset the stage.
-- **SimulationConfig**: generation parameters; the latest one is used. `clean()` enforces Beta feasibility.
-- **Student / School** (applicant / program): base score, `score_meta` (attribute scores), `meta_preference`
-  (weights over the other side's attributes); programs have `capacity`.
-- **Interview**: one row per applicant-program pair with true utilities, pre/post-interview ratings and ranks.
-- **Match**: unused until the match stage exists.
+- **Simulation**: owned by a `User`; `params` holds the draft parameters (JSON of `nrmps.params.SimulationParams`,
+  schema v1; `get_params()` validates). `Simulation.objects.owned_by(user)` for access, `.with_run_summary()` for
+  lists; `lock()` takes a row lock inside `transaction.atomic()`.
+- **PopulationUpload**: an uploaded CSV for one side (applicants or programs), parsed and stored as npz; runs use it
+  instead of generating that side.
+- **SimulationRun**: one execution. Frozen parameters with the seed used, the parameter hash, version stamps (model,
+  engine, schema, app, git SHA, numpy, Python), population source and digest, per-stage fingerprints, sizes, status,
+  progress and the diagnostics (`metrics`). At most one queued or running run per simulation.
+- **StageRun**: one stage of a run (population, pre_interview) with its fingerprint, timing and counts.
+- **RunArtifact**: npz bytes of a run: the population, and the per-agent pre-interview results.
+- **Stage**: the eight pipeline stages; only population and pre_interview are implemented.
 - **User**: custom user; email unique ignoring case, `email_verified_at` set by signed confirmation links.
+
+Pair-level values (utilities, observed scores, ranks) are never stored: `runs.RunData` recomputes them exactly from
+the stored population, the parameters and the seed.
 
 ### Modules
 
 ```
 nrmps/
 ├── models.py             # domain models (above)
-├── engine/               # model 2.0 (docs/model_spec.md), pure numpy, no Django: rng (streams, Philox),
-│                         #   population, utility, rank, metrics, pipeline (run_pre_interview), persistence (npz)
 ├── params.py             # SimulationParams: typed, versioned parameter schema (pydantic), the source of truth
-├── params_forms.py       # Django forms and formsets generated from the schema
-├── versions.py           # version stamps stored with runs (model, engine, schema, app, git SHA, numpy, Python)
-├── management/commands/  # nrmp_run: run the engine headless (--params, --seed, --out)
-├── simulation_engine.py  # legacy engine: interview rows, pre/post-interview ratings and ranks (numpy, bulk SQL)
-├── views.py              # simulation pages; HTMX steps through one dispatcher (STEPS) returning all stage cards
-├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
-├── help_views.py         # /help/ (generated parameter reference) and the staff-only developer reference
-├── accounts.py           # confirmation tokens and emails, the personal data export
+├── params_forms.py       # Django forms and formsets generated from the schema (the parameter editor)
+├── engine/               # model 2.0, pure numpy, no Django: rng (streams, Philox), population, utility, rank,
+│                         #   metrics, pipeline (run_pre_interview), persistence (npz, digest)
+├── runs.py               # start_run / execute_run / run_now, fingerprints, RunData (recomputed pair values)
+├── pipeline.py           # stage state machine for the stepper: done, stale (with the reason), running, planned ...
 ├── population_csv.py     # CSV format for population upload/download (one module for both directions)
-├── forms.py              # forms; ValidatorLimitsMixin puts model validator limits on the inputs
+├── views.py              # public pages, simulation list, the simulation page, runs and uploads (HTMX)
+├── run_views.py          # run page, applicants/programs lists, one agent's view, downloads
+├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
+├── help_views.py         # /help/ (reference generated from the schema) and the staff-only developer reference
+├── accounts.py           # confirmation tokens and emails, the personal data export
+├── versions.py           # version stamps stored with runs
+├── forms.py              # account and simulation forms, the upload form
 ├── limits.py             # NRMP_MAX_PAIRS size limit
 ├── exceptions.py         # SimulationError and subclasses: problems shown to the user instead of a 500
-├── validators.py         # attribute-list validation
 ├── security.py           # proxy-aware client IP (django-axes)
-├── admin.py              # admin registrations
-└── templatetags/         # form_tags (field_row), list_tags (sort_th), nav_tags (nav_link), simulation_tags
-templates/nrmps/          # pages; partials/ (stage cards), components/ (field, pagination, breadcrumbs ...), help/
+├── admin.py              # admin registrations (runs and artifacts read-only)
+├── management/commands/  # nrmp_run (the engine headless), seed_demo
+└── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link)
+templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/, help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
-static/js/site.js         # toasts, confirmation dialog, HTMX error handling, theme toggle
+static/js/site.js         # toasts, confirmation dialog, HTMX error handling, theme toggle, list editors
 static/vendor/            # htmx and Alpine.js by version (`npm run vendor` in theme/static_src)
 docs/                     # review, plan, status, deployment, model spec
 ```
@@ -154,9 +160,11 @@ docs/                     # review, plan, status, deployment, model spec
 - Docstrings required for all public functions/classes
 
 **Performance Considerations**:
-- The engine computes with numpy and writes in bulk (INSERT … SELECT, executemany, COPY on PostgreSQL); never save
-  interview rows one by one.
-- Steps run inside the request until background jobs exist; keep them within `NRMP_MAX_PAIRS`.
+- The engine walks pairs in blocks of `NRMP_BLOCK_PAIRS` with fixed-order arithmetic (model_spec.md §12.7), so a
+  block equals the same entries of the full matrix and memory stays bounded; never materialise all pairs in the
+  database.
+- Runs execute inside the request until background jobs exist (plan step 2.5); keep them within `NRMP_MAX_PAIRS`.
+- Changing a formula, stream ID or draw recipe changes results: it needs a new `MODEL_VERSION` (model_spec.md §12).
 
 **Security**:
 - Every page requires login unless marked `@login_not_required`; load simulations with `get_owned_simulation()`.
@@ -173,9 +181,8 @@ The project is being reworked according to a review and phased plan:
   `FINDINGS.md`, the register of every finding (IDs such as SIM-1 or ENG-3) with evidence and recommendations.
 - `docs/model_spec.md`: the normative model 2.0 specification that the Phase 2 engine implements.
 
-**Do not build `interview()`, `students_rank()`, `schools_rank()` or `match()` on the legacy engine in
-`simulation_engine.py`.** Phase 2 replaces it with the seeded, vectorised engine in `nrmps/engine/`, and Phase 3
-builds the remaining stages there. Engine rules: every random draw comes from its own stream (`engine/rng.py`,
-model_spec.md §12.1); pair-level values are computed block by block with the fixed-order arithmetic of §12.7, so any
-block equals the same entries of the full matrix; `nrmps/engine/` and `nrmps/params.py` are type-checked strictly. `TODO.md` and `IDEAS.md` predate the plan; Appendix H of the review says what happens to each
-item.
+The Phase 2 engine implements the stages up to the pre-interview rankings. Build the remaining stages (applications,
+signals, invitations, interviews, rank order lists, the match) in `nrmps/engine/` on the same rules: every random draw
+comes from its own stream (`engine/rng.py`, model_spec.md §12.1), pair-level draws use the counter-based Philox
+generator, and `nrmps/engine/` and `nrmps/params.py` are type-checked strictly. `TODO.md` and `IDEAS.md` predate
+the plan; Appendix H of the review says what happens to each item.

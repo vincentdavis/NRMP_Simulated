@@ -149,21 +149,21 @@ def test_login_page_links_to_password_reset(client):
 # --- Export and deletion ---------------------------------------------------------------------------------------------
 
 
-def test_data_export_contains_account_and_simulations(auth_client, populated_simulation):
-    from nrmps import simulation_engine as se
-
-    se.initialize_interview(populated_simulation)
+def test_data_export_contains_account_simulations_and_runs(auth_client, finished_run, simulation):
     response = auth_client.get(reverse("nrmps:account_export"))
     assert response["Content-Type"] == "application/zip"
     archive = zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
     names = archive.namelist()
     assert "account.json" in names
     assert json.loads(archive.read("account.json"))["username"] == "alice"
-    folder = f"simulations/{populated_simulation.pk}-test-simulation"
-    for name in ("simulation.json", "applicants.csv", "programs.csv", "interviews.csv"):
+    folder = f"simulations/{simulation.pk}-test-simulation"
+    for name in ("simulation.json", "runs/1/run.json", "runs/1/applicants.csv", "runs/1/programs.csv"):
         assert f"{folder}/{name}" in names
-    assert archive.read(f"{folder}/applicants.csv").decode().count("\n") == 21
-    assert archive.read(f"{folder}/interviews.csv").decode().count("\n") == 81
+    assert json.loads(archive.read(f"{folder}/simulation.json"))["params"] == simulation.params
+    record = json.loads(archive.read(f"{folder}/runs/1/run.json"))
+    assert record["seed"] == 12345
+    assert record["stamps"]["model_version"] == "2.0"
+    assert archive.read(f"{folder}/runs/1/applicants.csv").decode().count("\n") == 61
 
 
 def test_account_deletion_needs_the_password(auth_client, user, simulation):

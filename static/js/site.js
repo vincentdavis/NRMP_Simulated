@@ -82,6 +82,31 @@
     });
   });
 
+  // --- List editors (formsets) ---------------------------------------------------------------------------------
+  // Alpine component for the parameter tables: "Add row" copies the formset's empty form, numbered with the next
+  // index, and raises TOTAL_FORMS; the server validates everything, so this is only a convenience.
+  window.formsetRows = function (prefix) {
+    return {
+      get total() {
+        return document.getElementById(`id_${prefix}-TOTAL_FORMS`);
+      },
+      get full() {
+        const max = document.getElementById(`id_${prefix}-MAX_NUM_FORMS`);
+        return Boolean(this.total && max && Number(this.total.value) >= Number(max.value));
+      },
+      add() {
+        if (!this.total || this.full) return;
+        const index = Number(this.total.value);
+        const html = this.$refs.empty.innerHTML.replaceAll("__prefix__", String(index));
+        this.$refs.rows.insertAdjacentHTML("beforeend", html);
+        this.total.value = String(index + 1);
+        const added = this.$refs.rows.lastElementChild;
+        const first = added && added.querySelector("input, select");
+        if (first) first.focus();
+      },
+    };
+  };
+
   // --- Theme toggle ---------------------------------------------------------------------------------------------
   // The saved choice is applied before first paint by a small script in <head>; without one, daisyUI follows the
   // system preference.

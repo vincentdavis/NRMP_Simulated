@@ -13,10 +13,9 @@
         <thead>
           <tr>
             <th scope="col">Name</th>
-            <th scope="col">Iterations</th>
-            <th scope="col">Public</th>
-            <th scope="col">Applicants</th>
-            <th scope="col">Programs</th>
+            <th scope="col" class="text-right">Runs</th>
+            <th scope="col">Latest run</th>
+            <th scope="col">Created</th>
             <th scope="col" class="text-right">Actions</th>
           </tr>
         </thead>
@@ -28,16 +27,16 @@
                 {{ sim.name }}
               </a>
             </td>
-            <td>{{ sim.iterations }}</td>
+            <td class="text-right tabular-nums">{{ sim.n_runs }}</td>
             <td>
-              {% if sim.public %}
-                <div class="badge badge-success badge-sm">Yes</div>
+              {% if sim.latest_run_number %}
+                <a class="link" href="{% url 'nrmps:run_detail' pk=sim.pk number=sim.latest_run_number %}">Run {{ sim.latest_run_number }}</a>
+                {% include "nrmps/components/run_status.html" with status=sim.latest_run_status %}
               {% else %}
-                <div class="badge badge-outline badge-sm">No</div>
+                <span class="text-base-content/70">Not run yet</span>
               {% endif %}
             </td>
-            <td class="tabular-nums">{{ sim.n_students }}</td>
-            <td class="tabular-nums">{{ sim.n_schools }}</td>
+            <td class="whitespace-nowrap">{{ sim.created_at|date:"Y-m-d" }}</td>
             <td class="text-right">
               <div class="flex gap-2 justify-end">
                 <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">

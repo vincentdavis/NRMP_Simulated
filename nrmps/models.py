@@ -1,103 +1,40 @@
-import functools
-import math
-import random
+"""Database models: users, simulations with their draft parameters, uploaded populations and runs.
 
-import numpy as np
+A simulation holds editable parameters (`nrmps.params`, schema v1). Starting a run freezes a copy of them with the
+seed, the version stamps and the population the run uses; the run then stores what the engine produced: a record per
+stage, the diagnostics and array artifacts. Pair-level values are recomputed from the population when a page needs
+them (model 2.0 makes that exact), so no table grows with applicants x programs.
+"""
+
+import secrets
+from typing import Any
+
 from django.contrib.auth.models import AbstractUser
-from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models, transaction
+from django.db import models
 from django.db.models.functions import Coalesce, Lower
-from scipy.stats import beta
 
-from .exceptions import MissingConfigError
-from .limits import check_market_size
-from .validators import validate_attribute_list
+from .params import SimulationParams, load_params
 
 
-def default_school_meta_preference():
-    """Return the default applicant attributes that programs evaluate."""
+# Referenced by migrations 0002-0012 (the removed SimulationConfig); keep them importable.
+def default_school_meta_preference() -> list[str]:
+    """Return the legacy default applicant attributes that programs evaluate."""
     return ["board_scores", "research", "honors"]
 
 
-def default_applicant_meta_preference():
-    """Return the default program attributes that applicants evaluate."""
+def default_applicant_meta_preference() -> list[str]:
+    """Return the legacy default program attributes that applicants evaluate."""
     return ["program_size", "reputation", "location"]
 
 
-def get_beta_parameters(mean: float, desired_stddev: float) -> tuple[float, float]:
-    """Convert mean and desired standard deviation to beta distribution parameters.
-
-    For a beta distribution, if stddev is too large for the given mean,
-    it will be automatically reduced to the maximum possible value.
-
-    Returns:
-        tuple: (alpha, beta) parameters for beta distribution
-    """
-    # Ensure mean is within valid range for beta distribution
-    mean = max(0.001, min(0.999, mean))
-
-    # Calculate maximum possible stddev for this mean
-    max_stddev = np.sqrt(mean * (1 - mean))
-
-    # If desired stddev is too large, reduce it
-    if desired_stddev > max_stddev:
-        desired_stddev = max_stddev * 0.9  # Use 90% of max to be safe
-
-    # Calculate beta parameters from mean and variance
-    variance = desired_stddev**2
-
-    # For beta distribution: mean = a/(a+b), var = ab/((a+b)^2 * (a+b+1))
-    # Solving: a = mean * ((mean*(1-mean)/variance) - 1)
-    #         b = (1-mean) * ((mean*(1-mean)/variance) - 1)
-    temp = (mean * (1 - mean) / variance) - 1
-
-    if temp <= 0:  # Invalid parameters, fall back to low variance distribution
-        alpha = mean * 10
-        beta = (1 - mean) * 10
-    else:
-        alpha = mean * temp
-        beta = (1 - mean) * temp
-
-    # Ensure parameters are positive
-    alpha = max(0.1, alpha)
-    beta = max(0.1, beta)
-
-    return alpha, beta
+def new_seed() -> int:
+    """Return a random seed that is easy to read and type (up to nine digits)."""
+    return secrets.randbelow(10**9)
 
 
-def generate_beta_score(mean: float, stddev: float) -> float:
-    """Generate a score from beta distribution with given mean and stddev."""
-    alpha, beta_param = get_beta_parameters(mean, stddev)
-    return float(beta.rvs(alpha, beta_param))
-
-
-SIMULATION_STAGES = [
-    ("setup", "Setup"),
-    ("populations", "Populations"),
-    ("initialized", "Initialized"),
-    ("pre_interview", "Pre-Interview"),
-    ("invitations", "Invitations"),
-    ("post_interview", "Post-Interview"),
-    ("final_rankings", "Final Rankings"),
-    ("matched", "Matched"),
-]
-
-STAGE_ORDER = [s[0] for s in SIMULATION_STAGES]
-
-
-def _population_change(method):
-    """Run a population method in one transaction that locks the simulation, then reset the pipeline stage."""
-
-    @functools.wraps(method)
-    def wrapper(self, *args, **kwargs):
-        with transaction.atomic():
-            self.lock()
-            result = method(self, *args, **kwargs)
-            self.refresh_population_stage()
-        return result
-
-    return wrapper
+def default_params() -> dict[str, Any]:
+    """Return the default parameters with a fresh seed, so runs repeat exactly until the seed is changed."""
+    return SimulationParams().with_seed(new_seed()).to_json_data()
 
 
 class User(AbstractUser):
@@ -139,33 +76,25 @@ class SimulationQuerySet(models.QuerySet):
             return self.none()
         return self.filter(owner=user)
 
-    def with_counts(self) -> SimulationQuerySet:
-        """Annotate n_students and n_schools with one subquery each (no join, no N+1)."""
+    def with_run_summary(self) -> SimulationQuerySet:
+        """Annotate n_runs and the latest run's number and status (one subquery each, no N+1)."""
+        latest = SimulationRun.objects.filter(simulation=models.OuterRef("pk")).order_by("-number")
+        runs = (
+            SimulationRun.objects.filter(simulation=models.OuterRef("pk"))
+            .order_by()
+            .values("simulation")
+            .annotate(n=models.Count("*"))
+            .values("n")
+        )
         return self.annotate(
-            n_students=_count_subquery(Student),
-            n_schools=_count_subquery(School),
+            n_runs=Coalesce(models.Subquery(runs), 0),
+            latest_run_number=models.Subquery(latest.values("number")[:1]),
+            latest_run_status=models.Subquery(latest.values("status")[:1]),
         )
 
 
-def _count_subquery(model):
-    """Return a subquery counting `model` rows of the outer simulation, 0 when there are none."""
-    rows = (
-        model.objects.filter(simulation=models.OuterRef("pk"))
-        .order_by()
-        .values("simulation")
-        .annotate(n=models.Count("*"))
-        .values("n")
-    )
-    return Coalesce(models.Subquery(rows), 0)
-
-
 class Simulation(models.Model):
-    """A simulation: its owner, settings, pipeline stage, populations and results.
-
-    Applicants are stored as `Student` rows and programs as `School` rows (the code keeps the original names; the
-    interface says applicant and program). Population methods (create_*, upload_*, delete_*) run in one locked
-    transaction and reset the pipeline stage.
-    """
+    """A simulation: its owner, name, draft parameters, uploaded populations and runs."""
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="simulations")
     name = models.CharField(max_length=255, help_text="A short name for this experiment.")
@@ -174,28 +103,24 @@ class Simulation(models.Model):
         help_text="Planned: let others view this simulation read-only. Currently has no effect; only you can see it.",
     )
     description = models.TextField(default="", blank=True, help_text="Notes on what you are testing (optional).")
-    iterations = models.IntegerField(
-        default=1,
-        validators=[MinValueValidator(1), MaxValueValidator(100)],
-        help_text=(
-            "Planned: number of independent repeats with different random seeds; results will be aggregated. "
-            "Not used yet."
-        ),
+    params = models.JSONField(
+        default=default_params, help_text="The draft parameters (schema v1 of nrmps.params); runs copy them."
     )
     created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=50, choices=SIMULATION_STAGES, default="setup")
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = SimulationQuerySet.as_manager()
 
     def __str__(self):
         return self.name
 
-    def stage_index(self) -> int:
-        """Return the zero-based index of the current status in STAGE_ORDER."""
-        try:
-            return STAGE_ORDER.index(self.status)
-        except ValueError:
-            return 0
+    def get_params(self) -> SimulationParams:
+        """Return the validated draft parameters."""
+        return load_params(self.params)
+
+    def set_params(self, params: SimulationParams) -> None:
+        """Replace the draft parameters (call save() afterwards)."""
+        self.params = params.to_json_data()
 
     def lock(self) -> None:
         """Lock this simulation's row until the surrounding transaction ends.
@@ -205,584 +130,200 @@ class Simulation(models.Model):
         """
         Simulation.objects.select_for_update().only("id").get(pk=self.pk)
 
-    def set_stage(self, stage: str) -> None:
-        """Set the pipeline stage, forwards or backwards.
+    def active_run(self) -> SimulationRun | None:
+        """Return the queued or running run, if any (there is at most one)."""
+        return self.runs.filter(status__in=SimulationRun.ACTIVE).first()
 
-        Re-running a step replaces its results and invalidates every later stage, so the stage moves to exactly
-        the step that ran, even if the simulation had got further before.
-        """
-        if stage not in STAGE_ORDER:
-            raise ValueError(f"Unknown stage {stage!r}")
-        if self.status != stage:
-            self.status = stage
-            self.save(update_fields=["status"])
+    def latest_run(self, *, succeeded: bool = False) -> SimulationRun | None:
+        """Return the most recent run, or the most recent successful one."""
+        runs = self.runs.filter(status=SimulationRun.Status.SUCCEEDED) if succeeded else self.runs.all()
+        return runs.order_by("-number").first()
 
-    def refresh_population_stage(self) -> None:
-        """Reset the stage after a population change.
+    def uploads_by_side(self) -> dict[str, PopulationUpload]:
+        """Return the uploaded populations keyed by side ("applicants", "programs")."""
+        return {upload.side: upload for upload in self.uploads.defer("data")}
 
-        Replacing or deleting applicants or programs deletes every interview row (by cascade), so the pipeline goes
-        back to "populations" when both populations exist, or to "setup" otherwise.
-        """
-        both = self.students.exists() and self.schools.exists()
-        self.set_stage("populations" if both else "setup")
 
-    def get_workflow_stages(self) -> list[dict]:
-        """Build a list of stage dicts for template rendering.
+class Side(models.TextChoices):
+    """The two sides of the market."""
 
-        Each dict has keys: key, label, complete, active, locked.
-        """
-        current_idx = self.stage_index()
-        stages = []
-        for idx, (key, label) in enumerate(SIMULATION_STAGES):
-            stages.append(
-                {
-                    "key": key,
-                    "label": label,
-                    "complete": idx < current_idx,
-                    "active": idx == current_idx,
-                    "locked": idx > current_idx,
-                }
-            )
-        return stages
+    APPLICANTS = "applicants", "Applicants"
+    PROGRAMS = "programs", "Programs"
 
-    @_population_change
-    def create_students(self) -> int:
-        """Create the student population for this simulation using its latest SimulationConfig.
 
-        Behavior:
-        - Uses the most recent SimulationConfig linked to this Simulation (by id desc).
-        - Clears existing students for this simulation before creation.
-        - Generates `number_of_applicants` students named "Student {i}" with scores drawn from a
-          beta distribution using applicants_score_mean and applicant_score_stddev, ensuring scores stay between 0-1.
-        - Uses applicant_meta_scores_stddev from config when generating score_meta values based on
-          config.school_meta_preference: each meta gets beta-distributed scores with base_score as mean.
-        - Also generates meta_preference weights per student using config.applicant_meta_preference and
-          config.applicant_meta_preference_stddev, storing the stddev into meta_stddev_preference.
-        - Raises MissingConfigError if the simulation has no configuration.
-        - Returns the number of students created.
-        """
-        config = self.configs.order_by("-id").first()
-        if config is None:
-            raise MissingConfigError()
+class PopulationUpload(models.Model):
+    """A population uploaded as CSV for one side, used by the simulation's runs instead of a generated one."""
 
-        # Remove existing population for a fresh generation
-        self.students.all().delete()
+    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="uploads")
+    side = models.CharField(max_length=20, choices=Side.choices)
+    filename = models.CharField(max_length=255, blank=True, default="")
+    rows = models.PositiveIntegerField()
+    data = models.BinaryField(help_text="The parsed file as npz (nrmps.population_csv).")
+    digest = models.CharField(max_length=64, help_text="SHA-256 of `data`.")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
 
-        mean = config.applicant_score_mean
-        std = max(float(config.applicant_score_stddev), 0.0)
-        meta_std = max(float(getattr(config, "applicant_meta_scores_stddev", 0.0) or 0.0), 0.0)
-        meta_keys = list(getattr(config, "school_meta_preference", []) or [])
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["simulation", "side"], name="one_upload_per_side")]
 
-        # Applicant preference generation settings
-        pref_keys = list(getattr(config, "applicant_meta_preference", []) or [])
-        pref_std = max(float(getattr(config, "applicant_meta_preference_stddev", 0.0) or 0.0), 0.0)
+    def __str__(self):
+        return f"{self.get_side_display()} of {self.simulation_id}: {self.filename}"
 
-        to_create = []
-        for i in range(1, int(config.number_of_applicants) + 1):
-            # Use beta distribution to ensure scores stay between 0-1
-            base_score = generate_beta_score(mean, std) if std > 0 else float(mean)
-            score_meta = {}
-            for key in meta_keys:
-                try:
-                    k = str(key)
-                except Exception:
-                    k = str(key)
-                # Generate meta scores using beta distribution with base_score as mean
-                meta_score = generate_beta_score(base_score, meta_std) if meta_std > 0 else base_score
-                score_meta[k] = float(meta_score)
 
-            # Generate student meta-preferences: weights between 0.01 and 2.0, normalized to sum = 1
-            meta_preference = {}
-            for key in pref_keys:
-                try:
-                    k2 = str(key)
-                except Exception:
-                    k2 = str(key)
-                w = random.gauss(1.0, pref_std) if pref_std > 0 else 1.0
-                # Clamp to range [0.01, 2.0]
-                w = max(0.01, min(2.0, w))
-                meta_preference[k2] = float(w)
+class Stage(models.TextChoices):
+    """Pipeline stages in order (model_spec.md; plan step 2.4). Only the first two are implemented."""
 
-            # Normalize weights to sum to 1
-            if meta_preference:
-                weight_sum = sum(meta_preference.values())
-                if weight_sum > 0:
-                    for k in meta_preference:
-                        meta_preference[k] = meta_preference[k] / weight_sum
+    POPULATION = "population", "Population"
+    PRE_INTERVIEW = "pre_interview", "Pre-interview"
+    APPLICATIONS = "applications", "Applications"
+    SIGNALS = "signals", "Signals"
+    INVITATIONS = "invitations", "Invitations"
+    INTERVIEWS = "interviews", "Interviews"
+    RANK_LISTS = "rank_lists", "Rank order lists"
+    MATCH = "match", "Match"
 
-            to_create.append(
-                Student(
-                    simulation=self,
-                    name=f"Student {i}",
-                    score=float(base_score),
-                    score_meta=score_meta,
-                    meta_stddev_preference=pref_std,
-                    meta_preference=meta_preference,
-                )
-            )
 
-        if to_create:
-            Student.objects.bulk_create(to_create, batch_size=1000)
-        return len(to_create)
+IMPLEMENTED_STAGES = (Stage.POPULATION, Stage.PRE_INTERVIEW)
 
-    @_population_change
-    def create_schools(self) -> int:
-        """Create the school population for this simulation using its latest SimulationConfig.
 
-        Behavior:
-        - Uses the most recent SimulationConfig linked to this Simulation (by id desc).
-        - Clears existing schools for this simulation before creation.
-        - Generates `number_of_schools` schools named "School {i}" with scores drawn from a
-          beta distribution using school_score_mean and school_score_stddev, ensuring scores stay between 0-1.
-          Capacities use Gaussian distribution. Capacity is coerced to an int >= 0.
-        - Uses school_meta_scores_stddev from config when generating score_meta values based on
-          config.applicant_meta_preference: each meta gets beta-distributed scores with base_score as mean.
-        - Also generates meta_preference weights per school using config.school_meta_preference and
-          config.school_meta_preference_stddev, storing the stddev into meta_stddev_preference.
-        - Raises MissingConfigError if the simulation has no configuration.
-        - Returns the number of schools created.
-        """
-        config = self.configs.order_by("-id").first()
-        if config is None:
-            raise MissingConfigError()
+class SimulationRun(models.Model):
+    """One execution of the pipeline: frozen parameters, seed, versions, population and results."""
 
-        self.schools.all().delete()
+    class Status(models.TextChoices):
+        """Where the run is."""
 
-        score_mean = config.school_score_mean
-        score_std = max(float(config.school_score_stddev), 0.0)
-        cap_mean = config.school_capacity_mean
-        cap_std = max(float(config.school_capacity_stddev), 0.0)
-        meta_std = max(float(getattr(config, "school_meta_scores_stddev", 0.0) or 0.0), 0.0)
-        meta_keys = list(getattr(config, "applicant_meta_preference", []) or [])
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        SUCCEEDED = "succeeded", "Finished"
+        FAILED = "failed", "Failed"
 
-        # School preference generation settings
-        pref_keys = list(getattr(config, "school_meta_preference", []) or [])
-        pref_std = max(float(getattr(config, "school_meta_preference_stddev", 0.0) or 0.0), 0.0)
+    ACTIVE = (Status.QUEUED, Status.RUNNING)
 
-        to_create = []
-        for i in range(1, int(config.number_of_schools) + 1):
-            # Use beta distribution to ensure scores stay between 0-1
-            base_score = generate_beta_score(score_mean, score_std) if score_std > 0 else float(score_mean)
-            capacity_raw = random.gauss(cap_mean, cap_std) if cap_std > 0 else float(cap_mean)
-            capacity = round(capacity_raw)
-            if capacity < 0:
-                capacity = 0
-            score_meta = {}
-            for key in meta_keys:
-                try:
-                    k = str(key)
-                except Exception:
-                    k = str(key)
-                # Generate meta scores using beta distribution with base_score as mean
-                meta_score = generate_beta_score(base_score, meta_std) if meta_std > 0 else base_score
-                score_meta[k] = float(meta_score)
+    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="runs")
+    number = models.PositiveIntegerField(help_text="1, 2, 3 ... within the simulation.")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True, help_text="Engine time, start to finish.")
+    # What the run used.
+    params = models.JSONField(help_text="The parameters, with the seed that was used.")
+    params_hash = models.CharField(max_length=64)
+    seed = models.BigIntegerField()
+    seed_was_drawn = models.BooleanField(default=False, help_text="The draft had no seed, so one was drawn.")
+    replicate = models.PositiveIntegerField(default=0)
+    population_source = models.JSONField(default=dict, help_text='Per side: "generated" or the uploaded file name.')
+    population_digest = models.CharField(max_length=64, blank=True, default="")
+    fingerprints = models.JSONField(default=dict, help_text="Per stage: a hash of everything the stage depends on.")
+    n_applicants = models.PositiveIntegerField(default=0)
+    n_programs = models.PositiveIntegerField(default=0)
+    n_positions = models.PositiveIntegerField(default=0)
+    # Version stamps (model_spec.md §12.11).
+    model_version = models.CharField(max_length=20)
+    engine_version = models.CharField(max_length=20)
+    schema_version = models.PositiveSmallIntegerField()
+    app_version = models.CharField(max_length=20)
+    git_sha = models.CharField(max_length=40, blank=True, default="")
+    numpy_version = models.CharField(max_length=20)
+    python_version = models.CharField(max_length=20)
+    # Results and progress.
+    metrics = models.JSONField(null=True, blank=True)
+    error = models.TextField(blank=True, default="")
+    progress_done = models.PositiveBigIntegerField(default=0)
+    progress_total = models.PositiveBigIntegerField(default=0)
 
-            # Generate school meta preferences: weights between 0.01 and 2.0, normalized to sum = 1
-            meta_preference = {}
-            for key in pref_keys:
-                try:
-                    k2 = str(key)
-                except Exception:
-                    k2 = str(key)
-                w = random.gauss(1.0, pref_std) if pref_std > 0 else 1.0
-                # Clamp to range [0.01, 2.0]
-                w = max(0.01, min(2.0, w))
-                meta_preference[k2] = float(w)
-
-            # Normalize weights to sum to 1
-            if meta_preference:
-                weight_sum = sum(meta_preference.values())
-                if weight_sum > 0:
-                    for k in meta_preference:
-                        meta_preference[k] = meta_preference[k] / weight_sum
-
-            to_create.append(
-                School(
-                    simulation=self,
-                    name=f"School {i}",
-                    capacity=capacity,
-                    score=float(base_score),
-                    score_meta=score_meta,
-                    meta_stddev_preference=pref_std,
-                    meta_preference=meta_preference,
-                )
-            )
-
-        if to_create:
-            School.objects.bulk_create(to_create, batch_size=1000)
-        return len(to_create)
-
-    @_population_change
-    def delete_students(self) -> None:
-        """Delete the student population for this simulation."""
-        self.students.all().delete()
-
-    @_population_change
-    def delete_schools(self) -> None:
-        """Delete the school population for this simulation."""
-        self.schools.all().delete()
-
-    @_population_change
-    def upload_students(self, rows: list[dict]) -> int:
-        """Replace the applicants with validated rows from `population_csv.parse_population_csv(..., "students")`.
-
-        Runs in one transaction, so the old population survives if anything fails. Raises SizeLimitError if the
-        new applicants x the current programs would exceed the size limit. Returns the number of applicants.
-        """
-        check_market_size(len(rows), self.schools.count())
-        self.students.all().delete()
-        Student.objects.bulk_create(
-            (
-                Student(
-                    simulation=self,
-                    name=row["name"],
-                    score=row["score"],
-                    score_meta=row["score_meta"],
-                    meta_preference=row["meta_preference"],
-                )
-                for row in rows
+    class Meta:
+        ordering = ["-number"]
+        constraints = [
+            models.UniqueConstraint(fields=["simulation", "number"], name="unique_run_number"),
+            models.UniqueConstraint(
+                fields=["simulation"],
+                condition=models.Q(status__in=["queued", "running"]),
+                name="one_active_run_per_simulation",
             ),
-            batch_size=2000,
-        )
-        return len(rows)
-
-    @_population_change
-    def upload_schools(self, rows: list[dict]) -> int:
-        """Replace the programs with validated rows from `population_csv.parse_population_csv(..., "schools")`.
-
-        Runs in one transaction, so the old population survives if anything fails. Raises SizeLimitError if the
-        current applicants x the new programs would exceed the size limit. Returns the number of programs.
-        """
-        check_market_size(self.students.count(), len(rows))
-        self.schools.all().delete()
-        School.objects.bulk_create(
-            (
-                School(
-                    simulation=self,
-                    name=row["name"],
-                    capacity=row["capacity"],
-                    score=row["score"],
-                    score_meta=row["score_meta"],
-                    meta_preference=row["meta_preference"],
-                )
-                for row in rows
-            ),
-            batch_size=2000,
-        )
-        return len(rows)
-
-
-class SimulationConfig(models.Model):
-    """Simulation configuration model.
-
-    Parameters for generating the applicant (student) and program (school) populations and for the pre-interview
-    ratings. Scores and attribute scores live on a 0-1 scale and are drawn from Beta distributions, so a standard
-    deviation must stay below the Beta limit sqrt(mean * (1 - mean)); `clean()` enforces that for the base scores.
-    """
-
-    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="configs")
-    number_of_applicants = models.IntegerField(
-        default=200,
-        validators=[MinValueValidator(1), MaxValueValidator(10000)],
-        help_text="How many applicants (medical students) to generate.",
-    )
-    number_of_schools = models.IntegerField(
-        default=10,
-        validators=[MinValueValidator(1), MaxValueValidator(1000)],
-        help_text="How many residency programs to generate.",
-    )
-    # Applicant score configuration
-    applicant_score_mean = models.FloatField(
-        default=0.7,
-        validators=[MinValueValidator(0.01), MaxValueValidator(0.99)],
-        help_text="Average applicant base (overall strength) score on a 0-1 scale.",
-    )
-    applicant_score_stddev = models.FloatField(
-        default=0.1,
-        validators=[MinValueValidator(0), MaxValueValidator(0.45)],
-        help_text="How spread out applicant base scores are (SD on the 0-1 scale).",
-    )
-    applicant_interview_limit = models.IntegerField(
-        default=5,
-        validators=[MinValueValidator(0), MaxValueValidator(50)],
-        help_text="Not used yet: the most interviews an applicant can accept and attend.",
-    )
-    # The program attributes that applicants evaluate: every program gets a score for each name, and every applicant
-    # gets a preference weight for each name.
-    applicant_meta_preference = models.JSONField(
-        default=default_applicant_meta_preference,
-        validators=[validate_attribute_list],
-        help_text="Program attributes applicants care about, e.g. program_size, reputation, location.",
-    )
-    # SD of the raw preference weights each applicant gives the program attributes.
-    applicant_meta_preference_stddev = models.FloatField(
-        default=0.3,
-        validators=[MinValueValidator(0), MaxValueValidator(1.0)],
-        help_text="How much applicants disagree about which program attributes matter.",
-    )
-    # SD of each applicant's attribute scores around their base score.
-    applicant_meta_scores_stddev = models.FloatField(
-        default=0.1,
-        validators=[MinValueValidator(0), MaxValueValidator(0.45)],
-        help_text="How much an applicant's attribute scores vary around their base score.",
-    )
-    applicant_pre_interview_rating_error = models.FloatField(
-        default=0.1,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="How noisy applicants' view of programs is before interviewing (0 = perfect information).",
-    )
-    applicant_post_interview_rating_error = models.FloatField(
-        default=0.02,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Not used yet: how noisy applicants' view of programs is after interviewing.",
-    )
-
-    # School configuration
-    school_score_mean = models.FloatField(
-        default=0.5,
-        validators=[MinValueValidator(0.01), MaxValueValidator(0.99)],
-        help_text="Average program base (overall quality) score on a 0-1 scale.",
-    )
-    school_score_stddev = models.FloatField(
-        default=0.1,
-        validators=[MinValueValidator(0), MaxValueValidator(0.45)],
-        help_text="How spread out program base scores are (SD on the 0-1 scale).",
-    )
-    school_capacity_mean = models.FloatField(
-        default=20,
-        validators=[MinValueValidator(1)],
-        help_text="Average number of residency positions per program.",
-    )
-    school_capacity_stddev = models.FloatField(
-        default=4,
-        validators=[MinValueValidator(0)],
-        help_text="How much program sizes vary (at most half the mean is recommended).",
-    )
-    school_interview_limit = models.FloatField(
-        default=0.1,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Not used yet: Phase 2 replaces it with interviews per position.",
-    )
-    # The applicant attributes that programs evaluate: every applicant gets a score for each name, and every program
-    # gets a preference weight for each name.
-    school_meta_preference = models.JSONField(
-        default=default_school_meta_preference,
-        validators=[validate_attribute_list],
-        help_text="Applicant attributes programs care about, e.g. board_scores, research, honors.",
-    )
-    # SD of the raw preference weights each program gives the applicant attributes.
-    school_meta_preference_stddev = models.FloatField(
-        default=0.3,
-        validators=[MinValueValidator(0), MaxValueValidator(1.0)],
-        help_text="How much programs disagree about which applicant attributes matter.",
-    )
-    # SD of each program's attribute scores around its base score.
-    school_meta_scores_stddev = models.FloatField(
-        default=0.1,
-        validators=[MinValueValidator(0), MaxValueValidator(0.45)],
-        help_text="How much a program's attribute scores vary around its base score.",
-    )
-    school_pre_interview_rating_error = models.FloatField(
-        default=0.1,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="How noisy programs' view of applicants is from the application alone (0 = perfect information).",
-    )
-    school_post_interview_rating_error = models.FloatField(
-        default=0.02,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Not used yet: how noisy programs' view of applicants is after interviewing.",
-    )
+        ]
+        indexes = [models.Index(fields=["status", "created_at"], name="run_status_created")]
 
     def __str__(self):
-        return f"{self.simulation.name}-{self.id}"
+        return f"{self.simulation} run {self.number}"
 
-    def clean(self):
-        """Reject base-score standard deviations that no Beta distribution with the requested mean can have.
+    @property
+    def is_active(self) -> bool:
+        """Return True while the run is queued or running."""
+        return self.status in self.ACTIVE
 
-        A Beta distribution with mean m has a standard deviation below sqrt(m * (1 - m)). Larger requests used to be
-        silently cut, which produced U-shaped populations with a shifted mean.
-        """
-        errors = {}
-        for side, label in (("applicant", "applicant"), ("school", "program")):
-            mean = getattr(self, f"{side}_score_mean")
-            stddev = getattr(self, f"{side}_score_stddev")
-            if mean is None or stddev is None or not 0 < mean < 1:
-                continue
-            limit = math.sqrt(mean * (1 - mean))
-            if stddev >= limit:
-                errors[f"{side}_score_stddev"] = ValidationError(
-                    "With a %(label)s score mean of %(mean)s the standard deviation must be below %(limit)s.",
-                    code="beta_infeasible",
-                    params={"label": label, "mean": f"{mean:g}", "limit": f"{limit:.3f}"},
-                )
-        if errors:
-            raise ValidationError(errors)
+    @property
+    def n_pairs(self) -> int:
+        """Return applicants x programs."""
+        return self.n_applicants * self.n_programs
+
+    @property
+    def progress_percent(self) -> int:
+        """Return the progress as a whole percentage."""
+        if not self.progress_total:
+            return 0
+        return min(100, int(100 * self.progress_done / self.progress_total))
+
+    def get_params(self) -> SimulationParams:
+        """Return the frozen parameters."""
+        return load_params(self.params)
+
+    def stamps(self) -> dict[str, str | int]:
+        """Return the version stamps."""
+        return {
+            "model_version": self.model_version,
+            "engine_version": self.engine_version,
+            "schema_version": self.schema_version,
+            "app_version": self.app_version,
+            "git_sha": self.git_sha,
+            "numpy_version": self.numpy_version,
+            "python_version": self.python_version,
+        }
+
+    def artifact(self, kind: str) -> bytes | None:
+        """Return the bytes of one artifact, or None."""
+        row = self.artifacts.filter(kind=kind).values_list("data", flat=True).first()
+        return bytes(row) if row is not None else None
 
 
-class Student(models.Model):
-    """An applicant (a medical student applying to residency programs), shown as "applicant" in the interface."""
+class StageRun(models.Model):
+    """One stage of a run: when it ran, what it depended on and what it produced."""
 
-    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="students")
-    name = models.CharField(max_length=255, help_text="Applicant name.")
-    score = models.FloatField(
-        validators=[MinValueValidator(0), MaxValueValidator(1.0)],
-        help_text="Applicant's base (true overall) strength, 0-1; centre of their attribute scores.",
-    )
-    score_meta = models.JSONField(
-        default=dict,
-        help_text=(
-            "Applicant attribute scores (0-1) keyed by the attributes programs value, "
-            'e.g. {"board_scores": 0.72, "research": 0.55, "honors": 0.61}.'
-        ),
-    )
-    meta_stddev_preference = models.FloatField(
-        default=0.0, help_text="SD used when this applicant's preference weights were drawn (copied from config)."
-    )
-    meta_preference = models.JSONField(
-        default=dict,
-        help_text=(
-            "Applicant preference weights (sum to 1) keyed by the program attributes applicants value, "
-            'e.g. {"program_size": 0.31, "reputation": 0.45, "location": 0.24}.'
-        ),
-    )
+    run = models.ForeignKey(SimulationRun, on_delete=models.CASCADE, related_name="stages")
+    stage = models.CharField(max_length=20, choices=Stage.choices)
+    status = models.CharField(max_length=20, choices=SimulationRun.Status.choices)
+    fingerprint = models.CharField(max_length=64)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    counts = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True, default="")
 
     class Meta:
-        verbose_name = "applicant"
+        constraints = [models.UniqueConstraint(fields=["run", "stage"], name="unique_stage_per_run")]
 
     def __str__(self):
-        return self.name
+        return f"{self.run} {self.get_stage_display()}"
 
 
-class School(models.Model):
-    """A residency program, shown as "program" in the interface."""
+class RunArtifact(models.Model):
+    """Array results of a run, stored as npz bytes (nrmps.engine.persistence)."""
 
-    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="schools")
-    name = models.CharField(max_length=255, help_text="Program name.")
-    capacity = models.IntegerField(help_text="Number of positions the program can fill (>= 0).")
-    score = models.FloatField(
-        validators=[MinValueValidator(0), MaxValueValidator(1.0)],
-        help_text="Program's base (true overall) quality, 0-1; centre of its attribute scores.",
-    )
-    score_meta = models.JSONField(
-        default=dict,
-        help_text=(
-            "Program attribute scores (0-1) keyed by the attributes applicants value, "
-            'e.g. {"program_size": 0.4, "reputation": 0.8, "location": 0.6}.'
-        ),
-    )
-    meta_stddev_preference = models.FloatField(
-        validators=[MinValueValidator(0), MaxValueValidator(99)],
-        default=1.0,
-        help_text="SD used when this program's preference weights were drawn (copied from config).",
-    )
-    meta_preference = models.JSONField(
-        default=dict,
-        help_text=(
-            "Program preference weights (sum to 1) keyed by the applicant attributes programs value, "
-            'e.g. {"board_scores": 0.5, "research": 0.3, "honors": 0.2}.'
-        ),
-    )
+    class Kind(models.TextChoices):
+        """What the artifact holds."""
+
+        POPULATION = "population", "Population"
+        PRE_INTERVIEW = "pre_interview", "Pre-interview results"
+
+    run = models.ForeignKey(SimulationRun, on_delete=models.CASCADE, related_name="artifacts")
+    kind = models.CharField(max_length=30, choices=Kind.choices)
+    data = models.BinaryField()
+    size = models.PositiveIntegerField()
+    sha256 = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "program"
+        constraints = [models.UniqueConstraint(fields=["run", "kind"], name="unique_artifact_kind_per_run")]
 
     def __str__(self):
-        return self.name
-
-
-class Interview(models.Model):
-    """One applicant-program pair: true utilities, pre- and post-interview ratings and ranks, and stage flags."""
-
-    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="interviews")
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="interviews")
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="interviews")
-    # Logic flags
-    status = models.CharField(
-        max_length=50,
-        default="initialized",
-        help_text="Stage reached for this pair (currently always initialized).",
-    )
-
-    # Student steps
-    student_applied = models.BooleanField(default=False, help_text="True if the applicant applied to this program.")
-    student_signal = models.IntegerField(
-        default=0, help_text="Preference signal the applicant sent this program (0 = none). Not used yet."
-    )
-    student_accepted = models.BooleanField(
-        default=False,
-        help_text="True if the applicant accepted this program's interview invitation.",
-    )
-    student_true_score_of_school = models.FloatField(
-        null=True,
-        blank=True,
-        help_text="Applicant's noise-free utility for this program (sum of weight x program attribute).",
-    )
-
-    # Schools Steps
-    school_invited = models.BooleanField(
-        default=False,
-        help_text="True if the program invited this applicant to interview (requires an application).",
-    )
-    # Properties of the interview step
-    ## Pre interview Observed score.
-    student_pre_observed_score_of_school = models.FloatField(
-        null=True, blank=True, help_text="Applicant's pre-interview (noisy) rating of this program."
-    )
-    school_pre_observed_score_of_student = models.FloatField(
-        null=True, blank=True, help_text="Program's pre-interview (noisy) rating of this applicant."
-    )
-    school_true_score_of_student = models.FloatField(
-        null=True,
-        blank=True,
-        help_text="Program's noise-free utility for this applicant (sum of weight x applicant attribute).",
-    )
-
-    ## Pre interview rank.
-    students_pre_rank_of_school = models.IntegerField(
-        null=True,
-        blank=True,
-        help_text="Where this program falls in the applicant's pre-interview ordering (1 = favourite).",
-    )
-    schools_pre_rank_of_student = models.IntegerField(
-        null=True,
-        blank=True,
-        help_text="Where this applicant falls in the program's pre-interview ordering (1 = top applicant).",
-    )
-
-    ## Post interview Observed score.
-    student_post_observed_score_of_school = models.FloatField(
-        null=True, blank=True, help_text="Applicant's post-interview rating of this program."
-    )
-    school_post_observed_score_of_student = models.FloatField(
-        null=True, blank=True, help_text="Program's post-interview rating of this applicant."
-    )
-
-    ## Post interview rank.
-    students_post_rank_of_school = models.IntegerField(
-        null=True, blank=True, help_text="Where this program falls in the applicant's post-interview ordering."
-    )
-    schools_post_rank_of_student = models.IntegerField(
-        null=True, blank=True, help_text="Where this applicant falls in the program's post-interview ordering."
-    )
-
-    class Meta:
-        unique_together = ["student", "school"]
-
-    def __str__(self):
-        return f"{self.student.name} - {self.school.name}"
-
-
-class Match(models.Model):
-    """One matched applicant-program pair produced by the matching algorithm (not produced yet)."""
-
-    simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="matches")
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="matches")
-    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="matches")
-    students_rank_of_school = models.IntegerField(null=True, blank=True)
-    schools_rank_of_student = models.IntegerField(null=True, blank=True)
-
-    class Meta:
-        unique_together = ["student", "school"]
-
-    def __str__(self):
-        return f"Match: {self.student.name} - {self.school.name}"
+        return f"{self.run} {self.kind}"
