@@ -3,6 +3,8 @@
 import pytest
 from axe_playwright_python.sync_playwright import Axe
 
+from nrmps.guide import guide_pages
+
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
 
 PUBLIC = [
@@ -12,14 +14,8 @@ PUBLIC = [
     "/terms/",
     "/login/",
     "/signup/",
-    "/help/",
-    "/help/nrmp/",
-    "/help/model/",
-    "/help/results/",
-    "/help/parameters/",
-    "/help/csv/",
-    "/help/glossary/",
-    "/help/about/",
+    # Every page of the guide (plan step 4.7: a new page is checked without editing this list).
+    *(f"/help/{page.slug}/" if page.slug != "index" else "/help/" for page in guide_pages()),
     "/account/password/reset/",
     "/account/password/reset/sent/",
 ]
