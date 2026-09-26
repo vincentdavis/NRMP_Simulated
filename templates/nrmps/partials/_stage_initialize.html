@@ -19,7 +19,7 @@
         <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View List</a>
         <a class="btn btn-sm" href="{% url 'nrmps:simulation_download_interviews' pk=simulation.pk %}">Download CSV</a>
         <button class="btn btn-sm btn-primary"
-                hx-post="{% url 'nrmps:simulation_initialize_interviews' pk=simulation.pk %}"
+                hx-post="{% url 'nrmps:simulation_step' pk=simulation.pk step='initialize-interviews' %}"
                 hx-target="#stage-cards"
                 hx-swap="outerHTML"
                 hx-disabled-elt="this"

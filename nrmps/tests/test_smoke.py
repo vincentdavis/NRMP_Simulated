@@ -24,7 +24,6 @@ PUBLIC_PAGES = [
     "nrmps:documentation",
     "nrmps:login",
     "nrmps:signup",
-    "nrmps:account",
 ]
 
 
@@ -43,6 +42,15 @@ def test_runs_in_production_mode():
 def test_public_pages_render(client, name):
     """Every public page renders for an anonymous visitor."""
     assert client.get(reverse(name)).status_code == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("name", ["nrmps:account", "nrmps:simulation_list", "nrmps:simulation_create"])
+def test_private_pages_redirect_anonymous_visitors_to_login(client, name):
+    """LoginRequiredMiddleware protects every page that is not explicitly public (ENG-14)."""
+    response = client.get(reverse(name))
+    assert response.status_code == 302
+    assert response["Location"].startswith(reverse("nrmps:login"))
 
 
 @pytest.mark.django_db
@@ -107,12 +115,13 @@ def test_implemented_workflow_end_to_end(auth_client):
     assert client.post(manage, _config_post_data()).status_code == 302
 
     def step(name: str):
-        response = client.post(reverse(f"nrmps:{name}", kwargs={"pk": sim.pk}), headers={"hx-request": "true"})
+        url = reverse("nrmps:simulation_step", kwargs={"pk": sim.pk, "step": name})
+        response = client.post(url, headers={"hx-request": "true"})
         assert response.status_code == 200, name
         return response
 
-    step("simulation_create_students")
-    step("simulation_create_schools")
+    step("create-students")
+    step("create-schools")
     assert sim.students.count() == 20
     assert sim.schools.count() == 4
 
@@ -123,8 +132,8 @@ def test_implemented_workflow_end_to_end(auth_client):
         assert response.status_code == 200
         assert _body(response).startswith(b"name,")
 
-    step("simulation_initialize_interviews")
-    step("simulation_compute_pre_interview_all")
+    step("initialize-interviews")
+    step("compute-pre-interview")
     assert Interview.objects.filter(simulation=sim).count() == 80
     assert not Interview.objects.filter(simulation=sim, students_pre_rank_of_school__isnull=True).exists()
     assert not Interview.objects.filter(simulation=sim, schools_pre_rank_of_student__isnull=True).exists()

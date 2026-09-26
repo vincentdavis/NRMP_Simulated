@@ -4,7 +4,6 @@
   <div class="py-4 max-w-2xl">
     <h1 class="text-2xl font-bold mb-2">Account</h1>
     <p class="text-base-content/70 mb-6">Your account details.</p>
-    {% if request.user.is_authenticated %}
       <dl class="bg-base-200 rounded-box p-4 mb-6 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
         <dt class="font-medium">Username</dt><dd>{{ request.user.get_username }}</dd>
         <dt class="font-medium">Full name</dt><dd>{{ request.user.full_name|default:"—" }}</dd>
@@ -17,11 +16,5 @@
       <p class="text-sm text-base-content/70 mt-6">
         To delete your account and all its simulations, see the <a class="link" href="{% url 'nrmps:privacy' %}">privacy page</a>.
       </p>
-    {% else %}
-      <div role="alert" class="alert alert-info">
-        <span>You are not signed in. Please <a class="link" href="{% url 'nrmps:login' %}">log in</a> or
-          <a class="link" href="{% url 'nrmps:signup' %}">create an account</a>.</span>
-      </div>
-    {% endif %}
   </div>
 {% endblock %}

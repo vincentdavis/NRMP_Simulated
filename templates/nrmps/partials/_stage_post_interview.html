@@ -18,7 +18,7 @@
       </div>
       <div class="flex gap-2">
         <button class="btn btn-sm btn-primary"
-                hx-post="{% url 'nrmps:simulation_compute_post_interview_all' pk=simulation.pk %}"
+                hx-post="{% url 'nrmps:simulation_step' pk=simulation.pk step='compute-post-interview' %}"
                 hx-target="#stage-cards"
                 hx-swap="outerHTML"
                 hx-disabled-elt="this"

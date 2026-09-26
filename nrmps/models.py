@@ -7,6 +7,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
+from django.db.models.functions import Coalesce
 from scipy.stats import beta
 
 from .exceptions import MissingConfigError
@@ -112,6 +113,35 @@ class User(AbstractUser):
         return self.username
 
 
+class SimulationQuerySet(models.QuerySet):
+    """Queries for simulations."""
+
+    def owned_by(self, user) -> SimulationQuerySet:
+        """Return the simulations `user` owns (none for an anonymous user)."""
+        if not getattr(user, "is_authenticated", False):
+            return self.none()
+        return self.filter(owner=user)
+
+    def with_counts(self) -> SimulationQuerySet:
+        """Annotate n_students and n_schools with one subquery each (no join, no N+1)."""
+        return self.annotate(
+            n_students=_count_subquery(Student),
+            n_schools=_count_subquery(School),
+        )
+
+
+def _count_subquery(model):
+    """Return a subquery counting `model` rows of the outer simulation, 0 when there are none."""
+    rows = (
+        model.objects.filter(simulation=models.OuterRef("pk"))
+        .order_by()
+        .values("simulation")
+        .annotate(n=models.Count("*"))
+        .values("n")
+    )
+    return Coalesce(models.Subquery(rows), 0)
+
+
 class Simulation(models.Model):
     """Simulation model.
 
@@ -140,6 +170,8 @@ class Simulation(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=50, choices=SIMULATION_STAGES, default="setup")
+
+    objects = SimulationQuerySet.as_manager()
 
     def __str__(self):
         return self.name

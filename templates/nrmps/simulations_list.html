@@ -36,8 +36,8 @@
                 <div class="badge badge-outline badge-sm">No</div>
               {% endif %}
             </td>
-            <td>{{ sim.students.count }}</td>
-            <td>{{ sim.schools.count }}</td>
+            <td class="tabular-nums">{{ sim.n_students }}</td>
+            <td class="tabular-nums">{{ sim.n_schools }}</td>
             <td class="text-right">
               <div class="flex gap-2 justify-end">
                 <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_manage' pk=sim.pk %}">

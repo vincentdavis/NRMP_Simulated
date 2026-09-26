@@ -13,17 +13,19 @@ def _toast(response) -> dict:
     return json.loads(response.headers["HX-Trigger"])["toast"]
 
 
-def _post(client, sim, name):
-    return client.post(reverse(f"nrmps:{name}", kwargs={"pk": sim.pk}), headers={"hx-request": "true"})
+def _post(client, sim, step):
+    return client.post(
+        reverse("nrmps:simulation_step", kwargs={"pk": sim.pk, "step": step}), headers={"hx-request": "true"}
+    )
 
 
 def test_successful_step_sends_a_success_toast(auth_client, simulation):
-    response = _post(auth_client, simulation, "simulation_create_students")
+    response = _post(auth_client, simulation, "create-students")
     assert _toast(response) == {"level": "success", "text": "Created 20 students."}
 
 
 def test_failed_step_sends_an_error_toast(auth_client, populated_simulation):
-    response = _post(auth_client, populated_simulation, "simulation_compute_pre_interview_all")
+    response = _post(auth_client, populated_simulation, "compute-pre-interview")
     assert _toast(response) == {"level": "error", "text": "Initialize the interviews first."}
 
 

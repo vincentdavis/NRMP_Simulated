@@ -11,14 +11,16 @@ from nrmps.models import Interview, SimulationConfig
 pytestmark = pytest.mark.django_db
 
 
-def _post_step(client, sim, name):
+def _post_step(client, sim, step):
     """POST a step action as HTMX and return the response."""
-    return client.post(reverse(f"nrmps:{name}", kwargs={"pk": sim.pk}), headers={"hx-request": "true"})
+    return client.post(
+        reverse("nrmps:simulation_step", kwargs={"pk": sim.pk, "step": step}), headers={"hx-request": "true"}
+    )
 
 
 def test_step_response_refreshes_every_card_and_the_stepper(auth_client, populated_simulation):
     """A step returns all stage cards and an out-of-band stepper, so no panel goes stale (UX-5)."""
-    response = _post_step(auth_client, populated_simulation, "simulation_initialize_interviews")
+    response = _post_step(auth_client, populated_simulation, "initialize-interviews")
     body = response.content.decode()
     assert response.status_code == 200
     assert body.count('id="stage-cards"') == 1
@@ -31,31 +33,31 @@ def test_step_response_refreshes_every_card_and_the_stepper(auth_client, populat
 
 def test_recreating_applicants_updates_the_interview_card(auth_client, populated_simulation):
     """After a cascade delete the interview count shown is the real one (0), not the old one."""
-    _post_step(auth_client, populated_simulation, "simulation_initialize_interviews")
-    body = _post_step(auth_client, populated_simulation, "simulation_create_students").content.decode()
+    _post_step(auth_client, populated_simulation, "initialize-interviews")
+    body = _post_step(auth_client, populated_simulation, "create-students").content.decode()
     assert "<strong>Interviews:</strong> 0" in body
 
 
 def test_step_error_is_shown_in_its_card_with_status_200(auth_client, populated_simulation):
     """A problem the user can fix is shown in the card instead of an invisible 500 (SIM-4, ENG-16)."""
-    response = _post_step(auth_client, populated_simulation, "simulation_compute_pre_interview_all")
+    response = _post_step(auth_client, populated_simulation, "compute-pre-interview")
     assert response.status_code == 200
     assert b"Initialize the interviews first" in response.content
 
 
 def test_attribute_mismatch_is_shown_not_a_server_error(auth_client, populated_simulation):
-    _post_step(auth_client, populated_simulation, "simulation_initialize_interviews")
+    _post_step(auth_client, populated_simulation, "initialize-interviews")
     populated_simulation.schools.update(score_meta={"program_size": 0.5})
-    response = _post_step(auth_client, populated_simulation, "simulation_compute_pre_interview_all")
+    response = _post_step(auth_client, populated_simulation, "compute-pre-interview")
     assert response.status_code == 200
     assert b"regenerate both populations" in response.content
     assert not Interview.objects.filter(student_pre_observed_score_of_school__isnull=False).exists()
 
 
 def test_post_interview_step_explains_why_it_cannot_run(auth_client, populated_simulation):
-    _post_step(auth_client, populated_simulation, "simulation_initialize_interviews")
-    _post_step(auth_client, populated_simulation, "simulation_compute_pre_interview_all")
-    response = _post_step(auth_client, populated_simulation, "simulation_compute_post_interview_all")
+    _post_step(auth_client, populated_simulation, "initialize-interviews")
+    _post_step(auth_client, populated_simulation, "compute-pre-interview")
+    response = _post_step(auth_client, populated_simulation, "compute-post-interview")
     assert b"No interviews have taken place yet" in response.content
     populated_simulation.refresh_from_db()
     assert populated_simulation.status == "pre_interview"
@@ -74,9 +76,9 @@ def test_step_buttons_disable_themselves_and_are_synchronised(auth_client, popul
 def test_non_owner_cannot_run_steps(client, other_user, populated_simulation):
     client.force_login(other_user)
     for name in (
-        "simulation_create_students",
-        "simulation_initialize_interviews",
-        "simulation_compute_pre_interview_all",
+        "create-students",
+        "initialize-interviews",
+        "compute-pre-interview",
     ):
         assert _post_step(client, populated_simulation, name).status_code == 404
 
@@ -149,3 +151,16 @@ def test_next_step_button_is_enabled_once_its_prerequisite_is_reached(
     assert _button_disabled(body, "(re)Initialize Interviews") is not initialize
     assert _button_disabled(body, "Compute Pre-Interview All") is not pre_interview
     assert _button_disabled(body, "Compute Post-Interview All") is not post_interview
+
+
+def test_pagination_shows_totals_and_keeps_the_sort(auth_client, simulation):
+    """Numbered pages with "Showing a-b of N"; page links keep the other query parameters (UX-14)."""
+    simulation.configs.update(number_of_applicants=120)
+    simulation.create_students()
+    url = reverse("nrmps:simulation_students", kwargs={"pk": simulation.pk})
+    body = auth_client.get(url, {"sort": "score", "order": "desc", "page_size": 25}).content.decode()
+    assert "Showing 1\u201325 of 120" in body
+    assert 'aria-current="page">1</span>' in body
+    assert "?sort=score&amp;order=desc&amp;page_size=25&amp;page=2" in body
+    body = auth_client.get(url, {"sort": "score", "order": "desc", "page_size": 25, "page": 5}).content.decode()
+    assert "Showing 101\u2013120 of 120" in body

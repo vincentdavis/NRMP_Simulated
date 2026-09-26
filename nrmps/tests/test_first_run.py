@@ -83,8 +83,9 @@ def test_first_run_generates_populations_without_touching_the_configuration(auth
     """Right after creating a simulation, generating applicants and programs works with the defaults."""
     auth_client.post(reverse("nrmps:simulation_create"), {"name": "First", "description": "", "iterations": 1})
     sim = Simulation.objects.get(name="First")
-    for name in ("simulation_create_students", "simulation_create_schools"):
-        response = auth_client.post(reverse(f"nrmps:{name}", kwargs={"pk": sim.pk}), headers={"hx-request": "true"})
+    for step in ("create-students", "create-schools"):
+        url = reverse("nrmps:simulation_step", kwargs={"pk": sim.pk, "step": step})
+        response = auth_client.post(url, headers={"hx-request": "true"})
         assert response.status_code == 200
     assert sim.students.count() == 200
     assert sim.schools.count() == 10
@@ -103,7 +104,7 @@ def test_untouched_configuration_form_saves(auth_client):
 def test_missing_configuration_is_reported(auth_client, user):
     """A simulation without a configuration (created before this fix) explains what to do instead of doing nothing."""
     sim = Simulation.objects.create(owner=user, name="Legacy")
-    url = reverse("nrmps:simulation_create_students", kwargs={"pk": sim.pk})
+    url = reverse("nrmps:simulation_step", kwargs={"pk": sim.pk, "step": "create-students"})
     response = auth_client.post(url, headers={"hx-request": "true"})
     assert response.status_code == 200
     assert b"no configuration yet" in response.content
