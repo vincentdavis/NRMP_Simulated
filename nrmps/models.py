@@ -7,7 +7,7 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Lower
 from scipy.stats import beta
 
 from .exceptions import MissingConfigError
@@ -101,16 +101,35 @@ def _population_change(method):
 
 
 class User(AbstractUser):
-    """Custom user model extending Django's AbstractUser (which provides username, password and email)."""
+    """Custom user model extending Django's AbstractUser (which provides username, password and email).
+
+    Email addresses are unique ignoring case (empty addresses, from accounts created before email was required,
+    are exempt) and verified through a signed link.
+    """
 
     full_name = models.CharField(max_length=255, blank=True, default="")
+    email_verified_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the current email address was confirmed (empty: not confirmed)."
+    )
     disabled = models.BooleanField(default=False, null=True, blank=True)
     status = models.CharField(max_length=50, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            models.UniqueConstraint(
+                Lower("email"), condition=~models.Q(email=""), name="unique_user_email_ignoring_case"
+            ),
+        ]
+
     def __str__(self):
         return self.username
+
+    @property
+    def email_verified(self) -> bool:
+        """Return True if the current email address has been confirmed."""
+        return self.email_verified_at is not None
 
 
 class SimulationQuerySet(models.QuerySet):

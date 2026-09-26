@@ -1,0 +1,108 @@
+"""Account services: email verification links and the personal data export."""
+
+import io
+import json
+import tempfile
+import zipfile
+
+from django.conf import settings
+from django.core import signing
+from django.core.mail import send_mail
+from django.forms.models import model_to_dict
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.text import slugify
+
+from .models import Interview, User
+from .population_csv import COLUMNS, INTERVIEW_COLUMNS, csv_lines, plain_csv_lines
+
+VERIFY_SALT = "nrmps.accounts.verify-email"
+
+
+def verification_token(user: User) -> str:
+    """Return a signed token that confirms `user`'s current email address."""
+    return signing.dumps({"user": user.pk, "email": user.email}, salt=VERIFY_SALT)
+
+
+def verify_token(token: str) -> User | None:
+    """Mark the email address in a verification token as confirmed; return the user, or None if the token is bad.
+
+    A token is bad when its signature is wrong, it is older than PASSWORD_RESET_TIMEOUT, or the account's email has
+    changed since it was sent.
+    """
+    try:
+        data = signing.loads(token, salt=VERIFY_SALT, max_age=settings.PASSWORD_RESET_TIMEOUT)
+    except signing.BadSignature:
+        return None
+    user = User.objects.filter(pk=data.get("user"), is_active=True).first()
+    if user is None or not user.email or user.email != data.get("email"):
+        return None
+    if user.email_verified_at is None:
+        user.email_verified_at = timezone.now()
+        user.save(update_fields=["email_verified_at"])
+    return user
+
+
+def send_verification_email(request, user: User) -> None:
+    """Email `user` a link that confirms their address."""
+    link = request.build_absolute_uri(reverse("nrmps:verify_email", kwargs={"token": verification_token(user)}))
+    days = settings.PASSWORD_RESET_TIMEOUT // (24 * 60 * 60)
+    context = {"user": user, "link": link, "days": days}
+    send_mail(
+        subject="Confirm your email address for NRMP Simulations",
+        message=render_to_string("emails/verify_email.txt", context),
+        from_email=None,
+        recipient_list=[user.email],
+    )
+
+
+def export_user_data(user: User):
+    """Return a file object with a ZIP of everything stored for `user`, positioned at the start.
+
+    The archive holds account.json and, per simulation, simulation.json (fields and configuration), students.csv,
+    schools.csv (the upload format) and interviews.csv.
+    """
+    archive = tempfile.SpooledTemporaryFile(max_size=20 * 1024 * 1024)  # noqa: SIM115 (returned to the caller)
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        account = {
+            "username": user.username,
+            "full_name": user.full_name,
+            "email": user.email,
+            "email_verified_at": user.email_verified_at.isoformat() if user.email_verified_at else None,
+            "date_joined": user.date_joined.isoformat(),
+            "exported_at": timezone.now().isoformat(),
+        }
+        zf.writestr("account.json", json.dumps(account, indent=2))
+        for sim in user.simulations.order_by("id"):
+            folder = f"simulations/{sim.pk}-{slugify(sim.name) or 'simulation'}"
+            config = sim.configs.order_by("-id").first()
+            info = {
+                "name": sim.name,
+                "description": sim.description,
+                "iterations": sim.iterations,
+                "public": sim.public,
+                "stage": sim.status,
+                "created_at": sim.created_at.isoformat(),
+                "configuration": model_to_dict(config, exclude=["id", "simulation"]) if config else None,
+            }
+            zf.writestr(f"{folder}/simulation.json", json.dumps(info, indent=2))
+            for kind, queryset in (("students", sim.students), ("schools", sim.schools)):
+                records = queryset.order_by("id").values_list(*COLUMNS[kind]).iterator(chunk_size=2000)
+                _write_lines(zf, f"{folder}/{kind}.csv", csv_lines(kind, records))
+            rows = (
+                Interview.objects.filter(simulation=sim)
+                .order_by("id")
+                .values_list("student__name", "school__name", *INTERVIEW_COLUMNS)
+                .iterator(chunk_size=2000)
+            )
+            lines = plain_csv_lines(["student", "school", *INTERVIEW_COLUMNS], rows)
+            _write_lines(zf, f"{folder}/interviews.csv", lines)
+    archive.seek(0)
+    return archive
+
+
+def _write_lines(zf: zipfile.ZipFile, name: str, lines) -> None:
+    with zf.open(name, "w") as handle, io.TextIOWrapper(handle, encoding="utf-8", newline="") as text:
+        for line in lines:
+            text.write(line)

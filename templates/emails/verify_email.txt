@@ -1,0 +1,10 @@
+Hello {{ user.get_username }},
+
+Please confirm the email address for your NRMP Simulations account by opening this link:
+
+{{ link }}
+
+The link works for {{ days }} days. If you did not create an account or change your email address, you can ignore this
+message.
+
+NRMP Simulations

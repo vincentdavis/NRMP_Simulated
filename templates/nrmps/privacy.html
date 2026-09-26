@@ -11,8 +11,9 @@
     <section>
       <h2 class="text-lg font-semibold mb-2">What is stored</h2>
       <ul class="list-disc ml-6 space-y-1">
-        <li><strong>Your account:</strong> username, password (stored only as a salted hash), and the optional full
-          name and email address you give. Email addresses are not verified yet.</li>
+        <li><strong>Your account:</strong> username, password (stored only as a salted hash), email address (used only
+          to confirm your account and to reset your password; never shown to other users) and the optional full
+          name.</li>
         <li><strong>Your simulations:</strong> their names and descriptions, configurations, the applicant and program
           populations you generate or upload, and the computed ratings and rankings.</li>
         <li><strong>Uploads:</strong> CSV files are read in memory and not kept as files; only the rows they contain
@@ -48,9 +49,9 @@
       <h2 class="text-lg font-semibold mb-2">How long data is kept, and deleting it</h2>
       <p>
         Your data is kept until you delete it. Deleting a simulation deletes its configuration, populations and results.
-        To delete your account and everything in it,
-        {% if CONTACT_EMAIL %}email <a class="link" href="mailto:{{ CONTACT_EMAIL }}">{{ CONTACT_EMAIL }}</a>{% else %}contact the site operator through the <a class="link" href="{{ ISSUES_URL }}">issue tracker</a>{% endif %};
-        self-service account deletion and data export are planned.
+        On your account page you can download everything stored for your account as a ZIP file, and delete your
+        account together with all its simulations.
+        {% if CONTACT_EMAIL %}For anything else, email <a class="link" href="mailto:{{ CONTACT_EMAIL }}">{{ CONTACT_EMAIL }}</a>.{% endif %}
       </p>
     </section>
 

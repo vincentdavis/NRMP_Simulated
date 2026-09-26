@@ -1,20 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Account - NRMP Simulations{% endblock %}
 {% block content %}
-  <div class="py-4 max-w-2xl">
-    <h1 class="text-2xl font-bold mb-2">Account</h1>
-    <p class="text-base-content/70 mb-6">Your account details.</p>
-      <dl class="bg-base-200 rounded-box p-4 mb-6 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
-        <dt class="font-medium">Username</dt><dd>{{ request.user.get_username }}</dd>
-        <dt class="font-medium">Full name</dt><dd>{{ request.user.full_name|default:"—" }}</dd>
-        <dt class="font-medium">Email</dt><dd>{{ request.user.email|default:"—" }}</dd>
-      </dl>
-      <div class="flex flex-wrap gap-2">
-        <a class="btn btn-outline" href="{% url 'nrmps:password_change' %}">Change password</a>
-        <a class="btn btn-outline" href="{% url 'nrmps:simulation_list' %}">Your simulations</a>
-      </div>
-      <p class="text-sm text-base-content/70 mt-6">
-        To delete your account and all its simulations, see the <a class="link" href="{% url 'nrmps:privacy' %}">privacy page</a>.
-      </p>
+<div class="py-4 max-w-2xl space-y-6">
+  <h1 class="text-2xl font-bold">Account</h1>
+
+  {% if not user.email %}
+    <div role="alert" class="alert alert-warning">
+      <span>Your account has no email address, so you could not reset a forgotten password.
+        <a class="link" href="{% url 'nrmps:account_edit' %}">Add one</a>.</span>
+    </div>
+  {% elif not user.email_verified %}
+    <div role="alert" class="alert alert-info flex flex-wrap gap-2 justify-between">
+      <span>Please confirm your email address with the link we sent to {{ user.email }}.</span>
+      <form method="post" action="{% url 'nrmps:resend_verification' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm">Send a new link</button>
+      </form>
+    </div>
+  {% endif %}
+
+  <dl class="bg-base-200 rounded-box p-4 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
+    <dt class="font-medium">Username</dt><dd>{{ user.get_username }}</dd>
+    <dt class="font-medium">Full name</dt><dd>{{ user.full_name|default:"—" }}</dd>
+    <dt class="font-medium">Email</dt>
+    <dd class="break-all">
+      {{ user.email|default:"—" }}
+      {% if user.email %}
+        {% if user.email_verified %}<span class="badge badge-success badge-sm ml-1">confirmed</span>{% else %}<span class="badge badge-outline badge-sm ml-1">not confirmed</span>{% endif %}
+      {% endif %}
+    </dd>
+    <dt class="font-medium">Member since</dt><dd>{{ user.date_joined|date:"j F Y" }}</dd>
+  </dl>
+
+  <div class="flex flex-wrap gap-2">
+    <a class="btn btn-outline" href="{% url 'nrmps:account_edit' %}">Edit details</a>
+    <a class="btn btn-outline" href="{% url 'nrmps:password_change' %}">Change password</a>
+    <a class="btn btn-outline" href="{% url 'nrmps:account_export' %}">Download my data</a>
   </div>
+
+  <section class="border border-error rounded-box p-4">
+    <h2 class="font-semibold mb-2">Delete account</h2>
+    <p class="text-sm mb-3">Deletes your account and all your simulations. This cannot be undone; download your data first
+      if you want to keep it.</p>
+    <a class="btn btn-error btn-sm" href="{% url 'nrmps:account_delete' %}">Delete my account…</a>
+  </section>
+</div>
 {% endblock %}

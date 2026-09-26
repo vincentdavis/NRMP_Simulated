@@ -218,3 +218,27 @@ def csv_lines(kind: str, records: Iterable[tuple]) -> Iterator[str]:
                 json.dumps(meta_preference or {}, ensure_ascii=False),
             ]
         )
+
+
+# Columns of the interview-row export (after the student and school names).
+INTERVIEW_COLUMNS = [
+    "status",
+    "student_true_score_of_school",
+    "school_true_score_of_student",
+    "student_pre_observed_score_of_school",
+    "school_pre_observed_score_of_student",
+    "students_pre_rank_of_school",
+    "schools_pre_rank_of_student",
+    "student_post_observed_score_of_school",
+    "school_post_observed_score_of_student",
+    "students_post_rank_of_school",
+    "schools_post_rank_of_student",
+]
+
+
+def plain_csv_lines(header: list[str], rows: Iterable[Iterable]) -> Iterator[str]:
+    """Yield CSV lines (header first) for plain rows."""
+    writer = csv.writer(_Echo())
+    yield writer.writerow(header)
+    for row in rows:
+        yield writer.writerow(row)

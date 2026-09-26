@@ -1,4 +1,3 @@
-import csv
 import inspect
 import json
 import logging
@@ -6,7 +5,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from django.contrib import messages
-from django.contrib.auth import login
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.db import DatabaseError, connection, transaction
@@ -17,10 +15,10 @@ from django_htmx.http import trigger_client_event
 
 from . import models
 from .exceptions import SimulationError
-from .forms import SchoolsUploadForm, SignupForm, SimulationConfigForm, SimulationForm, StudentsUploadForm
+from .forms import SchoolsUploadForm, SimulationConfigForm, SimulationForm, StudentsUploadForm
 from .models import Interview, Simulation, SimulationConfig
 from .population_csv import COLUMNS as POPULATION_COLUMNS
-from .population_csv import csv_lines, parse_population_csv
+from .population_csv import INTERVIEW_COLUMNS, csv_lines, parse_population_csv, plain_csv_lines
 from .simulation_engine import (
     compute_post_interview_scores_and_rankings,
     compute_pre_interview_scores_and_rankings,
@@ -112,24 +110,9 @@ def _page_size(request) -> int:
     return size if size in PAGE_SIZES else 100
 
 
-class _Echo:
-    """A write-only file-like object that returns what it is given (for streaming CSV)."""
-
-    def write(self, value):
-        """Return the value instead of storing it."""
-        return value
-
-
 def _stream_csv(filename: str, header: list[str], rows) -> StreamingHttpResponse:
     """Return a CSV download that is generated row by row instead of built in memory."""
-    writer = csv.writer(_Echo())
-
-    def lines():
-        yield writer.writerow(header)
-        for row in rows:
-            yield writer.writerow(row)
-
-    response = StreamingHttpResponse(lines(), content_type="text/csv; charset=utf-8")
+    response = StreamingHttpResponse(plain_csv_lines(header, rows), content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
 
@@ -155,12 +138,6 @@ def index(request):
     return render(request, "nrmps/index.html")
 
 
-@require_GET
-def account(request):
-    """User account page; shows basic info if authenticated."""
-    return render(request, "nrmps/account.html")
-
-
 @login_not_required
 @require_GET
 def contact(request):
@@ -180,24 +157,6 @@ def privacy(request):
 def terms(request):
     """Terms of service page."""
     return render(request, "nrmps/terms.html")
-
-
-@login_not_required
-@require_http_methods(["GET", "POST"])
-def signup(request):
-    """Create a new user account.
-
-    On success, logs the user in and redirects to the index page.
-    """
-    if request.method == "POST":
-        form = SignupForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-            return redirect("nrmps:index")
-    else:
-        form = SignupForm()
-    return render(request, "nrmps/signup.html", {"form": form})
 
 
 @require_GET
@@ -482,21 +441,6 @@ def simulation_interviews(request, pk: int):
     return render(request, "nrmps/interviews_list.html", context)
 
 
-INTERVIEW_CSV_COLUMNS = [
-    "status",
-    "student_true_score_of_school",
-    "school_true_score_of_student",
-    "student_pre_observed_score_of_school",
-    "school_pre_observed_score_of_student",
-    "students_pre_rank_of_school",
-    "schools_pre_rank_of_student",
-    "student_post_observed_score_of_school",
-    "school_post_observed_score_of_student",
-    "students_post_rank_of_school",
-    "schools_post_rank_of_student",
-]
-
-
 @require_GET
 def simulation_download_interviews(request, pk: int):
     """Download the interview rows (scores and ranks for every applicant-program pair) as CSV."""
@@ -504,10 +448,10 @@ def simulation_download_interviews(request, pk: int):
     rows = (
         Interview.objects.filter(simulation=sim)
         .order_by("id")
-        .values_list("student__name", "school__name", *INTERVIEW_CSV_COLUMNS)
+        .values_list("student__name", "school__name", *INTERVIEW_COLUMNS)
         .iterator(chunk_size=2000)
     )
-    return _stream_csv(f"simulation_{sim.id}_interviews.csv", ["student", "school", *INTERVIEW_CSV_COLUMNS], rows)
+    return _stream_csv(f"simulation_{sim.id}_interviews.csv", ["student", "school", *INTERVIEW_COLUMNS], rows)
 
 
 @login_not_required

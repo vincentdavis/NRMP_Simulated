@@ -7,7 +7,17 @@ from nrmps import simulation_engine as se
 
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
 
-PUBLIC = ["/", "/contact/", "/privacy/", "/terms/", "/login/", "/signup/", "/documentation/"]
+PUBLIC = [
+    "/",
+    "/contact/",
+    "/privacy/",
+    "/terms/",
+    "/login/",
+    "/signup/",
+    "/documentation/",
+    "/account/password/reset/",
+    "/account/password/reset/sent/",
+]
 PRIVATE = [
     "/simulations/",
     "/simulations/new/",
@@ -16,6 +26,8 @@ PRIVATE = [
     "/simulations/{pk}/schools/",
     "/simulations/{pk}/interviews/",
     "/account/",
+    "/account/edit/",
+    "/account/delete/",
     "/account/password/",
 ]
 PHONE = {"width": 390, "height": 844}

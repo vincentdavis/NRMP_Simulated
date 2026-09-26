@@ -264,6 +264,32 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # request until background jobs exist, so this keeps every step well within the gunicorn timeout.
 NRMP_MAX_PAIRS = int(os.environ.get("NRMP_MAX_PAIRS", "250000"))
 
+# Email (Django 6.1 MAILERS): SMTP when EMAIL_HOST is set (any provider: Postmark, SendGrid, Mailgun, SES ...);
+# otherwise messages are written to the log, which is enough for development.
+_smtp_host = os.environ.get("EMAIL_HOST", "").strip()
+if _smtp_host:
+    MAILERS = {
+        "default": {
+            "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+            "OPTIONS": {
+                "host": _smtp_host,
+                "port": int(os.environ.get("EMAIL_PORT", "587")),
+                "username": os.environ.get("EMAIL_HOST_USER", ""),
+                "password": os.environ.get("EMAIL_HOST_PASSWORD", ""),
+                "use_tls": env_bool("EMAIL_USE_TLS", default=True),
+                "timeout": 10,
+            },
+        }
+    }
+else:
+    MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", "NRMP Simulations <noreply@nrmp-simulated.heteroskedastic.org>"
+)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# Email verification and password reset links stay valid for three days.
+PASSWORD_RESET_TIMEOUT = 3 * 24 * 60 * 60
+
 # Public contact details shown on the contact, privacy and terms pages. Without CONTACT_EMAIL only the issue tracker
 # is offered.
 CONTACT_EMAIL = os.environ.get("CONTACT_EMAIL", "").strip()

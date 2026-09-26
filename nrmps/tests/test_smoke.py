@@ -76,7 +76,8 @@ def test_https_redirect_is_on_in_production(client, settings):
 @pytest.mark.django_db
 def test_signup_login_logout(client):
     """A visitor can sign up, log out and log back in."""
-    response = client.post(reverse("nrmps:signup"), {"username": "bob", "password1": PASSWORD, "password2": PASSWORD})
+    data = {"username": "bob", "email": "bob@example.com", "password1": PASSWORD, "password2": PASSWORD}
+    response = client.post(reverse("nrmps:signup"), data)
     assert response.status_code == 302
     assert client.post(reverse("nrmps:logout")).status_code == 302
     response = client.post(reverse("nrmps:login"), {"username": "bob", "password": PASSWORD})

@@ -77,10 +77,15 @@ Once HTTPS is confirmed everywhere, raise `SECURE_HSTS_SECONDS` to `31536000`. S
 purpose, so their deploy-check warnings (`security.W005`, `security.W021`) are silenced in the settings; CI runs
 `manage.py check --deploy --fail-level WARNING`, so any other warning fails the build.
 
-## Email (*Planned*, step 1.9)
+## Email
 
-Verification and password-reset links will need outgoing email: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
-`EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` and `DEFAULT_FROM_EMAIL` for any SMTP provider.
+Email confirmation links and password-reset links need outgoing email. Set, for any SMTP provider (Postmark,
+SendGrid, Mailgun, SES…):
+- `EMAIL_HOST`, `EMAIL_PORT` (587), `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` (True);
+- `DEFAULT_FROM_EMAIL`, on a domain the provider may send for.
+
+Without `EMAIL_HOST`, emails are written to the log instead. Check delivery with
+`python manage.py sendtestemail you@example.com`.
 
 ## Background jobs, clean-up and operations (*Planned*, step 2.5)
 
