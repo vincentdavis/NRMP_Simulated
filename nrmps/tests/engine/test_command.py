@@ -1,4 +1,4 @@
-"""`manage.py nrmp_run`: the headless engine (plan step 2.2, CRIT-8)."""
+"""`manage.py nrmp_run`: the headless engine (plan steps 2.2 and 3.7, CRIT-8)."""
 
 import io
 import json
@@ -20,7 +20,7 @@ def test_same_seed_writes_identical_files(tmp_path):
     params.write_text(json.dumps({"market": {"n_applicants": 200}}))
     _run(params=params, seed=5, out=tmp_path / "a")
     _run(params=params, seed=5, out=tmp_path / "b")
-    for name in ("params.json", "population.npz", "results.npz"):
+    for name in ("params.json", "population.npz", "results.npz", "stages.npz"):
         assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes()
     record = json.loads((tmp_path / "a" / "metrics.json").read_text())
     assert record["seed"] == 5
@@ -41,6 +41,8 @@ def test_summary_output():
     text = _run(seed=1)
     assert text.startswith("Seed 1: 1,000 applicants, 142 programs, 926 positions")
     assert "agreement 0.6" in text
+    assert "applicants with a list matched" in text
+    assert "checks passed" in text
 
 
 def test_invalid_parameters_are_reported(tmp_path):

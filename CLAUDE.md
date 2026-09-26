@@ -71,6 +71,9 @@ uv run pytest
 
 # Browser tests (Playwright + axe; need the built CSS and `uv run playwright install chromium`)
 uv run pytest -m e2e
+
+# Validation report: the match engine against theory and an independent solver on random markets
+uv run python manage.py nrmp_validate --markets 500 --misreport-markets 100
 ```
 
 ### Docker Development
@@ -87,7 +90,7 @@ Deployment (Railway) is described in `docs/DEPLOY.md`.
 ## Architecture Overview
 
 A Django app that simulates the residency Match (NRMP) between applicants and residency programs, implementing
-model 2.0 (`docs/model_spec.md`). The interface says "applicant" and "program".
+model 2.1 (`docs/model_spec.md`). The interface says "applicant" and "program".
 
 ### Core Domain Models (`nrmps/models.py`)
 
@@ -99,13 +102,16 @@ model 2.0 (`docs/model_spec.md`). The interface says "applicant" and "program".
 - **SimulationRun**: one execution. Frozen parameters with the seed used, the parameter hash, version stamps (model,
   engine, schema, app, git SHA, numpy, Python), population source and digest, per-stage fingerprints, sizes, status,
   progress and the diagnostics (`metrics`). At most one queued or running run per simulation.
-- **StageRun**: one stage of a run (population, pre_interview) with its fingerprint, timing and counts.
-- **RunArtifact**: npz bytes of a run: the population, and the per-agent pre-interview results.
-- **Stage**: the eight pipeline stages; only population and pre_interview are implemented.
+- **StageRun**: one stage of a run with its fingerprint, timing and counts (or the error of the stage that failed).
+- **RunArtifact**: npz bytes of a run: the population, the per-agent pre-interview results, and the stage decisions
+  (`engine.persistence.StageRecord`: every application with its signal, invitation wave, interview, both list ranks,
+  and the match).
+- **Stage**: the eight pipeline stages, population to match; all are implemented.
 - **User**: custom user; email unique ignoring case, `email_verified_at` set by signed confirmation links.
 
-Pair-level values (utilities, observed scores, ranks) are never stored: `runs.RunData` recomputes them exactly from
-the stored population, the parameters and the seed.
+Continuous pair-level values (utilities, observed and post-interview views, ranks) are never stored:
+`runs.RunData` recomputes them exactly from the stored population, the parameters and the seed. Only decisions are
+stored.
 
 ### Modules
 
@@ -114,16 +120,20 @@ nrmps/
 ├── models.py             # domain models (above)
 ├── params.py             # SimulationParams: typed, versioned parameter schema (pydantic), the source of truth
 ├── params_forms.py       # Django forms and formsets generated from the schema (the parameter editor)
-├── engine/               # model 2.0, pure numpy, no Django: rng (streams, Philox), population, utility, rank,
-│                         #   metrics, pipeline (run_pre_interview), persistence (npz, digest)
-├── runs.py               # start_run / dispatch_run / execute_run, fingerprints, RunData (recomputed pair values)
+├── engine/               # model 2.1, pure numpy, no Django: rng (streams, Philox), population, utility, rank,
+│                         #   metrics, applications, signals, invitations, interviews, rol, match (deferred
+│                         #   acceptance), outcomes, validate (checks of every match), pipeline (run_pipeline),
+│                         #   persistence (npz, digest, StageRecord)
+├── runs.py               # start_run / dispatch_run / execute_run, fingerprints, RunData (recomputed pair values,
+│                         #   stage rows and totals, CSV rows)
+├── validation.py         # the validation report: random markets against theory and an independent solver
 ├── tasks.py              # django.tasks task that executes a run (immediate backend or django-tasks-db worker)
 ├── pipeline.py           # stage state machine for the stepper: done, stale (with the reason), running, planned ...
 ├── quotas.py             # per-account quotas (simulations, runs and pairs per day, verified email)
 ├── ratelimit.py          # rate limits counted in the database (sign-ups per IP, runs and uploads per account)
 ├── population_csv.py     # CSV format for population upload/download (one module for both directions)
 ├── views.py              # public pages, simulation list, the simulation page, runs and uploads (HTMX)
-├── run_views.py          # run page, applicants/programs lists, one agent's view, downloads
+├── run_views.py          # run page (match, funnel, checks, diagnostics), lists, one agent's stages, downloads
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
 ├── help_views.py         # /help/ (reference generated from the schema) and the staff-only developer reference
 ├── ops_views.py          # staff-only /ops/: runs per day, failures, durations, queue, workers, quota use
@@ -134,8 +144,9 @@ nrmps/
 ├── exceptions.py         # SimulationError and subclasses: problems shown to the user instead of a 500
 ├── security.py           # proxy-aware client IP (django-axes)
 ├── admin.py              # admin registrations (runs and artifacts read-only)
-├── management/commands/  # nrmp_run (the engine headless), seed_demo, nrmp_worker (queued runs), nrmp_cleanup
-└── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link)
+├── management/commands/  # nrmp_run (the engine headless), nrmp_validate (validation report), seed_demo,
+│                         #   nrmp_worker (queued runs), nrmp_cleanup
+└── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link), format_tags (percent)
 templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/, help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
 static/js/site.js         # toasts, confirmation dialog, HTMX error handling, theme toggle, list editors
@@ -185,10 +196,12 @@ The project is being reworked according to a review and phased plan:
 - `docs/IMPLEMENTATION_STATUS.md`: what has been done so far, step by step, and open owner decisions.
 - `docs/review/`: appendices (model spec draft, stage spec, parameters, UX, visualization, help, engineering) and
   `FINDINGS.md`, the register of every finding (IDs such as SIM-1 or ENG-3) with evidence and recommendations.
-- `docs/model_spec.md`: the normative model 2.0 specification that the Phase 2 engine implements.
+- `docs/model_spec.md`: the normative model 2.1 specification that the engine implements.
+- `docs/VALIDATION.md`: the validation report (`manage.py nrmp_validate`).
 
-The Phase 2 engine implements the stages up to the pre-interview rankings. Build the remaining stages (applications,
-signals, invitations, interviews, rank order lists, the match) in `nrmps/engine/` on the same rules: every random draw
-comes from its own stream (`engine/rng.py`, model_spec.md §12.1), pair-level draws use the counter-based Philox
-generator, and `nrmps/engine/` and `nrmps/params.py` are type-checked strictly. `TODO.md` and `IDEAS.md` predate
-the plan; Appendix H of the review says what happens to each item.
+The engine implements every stage of the single-applicant Match, from the population to deferred acceptance, and
+every run stores its checks (`outcomes.checks`: blocking pairs, capacity, list rules; all 0). New features (replicates,
+couples, SOAP, charts) follow the same rules: every random draw comes from its own stream (`engine/rng.py`,
+model_spec.md §12.1), pair-level draws use the counter-based Philox generator, and `nrmps/engine/` and
+`nrmps/params.py` are type-checked strictly. `TODO.md` and `IDEAS.md` predate the plan; Appendix H of the review says
+what happens to each item.

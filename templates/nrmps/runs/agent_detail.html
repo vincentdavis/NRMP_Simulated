@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load list_tags %}
+{% load list_tags humanize %}
 {% block title %}{{ name }} - run {{ run.number }} - {{ simulation.name }}{% endblock %}
 {% block content %}
 <div class="mt-4">
@@ -10,56 +10,165 @@
       All {% if applicant %}applicants{% else %}programs{% endif %}
     </a>
   </div>
-  <p class="text-sm text-base-content/70 mb-4">
-    {% if applicant %}
-      How this applicant sees every program before interviews (true utility, the noisy pre-interview view and the
-      rankings they give), and how each program sees this applicant.
-    {% else %}
-      How this program sees every applicant before interviews (true utility, the noisy pre-interview view and the
-      rankings they give), and how each applicant sees this program.
-    {% endif %}
-    Rank 1 is the favourite. Utilities are in SD units.
-    {% if not has_their_ranks %}The other side's ranks are not shown: this market is too large to recompute them for a page.{% endif %}
-  </p>
-  {% include "nrmps/components/page_size.html" %}
-  <div class="overflow-x-auto">
-    <table class="table table-zebra table-sm">
-      <thead>
-        <tr>
-          {% sort_th "index" "#" "right" %}
-          {% sort_th "name" "Name" %}
-          <th scope="col" class="text-right">True utility</th>
-          <th scope="col" class="text-right">Pre-interview view</th>
-          {% sort_th "true_rank" "True rank" "right" %}
-          {% sort_th "pre_rank" "Pre-interview rank" "right" %}
-          <th scope="col" class="text-right">Their true utility</th>
-          <th scope="col" class="text-right">Their pre-interview view</th>
-          {% if has_their_ranks %}
-            {% sort_th "their_true_rank" "Their true rank of it" "right" %}
-            {% sort_th "their_pre_rank" "Their pre-interview rank of it" "right" %}
+
+  {% if journey %}
+    <section class="card bg-base-100 shadow-xl mb-4" aria-labelledby="journey-title">
+      <div class="card-body">
+        <h2 id="journey-title" class="card-title">In the match</h2>
+        {% if applicant %}
+          <p>
+            Applied to {{ journey.applied|intcomma }} program{{ journey.applied|pluralize }}{% if journey.signals %},
+            {{ journey.signals|intcomma }} with a signal{% endif %}; invited by {{ journey.invited|intcomma }}{% if journey.declined %}
+            (declined {{ journey.declined|intcomma }}){% endif %}; interviewed at {{ journey.interviewed|intcomma }};
+            ranked {{ journey.ranked|intcomma }}.
+          </p>
+          <p class="font-medium">
+            {% for match in journey.matched %}
+              Matched to <a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=match.number %}">{{ match.name }}</a>,
+              the applicant's {{ match.list_rank|ordinal }} choice (the program ranked them {{ match.their_list_rank|ordinal }}).
+            {% empty %}
+              {% if journey.ranked %}Not matched.{% else %}Not in the match: without an interview there is no rank order list.{% endif %}
+            {% endfor %}
+          </p>
+        {% else %}
+          <p>
+            {{ journey.applied|intcomma }} application{{ journey.applied|pluralize }}{% if journey.signals %},
+            {{ journey.signals|intcomma }} with a signal{% endif %}; invited {{ journey.invited|intcomma }}
+            applicant{{ journey.invited|pluralize }}, of whom {{ journey.interviewed|intcomma }} interviewed; ranked
+            {{ journey.ranked|intcomma }}.
+          </p>
+          <p class="font-medium">
+            Filled {{ journey.matched|length|intcomma }} of {{ journey.positions|intcomma }} position{{ journey.positions|pluralize }}{% if journey.matched %}:{% else %}.{% endif %}
+          </p>
+          {% if journey.matched %}
+            <details class="collapse collapse-arrow bg-base-200"{% if journey.matched|length <= 10 %} open{% endif %}>
+              <summary class="collapse-title font-medium">The matched applicants, where the program ranked them and where they ranked the program</summary>
+              <ul class="collapse-content list-disc ms-6 sm:columns-2 xl:columns-3">
+                {% for match in journey.matched %}
+                  <li>
+                    <a class="link" href="{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=match.number %}">{{ match.name }}</a>:
+                    {{ match.list_rank|ordinal }}; ranked the program {{ match.their_list_rank|ordinal }}
+                  </li>
+                {% endfor %}
+              </ul>
+            </details>
           {% endif %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
+        {% endif %}
+      </div>
+    </section>
+    <nav class="tabs tabs-box mb-4 w-fit" aria-label="Tables">
+      <a class="tab{% if view == 'stages' %} tab-active{% else %} text-base-content{% endif %}" href="{% querystring view=None sort=None order=None page=None %}"{% if view == 'stages' %} aria-current="page"{% endif %}>
+        {% if applicant %}Applications{% else %}Applications received{% endif %} ({{ journey.applied|intcomma }})
+      </a>
+      <a class="tab{% if view == 'pre' %} tab-active{% else %} text-base-content{% endif %}" href="{% querystring view='pre' sort=None order=None page=None %}"{% if view == 'pre' %} aria-current="page"{% endif %}>
+        Before interviews: every {% if applicant %}program{% else %}applicant{% endif %} ({{ n_targets|intcomma }})
+      </a>
+    </nav>
+  {% endif %}
+
+  {% if view == "stages" %}
+    <p class="text-sm text-base-content/70 mb-4">
+      {% if applicant %}
+        Every program this applicant applied to: the signal they sent, the program's interview invitation (and its
+        wave), whether the interview took place, both sides' views after the interview and where each side put the
+        other on its rank order list.
+      {% else %}
+        Every applicant who applied to this program: the signal they sent, the program's interview invitation (and its
+        wave), whether the interview took place, both sides' views after the interview and where each side put the
+        other on its rank order list.
+      {% endif %}
+      Rank 1 is the favourite; utilities are in SD units. <em>Declined</em> means the applicant turned the invitation
+      down or had reached their interview cap.
+    </p>
+    {% include "nrmps/components/page_size.html" %}
+    <div class="overflow-x-auto">
+      <table class="table table-zebra table-sm">
+        <thead>
           <tr>
-            <td class="text-right tabular-nums">{{ row.number }}</td>
-            <td class="whitespace-nowrap"><a class="link" href="{% if applicant %}{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.number %}{% else %}{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.number %}{% endif %}">{{ row.name }}</a></td>
-            <td class="text-right tabular-nums">{{ row.true|floatformat:3 }}</td>
-            <td class="text-right tabular-nums">{{ row.observed|floatformat:3 }}</td>
-            <td class="text-right tabular-nums">{{ row.true_rank }}</td>
-            <td class="text-right tabular-nums">{{ row.pre_rank }}</td>
-            <td class="text-right tabular-nums">{{ row.their_true|floatformat:3 }}</td>
-            <td class="text-right tabular-nums">{{ row.their_observed|floatformat:3 }}</td>
+            {% sort_th "index" "#" "right" %}
+            {% sort_th "name" "Name" %}
+            {% sort_th "pre_rank" "Pre-interview rank" "right" %}
+            <th scope="col">{% if applicant %}Signal sent{% else %}Signal received{% endif %}</th>
+            <th scope="col">Invited</th>
+            <th scope="col">Interview</th>
+            <th scope="col" class="text-right">Post-interview view</th>
+            <th scope="col" class="text-right">Their post-interview view</th>
+            {% sort_th "list_rank" "List rank" "right" %}
+            {% sort_th "their_list_rank" "Their list rank of it" "right" %}
+            <th scope="col">Match</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr{% if row.matched %} class="font-semibold"{% endif %}>
+              <td class="text-right tabular-nums">{{ row.number }}</td>
+              <td class="whitespace-nowrap"><a class="link" href="{% if applicant %}{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.number %}{% else %}{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.number %}{% endif %}">{{ row.name }}</a></td>
+              <td class="text-right tabular-nums">{{ row.pre_rank|intcomma }}</td>
+              <td>{{ row.signal }}</td>
+              <td class="whitespace-nowrap">{% if row.wave %}Wave {{ row.wave }}{% else %}<span class="text-base-content/70">No</span>{% endif %}</td>
+              <td>{% if row.interviewed %}Yes{% elif row.wave %}<span class="text-base-content/70">Declined</span>{% endif %}</td>
+              <td class="text-right tabular-nums">{{ row.post|floatformat:3 }}</td>
+              <td class="text-right tabular-nums">{{ row.their_post|floatformat:3 }}</td>
+              <td class="text-right tabular-nums">{{ row.list_rank|default_if_none:"" }}</td>
+              <td class="text-right tabular-nums">{{ row.their_list_rank|default_if_none:"" }}</td>
+              <td>{% if row.matched %}<span class="badge badge-success badge-sm">Matched</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-sm text-base-content/70 mb-4">
+      {% if applicant %}
+        How this applicant sees every program before interviews (true utility, the noisy pre-interview view and the
+        rankings they give), and how each program sees this applicant.
+      {% else %}
+        How this program sees every applicant before interviews (true utility, the noisy pre-interview view and the
+        rankings they give), and how each applicant sees this program.
+      {% endif %}
+      Rank 1 is the favourite. Utilities are in SD units.
+      {% if not has_their_ranks %}The other side's ranks are not shown: this market is too large to recompute them for a page.{% endif %}
+    </p>
+    {% include "nrmps/components/page_size.html" %}
+    <div class="overflow-x-auto">
+      <table class="table table-zebra table-sm">
+        <thead>
+          <tr>
+            {% sort_th "index" "#" "right" %}
+            {% sort_th "name" "Name" %}
+            <th scope="col" class="text-right">True utility</th>
+            <th scope="col" class="text-right">Pre-interview view</th>
+            {% sort_th "true_rank" "True rank" "right" %}
+            {% sort_th "pre_rank" "Pre-interview rank" "right" %}
+            <th scope="col" class="text-right">Their true utility</th>
+            <th scope="col" class="text-right">Their pre-interview view</th>
             {% if has_their_ranks %}
-              <td class="text-right tabular-nums">{{ row.their_true_rank }}</td>
-              <td class="text-right tabular-nums">{{ row.their_pre_rank }}</td>
+              {% sort_th "their_true_rank" "Their true rank of it" "right" %}
+              {% sort_th "their_pre_rank" "Their pre-interview rank of it" "right" %}
             {% endif %}
           </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <td class="text-right tabular-nums">{{ row.number }}</td>
+              <td class="whitespace-nowrap"><a class="link" href="{% if applicant %}{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.number %}{% else %}{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.number %}{% endif %}">{{ row.name }}</a></td>
+              <td class="text-right tabular-nums">{{ row.true|floatformat:3 }}</td>
+              <td class="text-right tabular-nums">{{ row.observed|floatformat:3 }}</td>
+              <td class="text-right tabular-nums">{{ row.true_rank }}</td>
+              <td class="text-right tabular-nums">{{ row.pre_rank }}</td>
+              <td class="text-right tabular-nums">{{ row.their_true|floatformat:3 }}</td>
+              <td class="text-right tabular-nums">{{ row.their_observed|floatformat:3 }}</td>
+              {% if has_their_ranks %}
+                <td class="text-right tabular-nums">{{ row.their_true_rank }}</td>
+                <td class="text-right tabular-nums">{{ row.their_pre_rank }}</td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
   {% include "nrmps/components/pagination.html" with label="Pages" %}
 </div>
 {% endblock %}

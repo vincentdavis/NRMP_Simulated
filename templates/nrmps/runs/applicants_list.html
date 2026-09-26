@@ -14,7 +14,9 @@
   <p class="text-sm text-base-content/70 mb-4">
     Strength and attributes are on the model's z-scale (0 = average, 1 = one standard deviation above); the
     percentile is the applicant's strength rank among all applicants. Weights are how much each applicant values each
-    program attribute. <em>First choice</em> is the program the applicant would rank first before interviews;
+    program attribute.{% if has_stages %} <em>Applications</em> and <em>interviews</em> count the programs the applicant
+    applied to and interviewed at; <em>matched to</em> is the program of the match and where the applicant ranked
+    it.{% endif %} <em>First choice</em> is the program the applicant would rank first before interviews;
     <em>fidelity</em> is the rank correlation between the applicant's true and pre-interview orderings of programs.
   </p>
   {% include "nrmps/components/page_size.html" %}
@@ -27,6 +29,11 @@
           {% sort_th "group" "Group" %}
           {% sort_th "strength" "Strength" "right" %}
           <th scope="col" class="text-right">Percentile</th>
+          {% if has_stages %}
+            {% sort_th "applications" "Applications" "right" %}
+            {% sort_th "interviews" "Interviews" "right" %}
+            {% sort_th "match" "Matched to" %}
+          {% endif %}
           <th scope="col">Attributes</th>
           <th scope="col">Weights</th>
           <th scope="col">First choice</th>
@@ -42,6 +49,20 @@
             <td>{{ row.group }}</td>
             <td class="text-right tabular-nums">{{ row.strength|floatformat:3 }}</td>
             <td class="text-right tabular-nums">{{ row.percentile|floatformat:0 }}</td>
+            {% if has_stages %}
+              <td class="text-right tabular-nums">{{ row.applications|intcomma }}</td>
+              <td class="text-right tabular-nums">{{ row.interviews|intcomma }}</td>
+              <td class="whitespace-nowrap">
+                {% if row.match %}
+                  <a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.match %}">{{ row.match_name }}</a>
+                  <span class="text-base-content/70">({{ row.match_rank|ordinal }} choice)</span>
+                {% elif row.list_length %}
+                  <span class="text-base-content/70">Unmatched</span>
+                {% else %}
+                  <span class="text-base-content/70">No list</span>
+                {% endif %}
+              </td>
+            {% endif %}
             <td>{% include "nrmps/components/chips.html" with items=row.attributes places=2 %}</td>
             <td>{% include "nrmps/components/chips.html" with items=row.weights places=2 %}</td>
             <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.first_choice %}">{{ row.first_choice_name }}</a></td>

@@ -7,6 +7,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.db import DatabaseError, connection, transaction
+from django.db.models import F
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -174,7 +175,9 @@ def manage_context(request: HttpRequest, sim: Simulation, **overrides) -> dict:
         "background": settings.TASK_BACKEND == "database",
         "active_run": sim.active_run(),
         "latest_run": sim.latest_run(),
-        "recent_runs": sim.runs.defer("params", "metrics", "fingerprints")[:RECENT_RUNS],
+        "recent_runs": sim.runs.defer("params", "metrics", "fingerprints").annotate(
+            match_rate=F("metrics__outcomes__match__match_rate")
+        )[:RECENT_RUNS],
         "max_upload_mb": MAX_UPLOAD_BYTES // (1024 * 1024),
         "max_upload_rows": MAX_UPLOAD_ROWS,
         "upload_errors": {},

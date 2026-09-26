@@ -186,8 +186,8 @@ class StageRecord:
     invite_wave: NDArray[np.int8]
     eligible: NDArray[np.bool_]
     accepted: NDArray[np.bool_]
-    applicant_rank: NDArray[np.int16]
-    program_rank: NDArray[np.int16]
+    applicant_rank: NDArray[np.int16]  # at most 300
+    program_rank: NDArray[np.int32]  # program lists have no length limit
     # Per applicant.
     count: NDArray[np.int32]
     competitiveness: NDArray[np.float64]
@@ -195,7 +195,7 @@ class StageRecord:
     certified: NDArray[np.bool_]
     match_program: NDArray[np.int32]
     match_applicant_rank: NDArray[np.int16]
-    match_program_rank: NDArray[np.int16]
+    match_program_rank: NDArray[np.int32]
     alternative: NDArray[np.int32] | None
     # Per program.
     prestige: NDArray[np.float64]
@@ -216,14 +216,14 @@ STAGE_DTYPES = {
     "eligible": "?",
     "accepted": "?",
     "applicant_rank": "<i2",
-    "program_rank": "<i2",
+    "program_rank": "<i4",
     "count": "<i4",
     "competitiveness": "<f8",
     "standing": "<f8",
     "certified": "?",
     "match_program": "<i4",
     "match_applicant_rank": "<i2",
-    "match_program_rank": "<i2",
+    "match_program_rank": "<i4",
     "alternative": "<i4",
     "prestige": "<f8",
     "program_uses_signals": "?",
@@ -248,14 +248,14 @@ def stage_record(result: PipelineResult) -> StageRecord:
         eligible=invitations.eligible,
         accepted=invitations.accepted,
         applicant_rank=lists.applicant_rank.astype(np.int16),
-        program_rank=lists.program_rank.astype(np.int16),
+        program_rank=lists.program_rank.astype(np.int32),
         count=applications.count,
         competitiveness=applications.competitiveness,
         standing=applications.standing,
         certified=lists.certified,
         match_program=match.program,
         match_applicant_rank=match.applicant_list_rank.astype(np.int16),
-        match_program_rank=match.program_list_rank.astype(np.int16),
+        match_program_rank=match.program_list_rank.astype(np.int32),
         alternative=match.alternative,
         prestige=applications.prestige,
         program_uses_signals=signals.program_uses,

@@ -1,12 +1,16 @@
-"""The simulation page, runs started from it and the run pages (plan steps 2.3 and 2.4)."""
+"""The simulation page, runs started from it and the run pages (plan steps 2.3, 2.4 and 3.7)."""
 
+import csv
+import io
 import json
 
+import numpy as np
 import pytest
 from django.urls import reverse
 
 from nrmps.engine import ENGINE_VERSION, MODEL_VERSION
-from nrmps.models import Simulation, SimulationRun
+from nrmps.engine.pipeline import run_pipeline
+from nrmps.models import RunArtifact, Simulation, SimulationRun
 from nrmps.params import SimulationParams, load_params
 from nrmps.params_forms import post_data
 
@@ -152,7 +156,22 @@ def test_run_page_shows_versions_stages_and_diagnostics(auth_client, finished_ru
 
 
 @pytest.mark.parametrize("name", ["run_applicants", "run_programs"])
-@pytest.mark.parametrize("sort", ["index", "name", "strength", "quality", "fidelity", "popularity", "bogus"])
+@pytest.mark.parametrize(
+    "sort",
+    [
+        "index",
+        "name",
+        "strength",
+        "quality",
+        "fidelity",
+        "popularity",
+        "applications",
+        "interviews",
+        "match",
+        "fill",
+        "x",
+    ],
+)
 def test_agent_lists_sort_and_paginate(auth_client, finished_run, name, sort):
     response = auth_client.get(_run_url(finished_run, name), {"sort": sort, "order": "desc", "page_size": 25})
     assert response.status_code == 200
@@ -185,16 +204,139 @@ def test_agent_pages_show_both_sides(auth_client, finished_run, name, last):
 
 def test_agent_pages_leave_out_the_other_sides_ranks_for_large_markets(auth_client, finished_run, settings):
     settings.NRMP_DRILLDOWN_MAX_PAIRS = 100
-    response = auth_client.get(_run_url(finished_run, "run_applicant", index=1))
+    response = auth_client.get(_run_url(finished_run, "run_applicant", index=1), {"view": "pre"})
     assert not response.context["has_their_ranks"]
     assert "too large to recompute them" in response.content.decode()
     assert auth_client.get(_run_url(finished_run, "run_download", name="pairs.csv")).status_code == 404
 
 
+def test_run_page_shows_the_match_the_funnel_and_the_checks(auth_client, finished_run):
+    body = auth_client.get(_run_url(finished_run)).content.decode()
+    match = finished_run.metrics["outcomes"]["match"]
+    for text in (
+        "The match",
+        "Match rate",
+        f"{match['match_rate'] * 100:.1f}%",
+        f"{match['matched']} of {match['certified']} applicants with a rank order list",
+        "Where matched applicants had ranked their program",
+        "How this match was checked",
+        "Blocking pairs: an applicant and a program",
+        "From applications to rank order lists",
+        "No signals were sent",
+        "Who matched",
+        "By strength decile",
+        "Rank order lists",
+        "applicant list entries",  # stage counts in words
+        "The match: every applicant's result (CSV)",
+    ):
+        assert text in body, text
+    assert "Passed" in body
+
+
+def test_run_summaries_show_the_match_rate(auth_client, finished_run, simulation, user):
+    from nrmps.runs import run_now
+
+    run_now(simulation, user)
+    body = auth_client.get(_manage(simulation)).content.decode()
+    rate = f"{finished_run.metrics['outcomes']['match']['match_rate'] * 100:.1f}%"
+    assert "Positions filled" in body
+    assert body.count(rate) >= 3  # the latest run's summary and both rows of the recent runs
+
+
+def test_lists_show_each_agents_stages_and_match(auth_client, finished_run):
+    response = auth_client.get(_run_url(finished_run, "run_applicants"), {"sort": "match"})
+    body = response.content.decode()
+    assert "Matched to" in body
+    assert "choice)" in body
+    first = response.context["rows"][0]
+    assert first["match_rank"] == 1
+    assert first["applications"] >= first["interviews"]
+    programs = auth_client.get(_run_url(finished_run, "run_programs"), {"sort": "fill"})
+    rows = programs.context["rows"]
+    assert all(row["filled"] <= row["capacity"] for row in rows)
+    assert sum(row["filled"] for row in rows) == finished_run.metrics["outcomes"]["match"]["matched"]
+
+
+def test_an_applicants_page_follows_them_through_the_stages(auth_client, finished_run):
+    record = RunArtifact.objects.get(run=finished_run, kind=RunArtifact.Kind.STAGES)
+    assert record.size > 0
+    matched = next(row for row in _match_rows(auth_client, finished_run) if row["matched_program"])
+    index = int(matched["applicant"].rsplit(" ", 1)[-1])
+    response = auth_client.get(_run_url(finished_run, "run_applicant", index=index))
+    body = response.content.decode()
+    assert response.context["view"] == "stages"
+    assert "In the match" in body
+    assert 'Matched to <a class="link"' in body
+    assert matched["matched_program"] in body
+    rows = response.context["rows"]
+    assert len(rows) == int(matched["applications"])
+    assert [row["list_rank"] for row in rows[: int(matched["list_length"])]] == list(
+        range(1, int(matched["list_length"]) + 1)
+    )
+    assert sum(row["matched"] for row in rows) == 1
+    assert sum(row["interviewed"] for row in rows) == int(matched["interviews"])
+    pre = auth_client.get(_run_url(finished_run, "run_applicant", index=index), {"view": "pre"})
+    assert pre.context["view"] == "pre"
+    assert len(pre.context["rows"]) == finished_run.n_programs
+
+
+def test_a_programs_page_lists_its_applicants_and_the_positions_filled(auth_client, finished_run):
+    response = auth_client.get(_run_url(finished_run, "run_program", index=1), {"sort": "their_list_rank"})
+    body = response.content.decode()
+    journey = response.context["journey"]
+    assert f"Filled {len(journey['matched'])} of {journey['positions']} position" in body
+    assert "Applications received" in body
+    assert "Signal received" in body
+    assert len(response.context["rows"]) == min(journey["applied"], 100)
+
+
+def _match_rows(auth_client, run) -> list[dict[str, str]]:
+    body = _body(auth_client.get(_run_url(run, "run_download", name="match.csv")))
+    return list(csv.DictReader(io.StringIO(body)))
+
+
+def test_stage_downloads_agree_with_the_engine(auth_client, finished_run):
+    result = run_pipeline(load_params(SMALL_PARAMS), 12345)
+    body = _body(auth_client.get(_run_url(finished_run, "run_download", name="applications.csv")))
+    rows = list(csv.DictReader(io.StringIO(body)))
+    assert len(rows) == result.applications.size
+    assert [float(row["applicant_pre_interview_view"]) for row in rows] == result.applications.observed.tolist()
+    post = [float(row["applicant_post_interview_view"] or "nan") for row in rows]
+    assert np.array_equal(post, result.interviews.applicant_post, equal_nan=True)
+    program_post = [float(row["program_post_interview_view"] or "nan") for row in rows]
+    assert np.array_equal(program_post, result.interviews.program_post, equal_nan=True)
+    assert sum(int(row["matched"]) for row in rows) == int((result.match.program >= 0).sum())
+    assert {row["interviewed"] for row in rows if row["applicant_list_rank"]} == {"1"}
+    matches = _match_rows(auth_client, finished_run)
+    assert len(matches) == 60
+    assert sum(1 for row in matches if row["matched_program"]) == int((result.match.program >= 0).sum())
+    assert {row["program_if_the_other_side_proposes"] for row in matches} == {""}  # compare_both is off
+    programs = _body(auth_client.get(_run_url(finished_run, "run_download", name="program_results.csv")))
+    program_rows = list(csv.DictReader(io.StringIO(programs)))
+    assert [int(row["filled"]) for row in program_rows] == result.match.filled.tolist()
+
+
+def test_runs_from_before_the_match_still_open(auth_client, finished_run):
+    finished_run.artifacts.filter(kind=RunArtifact.Kind.STAGES).delete()
+    metrics = dict(finished_run.metrics)
+    del metrics["outcomes"]
+    SimulationRun.objects.filter(pk=finished_run.pk).update(metrics=metrics)
+    body = auth_client.get(_run_url(finished_run)).content.decode()
+    assert "The match" not in body
+    assert "Before interviews" in body
+    applicants = auth_client.get(_run_url(finished_run, "run_applicants"))
+    assert not applicants.context["has_stages"]
+    assert "Matched to" not in applicants.content.decode()
+    page = auth_client.get(_run_url(finished_run, "run_applicant", index=1))
+    assert page.context["view"] == "pre"
+    assert "In the match" not in page.content.decode()
+    assert auth_client.get(_run_url(finished_run, "run_download", name="match.csv")).status_code == 404
+
+
 def test_run_pages_of_a_failed_run(auth_client, simulation, user, monkeypatch):
     from nrmps.runs import run_now
 
-    monkeypatch.setattr("nrmps.runs.run_pre_interview", lambda *a, **k: (_ for _ in ()).throw(ValueError("No luck.")))
+    monkeypatch.setattr("nrmps.runs.run_pipeline", lambda *a, **k: (_ for _ in ()).throw(ValueError("No luck.")))
     run = run_now(simulation, user)
     body = auth_client.get(_run_url(run)).content.decode()
     assert "This run failed: No luck." in body

@@ -253,17 +253,21 @@ For each accepted interview:
   the list). Programs rank the applicants they interviewed by $\tilde v_{ji}$, plus the signal boost when
   `signals.use_in_ranking` is on and the program uses signals, keeping, by `rol.program_policy`: `all_interviewed`
   all; `dnr_quantile` the best $\max(1,\lceil n(1-q)-10^{-9}\rceil)$ of $n$ ($q$ = `program_dnr_quantile`); `dnr_threshold`
-  those with $\tilde v_{ji}\ge$ `reservation_utility`. Lists are at most 300 long. Applicants with a non-empty list are
-  *certified* and take part in the match.
+  those with $\tilde v_{ji}\ge$ `reservation_utility`. Applicant lists are at most 300 long (the NRMP's limit);
+  program lists have no limit. Applicants with a non-empty list are *certified* and take part in the match.
 - **Mechanism.** Deferred acceptance with capacities (Gale–Shapley; Roth–Peranson without couples): proposers go down
   their lists; a program (or an applicant, when programs propose) holds the best offers it ranked, up to its
   capacity (1 for an applicant), and rejects the rest; proposals to someone who did not rank the proposer are
   rejected. `match.algorithm` chooses the proposing side (applicants by default, as the NRMP). The result is the
   unique proposer-optimal stable matching, whatever the processing order.
-- **Validation on every run:** no blocking pair against the submitted lists; capacities respected; each matched
-  pair on both lists. With `match.compare_both` the other side's algorithm also runs; the matched applicants and the
-  number matched to each program must then be equal (rural hospitals theorem), and every applicant weakly prefers
-  the applicant-proposing result.
+- **Validation on every run** (`nrmps/engine/validate.py`, stored as `outcomes.checks`): no blocking pair against
+  the submitted lists; capacities respected; each matched pair on both lists; list entries only for interviews, ranks
+  exactly $1..k$ per list, applicant lists within 300. With `match.compare_both` the other side's algorithm also
+  runs; the matched applicants and the number matched to each program must then be equal (rural hospitals theorem),
+  and every applicant weakly prefers the applicant-proposing result. `manage.py nrmp_validate` repeats these checks
+  on random markets, adds agreement with an independent solver (the `matching` package) and checks that no applicant
+  gains by submitting another list under applicant-proposing deferred acceptance (strategy-proofness for the
+  proposing side); docs/VALIDATION.md is its report.
 
 ---
 
@@ -279,7 +283,7 @@ For each accepted interview:
 | 4 | Correlation knob: $\rho_A=1,\sigma=0$ ⇒ identical rankings; for ρ ∈ {0, …, 0.8}, N ≥ 500, M ≥ 100, the mean pairwise correlation is within ±0.02 of ρ (±0.01 at 0); $\operatorname{Corr}_j(C,T_{i\cdot})=0$ for every applicant | implemented (both sides) |
 | 5 | Moments: Var(u) ≈ 1; Dirichlet mean and variance; Σc = P, all c ≥ 1; realised applicants per position | implemented |
 | 6 | Ranks are permutations; tie-breaking differs by seed and repeats for the same seed | implemented |
-| 7 | Match: stability, capacity, rural-hospitals theorem, agreement with an oracle; stage invariants (applications ≤ M, signals ⊆ applications, accepted ⊆ invited ⊆ applied, caps and slots respected, lists ⊆ interviews) | implemented |
+| 7 | Match: stability, capacity, rural-hospitals theorem, agreement with an oracle, no profitable misreport for applicants (the validation report); stage invariants (applications ≤ M, signals ⊆ applications, accepted ⊆ invited ⊆ applied, caps and slots respected, lists ⊆ interviews) | implemented |
 | 8 | Validation: bad shares, duplicate keys, M > P, the pair guard, bad seeds and mismatched attribute keys raise before any computation | implemented |
 | 9 | JS parity on 200 × 20 markets | planned (the recipe of §12.3–12.4 is fixed now) |
 
@@ -300,6 +304,7 @@ Computed on every run (`nrmps/engine/metrics.py` and `nrmps/engine/outcomes.py` 
 | Signals | signal-to-interview and signal-to-match rates |
 | Welfare | the true-utility rank ($u^*$) of the match among the applicant's interviews; regret against the best interviewed program; post-interview fidelity |
 | By group | match rate and mean matched rank per applicant group and per strength decile |
+| Checks | the validation of §8: blocking pairs, programs over capacity, matches not on both lists, list entries without an interview, lists that are not strict, applicant list entries beyond 300 (all 0), the rural hospitals and applicant-optimality flags, and `passed` |
 | Planned | replicates and intervals, true-preference blocking pairs |
 
 ## 11. Parameter symbols ↔ schema names

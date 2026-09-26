@@ -10,8 +10,9 @@ Each stage's state comes from the draft parameters and the runs:
 - planned: the stage is not implemented yet.
 
 "Done" is decided by comparing stage fingerprints (`runs.fingerprints`), so a stage whose inputs did not change stays
-done after an unrelated edit: changing a noise parameter leaves the population done and makes only the
-pre-interview stage stale.
+done after an unrelated edit: changing a noise parameter leaves the population done and makes the pre-interview stage
+and every later stage stale. A stale stage names what changed among its own inputs, and the stage before it when that
+one is stale too.
 """
 
 from dataclasses import dataclass
@@ -58,6 +59,17 @@ INPUT_TITLES = {
     "rol": "rank order lists",
     "signals.use_in_ranking": "signals in ranking",
     "match": "the match settings",
+}
+
+# How a stale stage names a change in the stage before it.
+UPSTREAM_TITLES = {
+    Stage.POPULATION: "the population",
+    Stage.PRE_INTERVIEW: "the pre-interview views",
+    Stage.APPLICATIONS: "the applications",
+    Stage.SIGNALS: "the signals",
+    Stage.INVITATIONS: "the invitations",
+    Stage.INTERVIEWS: "the interviews",
+    Stage.RANK_LISTS: "the rank order lists",
 }
 
 
@@ -114,9 +126,9 @@ def get_pipeline(simulation: Simulation) -> list[StageState]:
         seed = draft.run.seed if draft.run.seed is not None else reference.seed
         now_prints = fingerprints(draft.with_seed(seed), seed, upload_sources(simulation.uploads_by_side()))
 
-    states = []
-    population_changed = False
+    states: list[StageState] = []
     for stage in Stage:
+        upstream_stale = bool(states) and states[-1].state == "stale"
         label = str(stage.label)
         if stage not in IMPLEMENTED_STAGES:
             states.append(StageState(stage.value, label, "planned", "Not implemented yet."))
@@ -136,9 +148,8 @@ def get_pipeline(simulation: Simulation) -> list[StageState]:
             changes = _changes(draft, reference, stage.value)
             if stage == Stage.POPULATION and not changes:
                 changes.append("the uploaded populations")
-            if stage == Stage.PRE_INTERVIEW and population_changed:
-                changes.append("the population")
-            population_changed = population_changed or stage == Stage.POPULATION
+            if upstream_stale:
+                changes.append(UPSTREAM_TITLES[Stage(states[-1].key)])
             reason = f"Changed since run {reference.number}: {', '.join(changes)}." if changes else "Changed."
             states.append(StageState(stage.value, label, "stale", reason))
     return states

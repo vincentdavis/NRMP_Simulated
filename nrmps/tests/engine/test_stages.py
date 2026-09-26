@@ -1,12 +1,9 @@
 """Applications to the match (model_spec.md §7-8): invariants, strategies, exactness, CRN and the match oracle."""
 
-import warnings
-
 import numpy as np
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from matching.games import HospitalResident
 
 from nrmps.engine.match import (
     UNMATCHED,
@@ -18,6 +15,7 @@ from nrmps.engine.match import (
 from nrmps.engine.pipeline import run_pipeline
 from nrmps.engine.rol import MAX_LIST
 from nrmps.engine.signals import NO_SIGNAL
+from nrmps.engine.validate import oracle_match
 from nrmps.params import SimulationParams
 
 GOLD_SILVER = [{"name": "gold", "count": 3, "boost": 0.8}, {"name": "silver", "count": 5, "boost": 0.4}]
@@ -219,6 +217,21 @@ def test_lists_are_strict_and_hold_only_interviews(rol):
         assert np.all(result.interviews.applicant_post[on_applicant] >= 0.0)
 
 
+def test_only_applicant_lists_are_limited_to_300():
+    params = {
+        "market": {"n_applicants": 1200, "applicants_per_position": 1.0, "n_programs": 2},
+        "apps": {"strategy": "all"},
+        "invites": {"interviews_per_position": 1.0},
+        "interview": {"applicant_cap": 2},
+        "rol": {"program_policy": "all_interviewed"},
+    }
+    result = run_pipeline(SimulationParams.model_validate(params), 3)
+    ranked = _per_program(result, result.lists.program_rank > 0)
+    assert ranked.max() > MAX_LIST  # a 600-position program ranks everyone it interviewed
+    assert np.array_equal(ranked, _per_program(result, result.invitations.accepted))
+    assert result.metrics["outcomes"]["checks"]["passed"]
+
+
 def test_do_not_rank_share_is_rounded_up():
     result = _run(rol={"program_policy": "dnr_quantile", "program_dnr_quantile": 0.1})
     interviewed = _per_program(result, result.invitations.accepted)
@@ -289,23 +302,6 @@ def _lists(applicant_lists, program_lists, capacity) -> Lists:
     )
 
 
-def _oracle(lists: Lists, optimal: str) -> list[int]:
-    """Solve with the `matching` package; clean=True drops one-sided list entries (DA rejects them anyway)."""
-    residents = {f"a{a}": [f"p{p}" for p in choices] for a, choices in enumerate(lists.applicant_lists)}
-    hospitals = {f"p{p}": [f"a{a}" for a in choices] for p, choices in enumerate(lists.program_lists)}
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # the package warns about every entry it drops
-        game = HospitalResident.create_from_dictionaries(
-            residents, hospitals, {f"p{p}": c for p, c in enumerate(lists.capacity)}, clean=True
-        )
-        solution = game.solve(optimal=optimal)
-    match = [UNMATCHED] * len(lists.applicant_lists)
-    for hospital, matched in solution.items():
-        for resident in matched:
-            match[int(str(resident)[1:])] = int(str(hospital)[1:])
-    return match
-
-
 @settings(max_examples=200, deadline=None)
 @given(markets())
 def test_deferred_acceptance_is_stable_and_agrees_with_the_oracle(market):
@@ -319,8 +315,8 @@ def test_deferred_acceptance_is_stable_and_agrees_with_the_oracle(market):
             if program != UNMATCHED:
                 assert program in lists.applicant_rank[applicant]
                 assert applicant in lists.program_rank[program]
-    assert by_applicants == _oracle(lists, "resident")
-    assert by_programs == _oracle(lists, "hospital")
+    assert by_applicants == oracle_match(lists, "resident")
+    assert by_programs == oracle_match(lists, "hospital")
     # Rural hospitals theorem: the same applicants are matched and every program fills the same number of positions.
     assert [p == UNMATCHED for p in by_applicants] == [p == UNMATCHED for p in by_programs]
     for program in range(len(lists.capacity)):

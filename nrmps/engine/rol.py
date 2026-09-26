@@ -17,7 +17,7 @@ F64 = NDArray[np.float64]
 I32 = NDArray[np.int32]
 I64 = NDArray[np.int64]
 
-MAX_LIST = 300  # the NRMP's limit on rank order list length
+MAX_LIST = 300  # the NRMP's limit on the length of an applicant's rank order list (programs have none)
 COUNT_TOLERANCE = 1e-9  # ceil(n x (1 - q)) must not round up exact products such as 10 x 0.9
 
 
@@ -98,12 +98,11 @@ def rank_lists(
     tie = pair_uniforms(seed, Stream.TIE_P, replicate, i[candidates], j[candidates])
     order = candidates[np.lexsort((tie, -program_key[candidates], j[candidates]))]
     position = _positions(np.arange(order.size), j[order])
-    limits = np.full(order.size, MAX_LIST, dtype=np.int64)
+    keep = np.ones(order.size, dtype=np.bool_)  # program lists have no length limit
     if rol.program_policy == "dnr_quantile" and order.size:
         interviewed = np.bincount(j[order], minlength=int(j.max()) + 1)
         kept = np.maximum(1, np.ceil(interviewed * (1.0 - rol.program_dnr_quantile) - COUNT_TOLERANCE))
-        limits = np.minimum(limits, kept[j[order]].astype(np.int64))
-    keep = position <= limits
+        keep = position <= kept[j[order]].astype(np.int64)
     program_rank[order[keep]] = position[keep]
 
     n = applications.count.shape[0]

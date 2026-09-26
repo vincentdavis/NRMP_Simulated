@@ -33,7 +33,7 @@ def test_a_run_freezes_parameters_seed_and_versions(finished_run, simulation):
     assert run.numpy_version == np.__version__
     assert (run.n_applicants, run.n_programs, run.n_positions) == (60, 8, 50)
     assert run.population_source == {"applicants": "generated", "programs": "generated"}
-    assert set(run.fingerprints) == {"population", "pre_interview"}
+    assert set(run.fingerprints) == {stage.value for stage in Stage}  # PostgreSQL does not keep the key order
     assert run.progress_done == run.progress_total == 2 * 480
     assert run.duration_ms is not None
     assert run.metrics["market"]["n_positions"] == 50
@@ -41,11 +41,14 @@ def test_a_run_freezes_parameters_seed_and_versions(finished_run, simulation):
 
 def test_a_run_stores_its_population_and_results(finished_run):
     kinds = set(finished_run.artifacts.values_list("kind", flat=True))
-    assert kinds == {RunArtifact.Kind.POPULATION, RunArtifact.Kind.PRE_INTERVIEW}
+    assert kinds == {RunArtifact.Kind.POPULATION, RunArtifact.Kind.PRE_INTERVIEW, RunArtifact.Kind.STAGES}
     stages = {stage.stage: stage for stage in finished_run.stages.all()}
-    assert set(stages) == {Stage.POPULATION, Stage.PRE_INTERVIEW}
+    assert set(stages) == set(Stage)
+    assert {stage.status for stage in stages.values()} == {SimulationRun.Status.SUCCEEDED}
+    assert all(stage.fingerprint == finished_run.fingerprints[key] for key, stage in stages.items())
     assert stages[Stage.POPULATION].counts == {"applicants": 60, "programs": 8, "positions": 50}
-    assert stages[Stage.PRE_INTERVIEW].fingerprint == finished_run.fingerprints["pre_interview"]
+    assert stages[Stage.MATCH].counts["matched"] == finished_run.metrics["outcomes"]["match"]["matched"]
+    assert stages[Stage.MATCH].counts["blocking_pairs"] == 0
     population = population_from_npz(finished_run.artifact(RunArtifact.Kind.POPULATION))
     assert population_digest(population) == finished_run.population_digest
 
@@ -92,7 +95,7 @@ def test_only_one_active_run_per_simulation(simulation, user):
 def test_execute_leaves_finished_runs_alone(finished_run):
     before = finished_run.metrics
     assert execute_run(finished_run.pk).metrics == before
-    assert finished_run.stages.count() == 2
+    assert finished_run.stages.count() == len(Stage)
 
 
 def test_market_above_the_limit_is_refused(simulation, user, settings):
@@ -115,7 +118,7 @@ def test_a_failure_during_execution_is_recorded(simulation, user, monkeypatch):
     def boom(*args, **kwargs):
         raise RuntimeError("engine bug")
 
-    monkeypatch.setattr("nrmps.runs.run_pre_interview", boom)
+    monkeypatch.setattr("nrmps.runs.run_pipeline", boom)
     run = execute_run(run.pk)
     assert run.status == SimulationRun.Status.FAILED
     assert "failed unexpectedly" in run.error

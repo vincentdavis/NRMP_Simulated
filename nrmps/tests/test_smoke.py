@@ -39,6 +39,13 @@ def test_runs_in_production_mode():
     assert settings.SECURE_HSTS_SECONDS > 0
 
 
+def test_logfire_sends_nothing_when_told_not_to():
+    """LOGFIRE_SEND_TO_LOGFIRE=false (the test settings, CI) wins even when a local Logfire token exists."""
+    import logfire
+
+    assert logfire.DEFAULT_LOGFIRE_INSTANCE.config.send_to_logfire is False
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize("name", PUBLIC_PAGES)
 def test_public_pages_render(client, name):

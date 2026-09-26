@@ -29,9 +29,11 @@
         {{ default_market.positions|intcomma }} positions in {{ default_market.programs|intcomma }} programs, and its
         own random seed.</li>
       <li>Press <strong>Run</strong>. The run generates the applicants and programs, their true preferences and their
-        noisy pre-interview views of each other, and ranks both sides.</li>
-      <li>Open the run to see the diagnostics, the applicants and programs, and any one applicant's or program's view
-        of the other side. Everything can be downloaded.</li>
+        noisy views of each other, then runs every stage of the Match: applications, preference signals, interview
+        invitations, interviews, rank order lists and the match itself.</li>
+      <li>Open the run to see the match (the match rate, positions filled and where applicants matched on their
+        lists), the funnel from applications to rank order lists, the diagnostics, and any one applicant's or
+        program's path through the stages. Everything can be downloaded.</li>
       <li>Change a parameter, press <strong>Save and run</strong>, and compare. The pipeline at the top of the page
         says which stages the change makes out of date.</li>
     </ol>
@@ -44,9 +46,10 @@
     <h2 class="text-2xl font-bold mb-3">How the simulation works</h2>
     <p class="mb-3">The residency Match pairs applicants with residency programs. Applicants apply, programs invite
       some of them to interview, both sides submit rank order lists, and the NRMP's algorithm produces the match.
-      This simulator (model {{ model_version }}) currently models the part before applications: who would prefer
-      whom, and how accurately each side can tell. Values such as strength, quality and utility are on a z-scale:
-      0 is average and 1 is one standard deviation above it.</p>
+      This simulator (model {{ model_version }}) follows every stage of the Main Match for single applicants: who
+      would prefer whom, how accurately each side can tell before and after interviews, and how applications,
+      signals, invitations and rank order lists lead to the match. Values such as strength, quality and utility are
+      on a z-scale: 0 is average and 1 is one standard deviation above it.</p>
     <dl class="space-y-3">
       <div>
         <dt class="font-semibold">Applicants and programs</dt>
@@ -90,6 +93,45 @@
           pre-interview view (1 = favourite). Exact ties are broken by seeded random keys, so ranks are always 1, 2,
           3 … with no gaps.</dd>
       </div>
+      <div>
+        <dt class="font-semibold">Applications</dt>
+        <dd>Each applicant applies to a number of programs (fixed, or drawn around the mean you set), chosen from
+          their pre-interview ranking: the best ones, a portfolio of reach, target and safety programs judged against
+          a noisy self-assessment of their own standing, every program, or random ones.</dd>
+      </div>
+      <div>
+        <dt class="font-semibold">Preference signals</dt>
+        <dd>Applicants can send signals in tiers (for example 3 gold and 5 silver) to the programs they apply to. A
+          share of programs use them: a signal adds a boost to the program's screening score for that
+          application.</dd>
+      </div>
+      <div>
+        <dt class="font-semibold">Interview invitations</dt>
+        <dd>Each program has interview slots (interviews per position × positions, rounded up) and invites in waves,
+          by its screening score: its pre-interview view of the applicant, plus the signal boost, minus a penalty for
+          applicants it expects to go elsewhere (yield protection). Applicants accept invitations up to their
+          interview cap, the best ones or the first ones; declined slots go to the next wave.</dd>
+      </div>
+      <div>
+        <dt class="font-semibold">Interviews</dt>
+        <dd>An interview reveals a personal fit that neither side knew, and shrinks each side's pre-interview error
+          by the interview informativeness (1 = after the interview each side knows its true utility, fit
+          included).</dd>
+      </div>
+      <div>
+        <dt class="font-semibold">Rank order lists</dt>
+        <dd>Applicants rank the programs where they interviewed: all of them, the top k, those above a reservation
+          utility, or all with the ones they are less likely to match moved down. Programs rank their interviewees,
+          leaving out a bottom share (do not rank) or those below a threshold. Applicant lists hold at most 300
+          programs, the NRMP's limit.</dd>
+      </div>
+      <div>
+        <dt class="font-semibold">The match</dt>
+        <dd>Applicant-proposing deferred acceptance, the NRMP's algorithm (without couples), or program-proposing for
+          comparison. Every run checks that the match is stable (no applicant and program prefer each other to their
+          match), that capacities and lists are respected and, when both proposing sides run, that they match the
+          same applicants and fill the same positions, as theory says they must.</dd>
+      </div>
     </dl>
     <p class="mt-3">The full specification, with every formula and the random-number recipe, is
       <code>docs/model_spec.md</code> in the <a class="link" href="{{ PROJECT_URL }}">project repository</a>.</p>
@@ -98,6 +140,18 @@
   <section id="results" class="mb-10 scroll-mt-4">
     <h2 class="text-2xl font-bold mb-3">Reading the results</h2>
     <ul class="list-disc ml-6 space-y-1">
+      <li><strong>Match rate</strong>: the share of applicants with a rank order list who matched, as NRMP reports
+        count it; <strong>positions filled</strong>: the share of positions the match filled.</li>
+      <li><strong>Where matched applicants had ranked their program</strong>: how many matched to their first, second,
+        … choice.</li>
+      <li><strong>From applications to rank order lists</strong>: applications, signals, invitations, interviews and
+        list entries per applicant, and how many applicants got no interview.</li>
+      <li><strong>Regret</strong>: for matched applicants, how much better (in SD units) the best program they
+        interviewed at turned out to be than the one they matched to, judged by the utility the interview
+        revealed.</li>
+      <li><strong>Who matched</strong>: match rate, mean choice matched and interviews by applicant group and by
+        strength decile.</li>
+      <li><strong>Checks</strong>: the stability and consistency checks of every run; each count must be 0.</li>
       <li><strong>Agreement</strong>: the average correlation between two agents' true utilities; it should be close
         to the agreement you set.</li>
       <li><strong>Fidelity</strong>: how well the pre-interview view matches the truth, over all pairs and per agent
@@ -111,9 +165,9 @@
 
   <section id="parameters" class="mb-10 scroll-mt-4">
     <h2 class="text-2xl font-bold mb-3">Parameters</h2>
-    <p class="mb-3">Parameters marked <span class="badge badge-outline badge-sm">Not used yet</span> belong to stages
-      that are not implemented; they are saved but have no effect. Applicants × programs is limited to
-      {{ max_pairs|intcomma }} pairs per run for now.</p>
+    <p class="mb-3">Parameters marked <span class="badge badge-outline badge-sm">Not used yet</span> belong to
+      features that are not implemented (replicates and interview dates); they are saved but have no effect.
+      Applicants × programs is limited to {{ max_pairs|intcomma }} pairs per run for now.</p>
     {% for section in sections %}
       <h3 class="text-lg font-semibold mt-6 mb-2">
         {{ section.title }}{% if not section.implemented %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}
@@ -195,9 +249,10 @@
   <section id="limitations" class="mb-10 scroll-mt-4">
     <h2 class="text-2xl font-bold mb-3">Current limitations</h2>
     <ul class="list-disc ml-6 space-y-1">
-      <li>Only the stages up to the pre-interview rankings run. Applications, preference signals, interview
-        invitations, interviews, rank order lists and the match are being built; their parameters are already in the
-        form, marked "Not used yet".</li>
+      <li>A run is one draw of the random stages. Replicates, with averages and uncertainty bands, are planned; the
+        replicate parameters are in the form, marked "Not used yet".</li>
+      <li>Couples, supplemental (PGY-1 and advanced) lists, interview date conflicts and SOAP (the process after the
+        Match for unfilled positions) are not modeled.</li>
       <li>Markets are limited to {{ max_pairs|intcomma }} applicant × program pairs per run{% if background %}, and
         runs wait in a queue when others are running{% endif %}. Accounts also have daily limits on runs and pairs.</li>
       <li>Results are simulations under the assumptions you set. They are not predictions of any real applicant's or

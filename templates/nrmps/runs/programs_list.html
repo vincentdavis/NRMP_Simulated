@@ -13,8 +13,10 @@
   </div>
   <p class="text-sm text-base-content/70 mb-4">
     Quality and attributes are on the model's z-scale; the percentile is the program's quality rank. Weights are how
-    much each program values each applicant attribute. <em>First choice</em> is the applicant the program would rank
-    first before interviews; <em>fidelity</em> is the rank correlation between its true and pre-interview orderings
+    much each program values each applicant attribute.{% if has_stages %} <em>Applications</em> and
+    <em>interviews</em> count the applicants who applied and who interviewed; <em>filled</em> is the number of
+    positions filled in the match.{% endif %} <em>First choice</em> is the applicant the program would rank first
+    before interviews; <em>fidelity</em> is the rank correlation between its true and pre-interview orderings
     of applicants; <em>ranked first by</em> counts the applicants whose pre-interview first choice it is.
   </p>
   {% include "nrmps/components/page_size.html" %}
@@ -28,6 +30,11 @@
           {% sort_th "quality" "Quality" "right" %}
           <th scope="col" class="text-right">Percentile</th>
           {% sort_th "capacity" "Positions" "right" %}
+          {% if has_stages %}
+            {% sort_th "applications" "Applications" "right" %}
+            {% sort_th "interviews" "Interviews" "right" %}
+            {% sort_th "fill" "Filled" "right" %}
+          {% endif %}
           <th scope="col">Attributes</th>
           <th scope="col">Weights</th>
           <th scope="col">First choice</th>
@@ -44,6 +51,13 @@
             <td class="text-right tabular-nums">{{ row.quality|floatformat:3 }}</td>
             <td class="text-right tabular-nums">{{ row.percentile|floatformat:0 }}</td>
             <td class="text-right tabular-nums">{{ row.capacity|intcomma }}</td>
+            {% if has_stages %}
+              <td class="text-right tabular-nums">{{ row.applications|intcomma }}</td>
+              <td class="text-right tabular-nums">{{ row.interviews|intcomma }}</td>
+              <td class="text-right tabular-nums whitespace-nowrap">
+                {{ row.filled|intcomma }} of {{ row.capacity|intcomma }}{% if row.filled < row.capacity %} <span class="badge badge-warning badge-sm">unfilled</span>{% endif %}
+              </td>
+            {% endif %}
             <td>{% include "nrmps/components/chips.html" with items=row.attributes places=2 %}</td>
             <td>{% include "nrmps/components/chips.html" with items=row.weights places=2 %}</td>
             <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.first_choice %}">{{ row.first_choice_name }}</a></td>

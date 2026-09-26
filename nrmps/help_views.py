@@ -11,8 +11,23 @@ from django.db import models as db_models
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
-from . import models, params, pipeline, runs
-from .engine import MODEL_VERSION, persistence, population, rank, rng, utility
+from . import models, params, pipeline, runs, validation
+from .engine import (
+    MODEL_VERSION,
+    applications,
+    interviews,
+    invitations,
+    match,
+    outcomes,
+    persistence,
+    population,
+    rank,
+    rng,
+    rol,
+    signals,
+    utility,
+    validate,
+)
 from .engine import pipeline as engine_pipeline
 from .limits import max_pairs
 from .params import ParamField, SimulationParams, iter_fields, list_fields
@@ -143,7 +158,26 @@ REFERENCE_MODELS = (
     models.StageRun,
     models.RunArtifact,
 )
-REFERENCE_MODULES = (runs, pipeline, params, engine_pipeline, population, utility, rank, rng, persistence)
+REFERENCE_MODULES = (
+    runs,
+    pipeline,
+    params,
+    engine_pipeline,
+    population,
+    utility,
+    rank,
+    rng,
+    applications,
+    signals,
+    invitations,
+    interviews,
+    rol,
+    match,
+    outcomes,
+    validate,
+    validation,
+    persistence,
+)
 
 
 @staff_member_required

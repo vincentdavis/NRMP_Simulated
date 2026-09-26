@@ -58,6 +58,11 @@
           {% if run.status == "succeeded" %}
             <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='applicants.csv' %}">Applicants (CSV)</a> – uploads back unchanged</li>
             <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='programs.csv' %}">Programs (CSV)</a> – uploads back unchanged</li>
+            {% if stage_downloads %}
+              <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='match.csv' %}">The match: every applicant's result (CSV)</a></li>
+              <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='program_results.csv' %}">Every program's results (CSV)</a></li>
+              <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='applications.csv' %}">Every application, from signal to match (CSV)</a></li>
+            {% endif %}
             {% if pairs_download %}
               <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='pairs.csv' %}">Every applicant–program pair (CSV)</a></li>
             {% endif %}
@@ -80,12 +85,12 @@
         <table class="table table-sm">
           <thead><tr><th scope="col">Stage</th><th scope="col">Status</th><th scope="col" class="text-right">Time</th><th scope="col">Result</th></tr></thead>
           <tbody>
-            {% for stage in stages %}
+            {% for row in stage_rows %}
               <tr>
-                <td>{{ stage.get_stage_display }}</td>
-                <td>{% include "nrmps/components/run_status.html" with status=stage.status %}</td>
-                <td class="text-right tabular-nums">{% if stage.duration_ms is not None %}{{ stage.duration_ms|intcomma }} ms{% endif %}</td>
-                <td>{% if stage.error %}{{ stage.error }}{% else %}{% for key, value in stage.counts.items %}{{ value|intcomma }} {{ key }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</td>
+                <td>{{ row.stage.get_stage_display }}</td>
+                <td>{% include "nrmps/components/run_status.html" with status=row.stage.status %}</td>
+                <td class="text-right tabular-nums">{% if row.stage.duration_ms is not None %}{{ row.stage.duration_ms|intcomma }} ms{% endif %}</td>
+                <td>{{ row.result }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -94,6 +99,9 @@
     </div>
   </section>
 
+  {% if outcomes %}
+    {% include "nrmps/runs/_outcomes.html" %}
+  {% endif %}
   {% if metrics %}
     {% include "nrmps/runs/_metrics.html" %}
   {% endif %}

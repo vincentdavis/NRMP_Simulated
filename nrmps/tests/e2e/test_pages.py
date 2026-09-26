@@ -41,7 +41,8 @@ def _overflow(page) -> int:
 def _serious_violations(page) -> list[str]:
     results = Axe().run(page)
     return [
-        f"{v['id']} ({v['impact']}): {v['help']} [{len(v['nodes'])} nodes]"
+        f"{v['id']} ({v['impact']}): {v['help']} [{len(v['nodes'])} nodes: "
+        f"{'; '.join(' '.join(map(str, node['target'])) for node in v['nodes'][:3])}]"
         for v in results.response["violations"]
         if v["impact"] in {"serious", "critical"}
     ]

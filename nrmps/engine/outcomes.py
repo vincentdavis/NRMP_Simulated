@@ -12,7 +12,11 @@
 - `welfare`: over matched applicants, the realised-utility (u*) rank of the match among the programs they
   interviewed at, and the regret (best interviewed u* minus the match's); the correlation of realised and
   post-interview views (post-interview fidelity) for both sides.
-- `by_group` and `by_strength_decile`: applicants, certified, match rate, mean matched rank and interviews.
+- `by_group` and `by_strength_decile`: lists (in group order, or deciles 1 to 10) of the name, applicants,
+  certified, match rate, mean matched rank and interviews. Lists rather than objects, because PostgreSQL's JSON
+  storage does not keep the order of object keys.
+- `checks`: the validation of the lists and the match (`validate.run_checks`): counts that must be 0, the rural
+  hospitals and applicant-optimality flags (None without `match.compare_both`) and `passed`.
 """
 
 from typing import Any
@@ -28,6 +32,7 @@ from .numeric import correlation, quantiles
 from .population import Population
 from .rol import RankLists
 from .signals import NO_SIGNAL, Signals
+from .validate import run_checks
 
 F64 = NDArray[np.float64]
 
@@ -65,21 +70,24 @@ def _by(
     match: MatchResult,
     certified: NDArray[np.bool_],
     interviews_per_applicant: F64,
-) -> dict[str, dict[str, Any]]:
-    result = {}
+) -> list[dict[str, Any]]:
+    result = []
     for index, name in enumerate(names):
         members = labels == index
         count = int(members.sum())
         entered = members & certified
         matched = entered & (match.program != UNMATCHED)
         ranks = match.applicant_list_rank[matched]
-        result[name] = {
-            "applicants": count,
-            "certified": int(entered.sum()),
-            "match_rate": _share(int(matched.sum()), int(entered.sum())),
-            "mean_matched_rank": _mean(ranks.astype(np.float64)),
-            "interviews_mean": _mean(interviews_per_applicant[members]),
-        }
+        result.append(
+            {
+                "name": name,
+                "applicants": count,
+                "certified": int(entered.sum()),
+                "match_rate": _share(int(matched.sum()), int(entered.sum())),
+                "mean_matched_rank": _mean(ranks.astype(np.float64)),
+                "interviews_mean": _mean(interviews_per_applicant[members]),
+            }
+        )
     return result
 
 
@@ -164,4 +172,5 @@ def outcome_metrics(
             strength_decile, [str(d + 1) for d in range(10)], match, certified, interviews_per_applicant
         ),
         "programs": {"n": m, "positions": positions},
+        "checks": run_checks(applications, invitations, lists, match_lists, match),
     }

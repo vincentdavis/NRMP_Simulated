@@ -158,13 +158,20 @@ def test_data_export_contains_account_simulations_and_runs(auth_client, finished
     assert "account.json" in names
     assert json.loads(archive.read("account.json"))["username"] == "alice"
     folder = f"simulations/{simulation.pk}-test-simulation"
-    for name in ("simulation.json", "runs/1/run.json", "runs/1/applicants.csv", "runs/1/programs.csv"):
+    for name in (
+        "simulation.json",
+        "runs/1/run.json",
+        "runs/1/applicants.csv",
+        "runs/1/programs.csv",
+        "runs/1/match.csv",
+    ):
         assert f"{folder}/{name}" in names
     assert json.loads(archive.read(f"{folder}/simulation.json"))["params"] == simulation.params
     record = json.loads(archive.read(f"{folder}/runs/1/run.json"))
     assert record["seed"] == 12345
     assert record["stamps"]["model_version"] == MODEL_VERSION
     assert archive.read(f"{folder}/runs/1/applicants.csv").decode().count("\n") == 61
+    assert archive.read(f"{folder}/runs/1/match.csv").decode().startswith("applicant,group,strength,applications")
 
 
 def test_account_deletion_needs_the_password(auth_client, user, simulation):

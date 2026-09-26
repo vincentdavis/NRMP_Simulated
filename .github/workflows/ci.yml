@@ -68,6 +68,11 @@ jobs:
         env:
           NRMP_TEST_DATABASE_URL: ${{ matrix.database == 'postgresql' && 'postgres://postgres:postgres@localhost:5432/postgres' || '' }}
         run: uv run pytest
+      - name: Validation report (stability, rural hospitals, oracle, strategy-proofness on random markets)
+        if: matrix.database == 'sqlite'
+        env:
+          DJANGO_SETTINGS_MODULE: NRMP_Simulated.settings_test
+        run: uv run python manage.py nrmp_validate --markets 500 --misreport-markets 100
 
   docker:
     name: Docker image

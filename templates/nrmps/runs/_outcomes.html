@@ -1,0 +1,210 @@
+{% load humanize format_tags %}
+{% comment %}
+  The match and the stages before it (docs/model_spec.md §10). Context: run, outcomes (metrics.outcomes) and
+  outcome_views (the matched-rank bars and the checks, from run_views._outcomes).
+{% endcomment %}
+{% with match=outcomes.match funnel=outcomes.funnel signals=outcomes.signals welfare=outcomes.welfare %}
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="match-title">
+  <div class="card-body">
+    <h2 id="match-title" class="card-title">The match</h2>
+    <div class="stats stats-vertical sm:stats-horizontal bg-base-200 w-full">
+      <div class="stat">
+        <div class="stat-title">Match rate</div>
+        <div class="stat-value text-3xl tabular-nums">{{ match.match_rate|percent }}</div>
+        <div class="stat-desc whitespace-normal">{{ match.matched|intcomma }} of {{ match.certified|intcomma }} applicants with a rank order list</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Positions filled</div>
+        <div class="stat-value text-3xl tabular-nums">{{ match.fill_rate|percent }}</div>
+        <div class="stat-desc whitespace-normal">{{ match.unfilled_positions|intcomma }} unfilled, in {{ match.programs_unfilled|intcomma }} programs</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Matched to their first choice</div>
+        <div class="stat-value text-3xl tabular-nums">{{ match.first_choice_share|percent }}</div>
+        <div class="stat-desc whitespace-normal">of matched applicants; {{ match.top3_share|percent }} to one of their top 3</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Checks</div>
+        <div class="stat-value text-3xl">{% if outcome_views.passed %}Passed{% else %}<span class="text-error">Failed</span>{% endif %}</div>
+        <div class="stat-desc whitespace-normal">{{ match.blocking_pairs|intcomma }} blocking pairs: the match is {% if match.blocking_pairs %}not {% endif %}stable</div>
+      </div>
+    </div>
+    <p class="text-sm text-base-content/70">
+      {% if match.algorithm == "program_proposing" %}Program-proposing{% else %}Applicant-proposing{% endif %} deferred
+      acceptance{% if match.algorithm != "program_proposing" %}, the mechanism of the NRMP{% endif %}. The match rate
+      counts the applicants who submitted a rank order list, as NRMP reports do;
+      {{ funnel.applicants_without_interview|intcomma }} applicants had no interview and so no list.
+    </p>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="overflow-x-auto" tabindex="0" role="region" aria-label="Where matched applicants had ranked their program">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Where matched applicants had ranked their program</caption>
+          <thead>
+            <tr>
+              <th scope="col">Choice</th>
+              <th scope="col" class="w-1/2"><span class="sr-only">Bar</span></th>
+              <th scope="col" class="text-right">Applicants</th>
+              <th scope="col" class="text-right">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rank in outcome_views.ranks %}
+              <tr>
+                <th scope="row" class="font-normal whitespace-nowrap">{% if rank.label == "11+" %}11th or lower{% else %}{{ rank.label|ordinal }}{% endif %}</th>
+                <td aria-hidden="true"><div class="h-3 rounded-sm bg-primary" style="width: {{ rank.width }}%"></div></td>
+                <td class="text-right tabular-nums">{{ rank.count|intcomma }}</td>
+                <td class="text-right tabular-nums">{{ rank.share|percent }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h3 class="font-semibold">Rank order lists</h3>
+        <dl class="mt-2 space-y-1 text-sm">
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Mean list length, matched applicants</dt><dd class="tabular-nums">{{ match.list_length_matched|floatformat:2|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Mean list length, unmatched applicants</dt><dd class="tabular-nums">{{ match.list_length_unmatched|floatformat:2|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Applicants with a list</dt><dd class="tabular-nums">{{ match.certified|intcomma }} of {{ run.n_applicants|intcomma }}</dd></div>
+        </dl>
+        {% if match.comparison %}
+          <h3 class="font-semibold mt-4">With the other side proposing</h3>
+          <p class="text-sm mt-1">
+            {{ match.comparison.differing_applicants|intcomma }} applicant{{ match.comparison.differing_applicants|pluralize }}
+            would get a different result.
+            {% if match.comparison.same_matched_applicants and match.comparison.same_fill_per_program %}
+              The same applicants match and every program fills the same number of positions, as the rural
+              hospitals theorem says.
+            {% else %}
+              <span class="text-error">The matched applicants or the positions filled differ, which the rural hospitals
+              theorem rules out.</span>
+            {% endif %}
+            {% if match.comparison.applicants_worse_off_when_applicants_propose %}
+              <span class="text-error">{{ match.comparison.applicants_worse_off_when_applicants_propose|intcomma }}
+              applicants do worse when applicants propose, which should not happen.</span>
+            {% else %}
+              No applicant does better when programs propose.
+            {% endif %}
+          </p>
+        {% endif %}
+      </div>
+    </div>
+    <details class="collapse collapse-arrow bg-base-200">
+      <summary class="collapse-title font-medium">How this match was checked</summary>
+      <div class="collapse-content overflow-x-auto" tabindex="0" role="region" aria-label="Checks of this match">
+        <table class="table table-sm">
+          <thead><tr><th scope="col">Check</th><th scope="col" class="text-right">Result</th></tr></thead>
+          <tbody>
+            {% for check in outcome_views.checks %}
+              <tr>
+                <th scope="row" class="font-normal">{{ check.title }}</th>
+                <td class="text-right tabular-nums whitespace-nowrap">
+                  {% if check.skipped %}<span class="text-base-content/70">not run</span>{% elif check.value is True %}yes{% elif check.value is False %}<span class="text-error">no</span>{% elif check.ok %}{{ check.value|intcomma }}{% else %}<span class="text-error">{{ check.value|intcomma|default:"missing" }}</span>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p class="text-xs text-base-content/70 mt-2">
+          The last two checks run when <em>Compare both sides proposing</em> is on in the match settings. The engine is
+          also checked on hundreds of random markets against an independent solver (docs/VALIDATION.md).
+        </p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="funnel-title">
+  <div class="card-body">
+    <h2 id="funnel-title" class="card-title">From applications to rank order lists</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <caption class="text-left font-semibold">Per applicant, on average</caption>
+          <tbody>
+            <tr><th scope="row" class="font-normal">Applications</th><td class="text-right tabular-nums">{{ funnel.applications_per_applicant|floatformat:2 }}</td></tr>
+            <tr><th scope="row" class="font-normal">Signals</th><td class="text-right tabular-nums">{{ funnel.signals_per_applicant|floatformat:2 }}</td></tr>
+            <tr><th scope="row" class="font-normal">Interview invitations</th><td class="text-right tabular-nums">{{ funnel.invitations_per_applicant|floatformat:2 }}</td></tr>
+            <tr><th scope="row" class="font-normal">Interviews</th><td class="text-right tabular-nums">{{ funnel.interviews_per_applicant|floatformat:2 }}</td></tr>
+            <tr><th scope="row" class="font-normal">Rank order list entries</th><td class="text-right tabular-nums">{{ funnel.list_entries_per_applicant|floatformat:2 }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <dl class="text-sm space-y-1">
+        <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Interviews per position</dt><dd class="tabular-nums">{{ funnel.interviews_per_position|floatformat:2 }}</dd></div>
+        <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Interview slots offered</dt><dd class="tabular-nums">{{ funnel.interview_slots|intcomma }}</dd></div>
+        <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Invitations declined (or over the applicant's cap)</dt><dd class="tabular-nums">{{ funnel.declined_invitations|intcomma }}</dd></div>
+        <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Applicants with no interview</dt><dd class="tabular-nums">{{ funnel.applicants_without_interview|intcomma }}</dd></div>
+      </dl>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+      <div>
+        <h3 class="font-semibold">Signals</h3>
+        {% if signals.sent %}
+          <dl class="mt-2 text-sm space-y-1">
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Signals sent</dt><dd class="tabular-nums">{{ signals.sent|intcomma }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Programs that use signals</dt><dd class="tabular-nums">{{ signals.programs_using_signals|intcomma }} of {{ run.n_programs|intcomma }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Interview rate, applications with a signal</dt><dd class="tabular-nums">{{ signals.interview_rate_signalled|percent }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Interview rate, other applications</dt><dd class="tabular-nums">{{ signals.interview_rate_other|percent }}</dd></div>
+            <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Signals that ended in a match</dt><dd class="tabular-nums">{{ signals.match_rate_signalled|percent }}</dd></div>
+          </dl>
+        {% else %}
+          <p class="text-sm mt-2">No signals were sent: there are no signal tiers in the parameters. Of all applications, {{ signals.interview_rate_other|percent }} led to an interview.</p>
+        {% endif %}
+      </div>
+      <div>
+        <h3 class="font-semibold">Interviews and outcomes for applicants</h3>
+        <dl class="mt-2 text-sm space-y-1">
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Where the match stands among the applicant's interviews, by realised utility (1 = the best)</dt><dd class="tabular-nums">{{ welfare.true_rank_mean|floatformat:2|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Regret: best interviewed program minus the match (SD)</dt><dd class="tabular-nums">{{ welfare.regret_mean|floatformat:3|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Post-interview fidelity, applicants</dt><dd class="tabular-nums">{{ welfare.applicant_post_fidelity|floatformat:3|default:"-" }}</dd></div>
+          <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Post-interview fidelity, programs</dt><dd class="tabular-nums">{{ welfare.program_post_fidelity|floatformat:3|default:"-" }}</dd></div>
+        </dl>
+        <p class="text-xs text-base-content/70 mt-2">
+          The realised utility includes the fit an interview reveals. Post-interview fidelity is the correlation of
+          the realised utility and the post-interview view over all interviews (1 = interviews reveal everything).
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="groups-title">
+  <div class="card-body">
+    <h2 id="groups-title" class="card-title">Who matched</h2>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      {% for title, rows, label in outcome_views.group_tables %}
+        <div class="overflow-x-auto" tabindex="0" role="region" aria-label="{{ title }}">
+          <table class="table table-sm">
+            <caption class="text-left font-semibold">{{ title }}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ label }}</th>
+                <th scope="col" class="text-right">Applicants</th>
+                <th scope="col" class="text-right">With a list</th>
+                <th scope="col" class="text-right">Match rate</th>
+                <th scope="col" class="text-right">Mean choice matched</th>
+                <th scope="col" class="text-right">Interviews (mean)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+                <tr>
+                  <th scope="row" class="font-normal">{{ row.name }}</th>
+                  <td class="text-right tabular-nums">{{ row.applicants|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.certified|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.match_rate|percent }}</td>
+                  <td class="text-right tabular-nums">{{ row.mean_matched_rank|floatformat:2|default:"-" }}</td>
+                  <td class="text-right tabular-nums">{{ row.interviews_mean|floatformat:2|default:"-" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="text-xs text-base-content/70">
+      Strength deciles group applicants by their latent strength: 1 is the weakest tenth, 10 the strongest.
+    </p>
+  </div>
+</section>
+{% endwith %}

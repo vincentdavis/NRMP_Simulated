@@ -170,7 +170,7 @@ class PopulationUpload(models.Model):
 
 
 class Stage(models.TextChoices):
-    """Pipeline stages in order (model_spec.md; plan step 2.4). Only the first two are implemented."""
+    """Pipeline stages in order (model_spec.md §3-8)."""
 
     POPULATION = "population", "Population"
     PRE_INTERVIEW = "pre_interview", "Pre-interview"
@@ -182,7 +182,7 @@ class Stage(models.TextChoices):
     MATCH = "match", "Match"
 
 
-IMPLEMENTED_STAGES = (Stage.POPULATION, Stage.PRE_INTERVIEW)
+IMPLEMENTED_STAGES = tuple(Stage)
 
 
 class SimulationRun(models.Model):
@@ -315,6 +315,7 @@ class RunArtifact(models.Model):
 
         POPULATION = "population", "Population"
         PRE_INTERVIEW = "pre_interview", "Pre-interview results"
+        STAGES = "stages", "Applications to the match"
 
     run = models.ForeignKey(SimulationRun, on_delete=models.CASCADE, related_name="artifacts")
     kind = models.CharField(max_length=30, choices=Kind.choices)

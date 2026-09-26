@@ -1,7 +1,7 @@
 {% load form_tags humanize %}
 {% comment %}
   The parameter editor, generated from the schema (nrmps.params_forms.ParamsForm): one section per parameter group,
-  advanced options collapsed, list parameters as tables, and the parameters of planned stages in a collapsed group.
+  advanced options collapsed, list parameters as tables, and the parameters of planned features in a collapsed group.
 {% endcomment %}
 <form method="post" id="parameters" class="card bg-base-100 shadow-xl" novalidate>
   {% csrf_token %}
@@ -74,8 +74,8 @@
       <summary class="collapse-title font-semibold">Planned parameters (not used yet)</summary>
       <div class="collapse-content">
         <p class="text-sm text-base-content/70 mb-2">
-          These belong to stages that are not implemented yet (applications, signals, invitations, interviews, rank
-          order lists and the match). They are saved with the simulation but have no effect on the results for now.
+          These belong to features that are not implemented yet: replicates with uncertainty bands, and interview
+          dates. They are saved with the simulation but have no effect on the results for now.
         </p>
         {% for warning in planned_warnings %}
           <div role="status" class="alert alert-warning my-2"><span>{{ warning.message }}</span></div>

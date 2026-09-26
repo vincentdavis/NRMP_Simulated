@@ -385,8 +385,10 @@ LOGGING: dict[str, Any] = {
 if not DEBUG:
     import logfire
 
+    # An explicit argument would override LOGFIRE_SEND_TO_LOGFIRE, so honour "false" here (tests and CI set it).
+    _send_to_logfire = os.environ.get("LOGFIRE_SEND_TO_LOGFIRE", "").strip().lower() not in {"false", "0", "no", "off"}
     logfire.configure(
-        send_to_logfire="if-token-present",
+        send_to_logfire="if-token-present" if _send_to_logfire else False,
         console=False,
         service_name="nrmp-simulated",
         environment=os.environ.get("RAILWAY_ENVIRONMENT_NAME", "local"),

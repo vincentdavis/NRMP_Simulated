@@ -1,4 +1,4 @@
-{% load humanize %}
+{% load humanize format_tags %}
 {% comment %}
   The run panel: the Run button, the latest run's summary and the recent runs. The Run button posts with HTMX and
   gets this panel back (and the stepper, out of band); without JavaScript it posts normally and redirects.
@@ -83,6 +83,7 @@
                 <th scope="col" class="text-right">Seed</th>
                 <th scope="col" class="text-right">Applicants</th>
                 <th scope="col" class="text-right">Programs</th>
+                <th scope="col" class="text-right">Match rate</th>
                 <th scope="col" class="text-right">Time</th>
                 <th scope="col">Started</th>
               </tr>
@@ -95,6 +96,7 @@
                   <td class="text-right tabular-nums">{{ run.seed }}</td>
                   <td class="text-right tabular-nums">{{ run.n_applicants|intcomma }}</td>
                   <td class="text-right tabular-nums">{{ run.n_programs|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ run.match_rate|percent }}</td>
                   <td class="text-right tabular-nums">{% if run.duration_ms is not None %}{{ run.duration_ms|intcomma }} ms{% else %}-{% endif %}</td>
                   <td class="whitespace-nowrap">{{ run.created_at|date:"Y-m-d H:i" }}</td>
                 </tr>

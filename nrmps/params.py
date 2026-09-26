@@ -711,7 +711,8 @@ class InterviewParams(ParamGroup):
         "first_come",
         title="Acceptance order",
         description=(
-            "In which order applicants accept invitations: the best (by pre-interview view) or the first first."
+            "In which order applicants accept invitations: the best first (by pre-interview view), or in the order "
+            "they arrive."
         ),
     )
     n_dates: int = param(

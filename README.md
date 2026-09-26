@@ -1,8 +1,8 @@
 # NRMP Simulations
 
 Simulate the residency Match: build a market of applicants and residency programs, give each side preferences and
-imperfect information, and see how their ratings and rankings form. For students, program directors, educators and
-researchers.
+imperfect information, and follow them through applications, preference signals, interviews and rank order lists to
+the match. For students, program directors, educators and researchers.
 
 Live site: <https://nrmp-simulated.heteroskedastic.org>
 
@@ -12,19 +12,24 @@ Live site: <https://nrmp-simulated.heteroskedastic.org>
 
 ## What works today
 
-1. Create a simulation; it starts with working default parameters (model 2.0: NRMP-like applicant groups, 1.08
+1. Create a simulation; it starts with working default parameters (model 2.1: NRMP-like applicant groups, 1.08
    applicants per position, moderate agreement on both sides) and its own random seed.
 2. Adjust the parameters: market size and tightness, applicant groups, the attributes each side evaluates and how
-   much they agree, and the pre-interview noise. The parameter editor and the help page are generated from one typed
-   schema.
-3. Run it: applicants and programs are generated (or taken from uploaded CSV files), with true preferences, noisy
-   pre-interview views and strict rankings on both sides. The same parameters and seed always give the same results,
-   and the pipeline shows which stages a change makes out of date.
-4. Explore the run: diagnostics (agreement, fidelity, first choices, the realised population against the request),
-   applicants and programs, and one applicant's or program's view of the other side. Download everything as CSV or
-   JSON; a downloaded population uploads back unchanged.
+   much they agree, information before and after interviews, application strategies, signals, interview
+   invitations, rank order list policies and the matching algorithm. The parameter editor and the help page are
+   generated from one typed schema.
+3. Run it: applicants and programs are generated (or taken from uploaded CSV files) with true preferences and noisy
+   views of each other; applicants apply and signal, programs invite in waves, interviews reveal fit, both sides
+   submit rank order lists, and deferred acceptance (as the NRMP) produces the match. The same parameters and seed
+   always give the same results, and the pipeline shows which stages a change makes out of date.
+4. Explore the run: the match rate, positions filled and where applicants matched on their lists, the funnel from
+   applications to rank order lists, signals, regret, results by applicant group and strength, the stability checks,
+   the pre-interview diagnostics, and each applicant's or program's path through the stages. Download everything as
+   CSV or JSON; a downloaded population uploads back unchanged.
 
-Applications, signals, invitations, interviews, rank order lists and the match itself are being built: see the
+Every match is checked for stability, capacities and list rules; `manage.py nrmp_validate` checks the engine against
+matching theory and an independent solver on hundreds of random markets ([docs/VALIDATION.md](docs/VALIDATION.md)).
+Replicates with uncertainty bands, charts and the remaining phases are next: see the
 [phased plan](docs/PROJECT_REVIEW.md#9-phased-implementation-plan) and
 [implementation status](docs/IMPLEMENTATION_STATUS.md). The in-app help page (`/help/`) explains the model, every
 parameter and the CSV formats; `docs/model_spec.md` is the full specification.
@@ -55,8 +60,9 @@ NRMP_TEST_DATABASE_URL=postgres://... uv run pytest   # the same tests on Postgr
 uv run pytest -m e2e                                  # browser tests: Playwright + axe (needs the built CSS)
 ```
 
-The engine also runs without the web interface: `uv run python manage.py nrmp_run --seed 42 --out results/` writes
-the parameters, population, per-agent results and diagnostics; `manage.py seed_demo` creates a demo simulation.
+The engine also runs without the web interface: `uv run python manage.py nrmp_run --seed 42 --out results/` runs
+every stage and writes the parameters, population, per-agent results, the stage decisions and the diagnostics;
+`manage.py nrmp_validate` prints the validation report; `manage.py seed_demo` creates a demo simulation.
 
 CI runs all of these, builds the Docker image and checks its health endpoint. `uvx pre-commit install` runs the fast
 checks before each commit.
@@ -73,7 +79,8 @@ and a worker.
 - [docs/PROJECT_REVIEW.md](docs/PROJECT_REVIEW.md): the project review and the phased plan.
 - [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md): what has been done, step by step.
 - [docs/DEPLOY.md](docs/DEPLOY.md): deployment and operations.
-- [docs/model_spec.md](docs/model_spec.md): the model 2.0 specification (normative since Phase 2).
+- [docs/model_spec.md](docs/model_spec.md): the model specification (2.1, normative).
+- [docs/VALIDATION.md](docs/VALIDATION.md): the validation report of the match engine.
 - [CLAUDE.md](CLAUDE.md): notes for AI coding assistants (commands, architecture, conventions).
 
 ## License

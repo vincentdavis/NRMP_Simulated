@@ -13,9 +13,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
-from .engine.persistence import population_from_npz
-from .models import RunArtifact, User
-from .population_csv import UploadedSide, population_csv_lines, uploaded_csv_lines
+from .engine.population import PopulationError
+from .models import User
+from .population_csv import UploadedSide, plain_csv_lines, population_csv_lines, uploaded_csv_lines
+from .runs import MATCH_COLUMNS, RunData
 
 VERIFY_SALT = "nrmps.accounts.verify-email"
 
@@ -62,8 +63,8 @@ def export_user_data(user: User):
 
     The archive holds account.json and, per simulation: simulation.json (fields and draft parameters), the uploaded
     populations as CSV, and per run run.json (parameters with the seed, versions, status, diagnostics). The latest
-    successful run's applicants and programs are included as CSV; other runs can be reproduced from their parameters
-    and seed.
+    successful run's applicants, programs and match are included as CSV; other runs can be reproduced from their
+    parameters and seed.
     """
     archive = tempfile.SpooledTemporaryFile(max_size=20 * 1024 * 1024)  # noqa: SIM115 (returned to the caller)
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -105,19 +106,21 @@ def export_user_data(user: User):
                 }
                 zf.writestr(f"{folder}/runs/{run.number}/run.json", json.dumps(record, indent=2))
                 if latest is not None and run.pk == latest.pk:
-                    data = run.artifact(RunArtifact.Kind.POPULATION)
-                    if data is not None:
-                        population = population_from_npz(data)
-                        _write_lines(
-                            zf,
-                            f"{folder}/runs/{run.number}/applicants.csv",
-                            population_csv_lines(population.applicants),
-                        )
-                        _write_lines(
-                            zf, f"{folder}/runs/{run.number}/programs.csv", population_csv_lines(population.programs)
-                        )
+                    _write_run_files(zf, f"{folder}/runs/{run.number}", run)
     archive.seek(0)
     return archive
+
+
+def _write_run_files(zf: zipfile.ZipFile, folder: str, run) -> None:
+    """Write a run's applicants, programs and (for runs with the match) the match as CSV."""
+    try:
+        data = RunData(run)
+    except PopulationError:
+        return
+    _write_lines(zf, f"{folder}/applicants.csv", population_csv_lines(data.population.applicants))
+    _write_lines(zf, f"{folder}/programs.csv", population_csv_lines(data.population.programs))
+    if data.stages is not None:
+        _write_lines(zf, f"{folder}/match.csv", plain_csv_lines(MATCH_COLUMNS, data.match_rows()))
 
 
 def _write_lines(zf: zipfile.ZipFile, name: str, lines) -> None:

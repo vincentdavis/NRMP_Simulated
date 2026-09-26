@@ -27,6 +27,26 @@ class Interviews:
     program_post: F64  # the program's post-interview view
 
 
+def pair_views(
+    params: SimulationParams,
+    model: MarketModel,
+    i: NDArray[np.int64],
+    j: NDArray[np.int64],
+    seed: int,
+    replicate: int = 0,
+) -> tuple[F64, F64, F64, F64, F64, F64]:
+    """Return (u, u*, applicant post view, v, v*, program post view) for interviewed pairs (i, j) (§7.4, §12.7)."""
+    sigma_fit = params.info.fit_shock_sd
+    kappa = params.info.interview_informativeness
+    u = model.applicants.pair_utilities(i, j)
+    u_star = u + sigma_fit * pair_normals(seed, Stream.FIT, replicate, i, j)
+    u_post = u_star + (1.0 - kappa) * model.applicant_view.pair_error(i, j)
+    v = model.programs.pair_utilities(j, i)
+    v_star = v + sigma_fit * pair_normals(seed, Stream.FIT_P, replicate, i, j)
+    v_post = v_star + (1.0 - kappa) * model.program_view.pair_error(j, i)
+    return u, u_star, u_post, v, v_star, v_post
+
+
 def interview(
     params: SimulationParams,
     model: MarketModel,
@@ -42,14 +62,6 @@ def interview(
     if held.size:
         i = applications.i[held].astype(np.int64)
         j = applications.j[held].astype(np.int64)
-        sigma_fit = params.info.fit_shock_sd
-        kappa = params.info.interview_informativeness
-        u = model.applicants.pair_utilities(i, j)
-        u_star = u + sigma_fit * pair_normals(seed, Stream.FIT, replicate, i, j)
-        u_post = u_star + (1.0 - kappa) * model.applicant_view.pair_error(i, j)
-        v = model.programs.pair_utilities(j, i)
-        v_star = v + sigma_fit * pair_normals(seed, Stream.FIT_P, replicate, i, j)
-        v_post = v_star + (1.0 - kappa) * model.program_view.pair_error(j, i)
-        for target, values in zip(arrays, (u, u_star, u_post, v, v_star, v_post), strict=True):
+        for target, values in zip(arrays, pair_views(params, model, i, j, seed, replicate), strict=True):
             target[held] = values
     return Interviews(*arrays)

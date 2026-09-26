@@ -1,9 +1,10 @@
-"""Starting and executing simulation runs, and loading their results (plan steps 2.3-2.5).
+"""Starting and executing simulation runs, and loading their results (plan steps 2.3-2.5 and 3.7).
 
 `start_run` freezes everything a run depends on: the validated parameters with the seed, the version stamps and the
-population (generated, uploaded or both), which it stores as an artifact. `execute_run` computes the pre-interview
-stage from that population and stores the per-agent results and the diagnostics. Pair-level values are not stored;
-`RunData` recomputes them for the pages that show them.
+population (generated, uploaded or both), which it stores as an artifact. `execute_run` computes every later stage,
+from the pre-interview views to the match, and stores the per-agent pre-interview results, the decisions of each
+stage (applications, signals, invitations, interviews, rank order lists and the match) and the diagnostics.
+Continuous pair values are not stored; `RunData` recomputes them for the pages and downloads that show them.
 """
 
 import hashlib
@@ -29,14 +30,20 @@ from numpy.typing import NDArray
 from pydantic import ValidationError
 
 from .engine import MODEL_VERSION
+from .engine.applications import REACH, SAFETY, TARGET
+from .engine.interviews import pair_views
 from .engine.persistence import (
+    StageRecord,
     population_digest,
     population_from_npz,
     population_to_npz,
     results_from_npz,
     results_to_npz,
+    stage_record,
+    stages_from_npz,
+    stages_to_npz,
 )
-from .engine.pipeline import SideResult, blocks, run_pre_interview, side_block
+from .engine.pipeline import SideResult, blocks, run_pipeline, side_block
 from .engine.population import Population, PopulationError, generate_population
 from .engine.utility import MarketModel, build_market
 from .exceptions import SimulationError
@@ -184,11 +191,20 @@ def start_run(simulation: Simulation, user: Any = None, *, notify: bool = False)
     return run
 
 
-def execute_run(run_id: int) -> SimulationRun:
-    """Compute a queued run's pre-interview stage and store the results; return the updated run.
+@dataclass
+class StageReport:
+    """A finished stage as the engine reported it."""
 
-    Problems with the data are recorded on the run (status failed, with the message); unexpected errors are logged
-    and recorded with a generic message. A run that is not queued is left alone.
+    stage: str
+    milliseconds: int
+    counts: dict[str, int]
+
+
+def execute_run(run_id: int) -> SimulationRun:
+    """Compute a queued run's stages, from the pre-interview views to the match, and store the results.
+
+    Problems with the data are recorded on the run (status failed, with the message, on the stage that failed);
+    unexpected errors are logged and recorded with a generic message. A run that is not queued is left alone.
     """
     run = SimulationRun.objects.get(pk=run_id)
     now = timezone.now()
@@ -197,6 +213,7 @@ def execute_run(run_id: int) -> SimulationRun:
         return run
     started = time.perf_counter()
     last_update = 0.0
+    reports: list[StageReport] = []
 
     def progress(done: int, total: int) -> None:
         nonlocal last_update
@@ -205,27 +222,32 @@ def execute_run(run_id: int) -> SimulationRun:
             last_update = moment
             SimulationRun.objects.filter(pk=run_id).update(progress_done=done)
 
+    def on_stage(stage: str, seconds: float, counts: dict[str, int]) -> None:
+        reports.append(StageReport(stage, round(seconds * 1000), counts))
+
     try:
         params = run.get_params()
         population_data = run.artifact(RunArtifact.Kind.POPULATION)
         if population_data is None:
             raise PopulationError("The run has no stored population.")
         with logfire.span(
-            "pre-interview stage",
-            run_id=run_id,
-            n_applicants=run.n_applicants,
-            n_programs=run.n_programs,
-            n_pairs=run.n_pairs,
+            "run stages", run_id=run_id, n_applicants=run.n_applicants, n_programs=run.n_programs, n_pairs=run.n_pairs
         ):
-            result = run_pre_interview(
+            result = run_pipeline(
                 params,
                 run.seed,
                 replicate=run.replicate,
                 population=population_from_npz(population_data),
                 block_pairs=settings.NRMP_BLOCK_PAIRS,
                 progress=progress,
+                on_stage=on_stage,
             )
-            results = results_to_npz(result.applicants, result.programs)
+            artifacts: dict[str, bytes] = {
+                RunArtifact.Kind.PRE_INTERVIEW: results_to_npz(result.pre.applicants, result.pre.programs),
+                RunArtifact.Kind.STAGES: stages_to_npz(stage_record(result)),
+            }
+        if result.match.blocking_pairs:  # impossible for deferred acceptance; recorded rather than hidden
+            logger.error("Unstable match run_id=%s blocking_pairs=%s", run_id, result.match.blocking_pairs)
     except Exception as exc:  # recorded on the run; the page shows it
         if isinstance(exc, ValueError):
             message = str(exc)
@@ -233,9 +255,9 @@ def execute_run(run_id: int) -> SimulationRun:
         else:
             message = "The run failed unexpectedly. The error has been logged; please try again or report it."
             logger.exception("Run failed unexpectedly run_id=%s", run_id)
-        _finish(run, Status.FAILED, started, error=message)
+        _finish(run, Status.FAILED, started, reports, error=message)
         return _notify(SimulationRun.objects.get(pk=run_id))
-    _finish(run, Status.SUCCEEDED, started, metrics=result.metrics, results=results)
+    _finish(run, Status.SUCCEEDED, started, reports, metrics=result.metrics, artifacts=artifacts)
     return _notify(SimulationRun.objects.get(pk=run_id))
 
 
@@ -263,28 +285,42 @@ def _finish(
     run: SimulationRun,
     status: str,
     started: float,
+    reports: list[StageReport],
     *,
     error: str = "",
     metrics: dict[str, Any] | None = None,
-    results: bytes | None = None,
+    artifacts: dict[str, bytes] | None = None,
 ) -> None:
-    """Record the pre-interview stage and the run's outcome in one transaction."""
+    """Record the stages and the run's outcome in one transaction (a failure lands on the first unfinished stage)."""
     duration = _milliseconds(started)
     finished = timezone.now()
     with transaction.atomic():
-        if results is not None:
-            _save_artifact(run, RunArtifact.Kind.PRE_INTERVIEW, results)
-        StageRun.objects.create(
-            run=run,
-            stage=Stage.PRE_INTERVIEW,
-            status=status,
-            fingerprint=run.fingerprints.get(Stage.PRE_INTERVIEW, ""),
-            started_at=run.started_at or finished,
-            finished_at=finished,
-            duration_ms=duration,
-            counts={"pairs": run.n_pairs} if status == Status.SUCCEEDED else {},
-            error=error,
-        )
+        for kind, data in (artifacts or {}).items():
+            _save_artifact(run, kind, data)
+        for report in reports:
+            StageRun.objects.create(
+                run=run,
+                stage=report.stage,
+                status=Status.SUCCEEDED,
+                fingerprint=run.fingerprints.get(report.stage, ""),
+                started_at=run.started_at or finished,
+                finished_at=finished,
+                duration_ms=report.milliseconds,
+                counts=report.counts,
+            )
+        if status == Status.FAILED:
+            done = {report.stage for report in reports} | {Stage.POPULATION.value}
+            failed = next(stage for stage in IMPLEMENTED_STAGES if stage.value not in done)
+            StageRun.objects.create(
+                run=run,
+                stage=failed,
+                status=Status.FAILED,
+                fingerprint=run.fingerprints.get(failed.value, ""),
+                started_at=run.started_at or finished,
+                finished_at=finished,
+                duration_ms=duration - sum(report.milliseconds for report in reports),
+                error=error,
+            )
         population_ms = run.stages.filter(stage=Stage.POPULATION).values_list("duration_ms", flat=True).first() or 0
         updates: dict[str, Any] = {
             "status": status,
@@ -343,6 +379,36 @@ class PairRows:
     other_observed_rank: NDArray[np.int32] | None
 
 
+@dataclass
+class StageRows:
+    """One agent's stage outcomes for every target (all programs, or all applicants), unset where none apply."""
+
+    applied: NDArray[np.bool_]
+    signal: NDArray[np.int8]  # signal tier, -1 = none
+    wave: NDArray[np.int8]  # invitation wave, 0 = not invited
+    interviewed: NDArray[np.bool_]
+    post: NDArray[np.float64]  # the agent's post-interview view of the target (NaN without an interview)
+    other_post: NDArray[np.float64]  # the target's post-interview view of the agent
+    list_rank: NDArray[np.int32]  # the agent's list rank of the target (0 = not on the list)
+    other_list_rank: NDArray[np.int32]  # the target's list rank of the agent
+    matched: NDArray[np.bool_]
+
+    @classmethod
+    def empty(cls, n: int) -> StageRows:
+        """Return rows for n targets with nothing applied."""
+        return cls(
+            applied=np.zeros(n, dtype=np.bool_),
+            signal=np.full(n, -1, dtype=np.int8),
+            wave=np.zeros(n, dtype=np.int8),
+            interviewed=np.zeros(n, dtype=np.bool_),
+            post=np.full(n, np.nan),
+            other_post=np.full(n, np.nan),
+            list_rank=np.zeros(n, dtype=np.int32),
+            other_list_rank=np.zeros(n, dtype=np.int32),
+            matched=np.zeros(n, dtype=np.bool_),
+        )
+
+
 class RunData:
     """A finished run's population, per-agent results and market model, loaded from its artifacts."""
 
@@ -358,6 +424,73 @@ class RunData:
         self.program_results: SideResult | None = None
         if results is not None:
             self.applicant_results, self.program_results = results_from_npz(results)
+        stages = run.artifact(RunArtifact.Kind.STAGES)
+        self.stages: StageRecord | None = stages_from_npz(stages) if stages is not None else None
+
+    def applicant_totals(self) -> dict[str, NDArray[Any]] | None:
+        """Return per applicant: applications, signals, interviews, list length, matched program and its rank."""
+        record = self.stages
+        if record is None:
+            return None
+        n = self.population.n_applicants
+        return {
+            "applications": np.bincount(record.i, minlength=n),
+            "signals": np.bincount(record.i[record.signal_tier >= 0], minlength=n),
+            "interviews": np.bincount(record.i[record.accepted], minlength=n),
+            "list_length": np.bincount(record.i[record.applicant_rank > 0], minlength=n),
+            "match": record.match_program,
+            "match_rank": record.match_applicant_rank.astype(np.int64),
+        }
+
+    def program_totals(self) -> dict[str, NDArray[Any]] | None:
+        """Return per program: applications and signals received, invitations, interviews, list length and filled."""
+        record = self.stages
+        if record is None:
+            return None
+        m = self.population.n_programs
+        return {
+            "applications": np.bincount(record.j, minlength=m),
+            "signals": np.bincount(record.j[record.signal_tier >= 0], minlength=m),
+            "invitations": np.bincount(record.j[record.invite_wave > 0], minlength=m),
+            "interviews": np.bincount(record.j[record.accepted], minlength=m),
+            "list_length": np.bincount(record.j[record.program_rank > 0], minlength=m),
+            "filled": record.filled.astype(np.int64),
+        }
+
+    def stage_rows(self, agent: int, *, applicant: bool) -> StageRows | None:
+        """Return one agent's stage outcomes for every target (applications, or applications received)."""
+        record = self.stages
+        if record is None:
+            return None
+        n_targets = self.population.n_programs if applicant else self.population.n_applicants
+        mine = np.flatnonzero((record.i if applicant else record.j) == agent)
+        targets = (record.j if applicant else record.i)[mine].astype(np.int64)
+        rows = StageRows.empty(n_targets)
+        rows.applied[targets] = True
+        rows.signal[targets] = record.signal_tier[mine]
+        rows.wave[targets] = record.invite_wave[mine]
+        rows.interviewed[targets] = record.accepted[mine]
+        own_rank, other_rank = (
+            (record.applicant_rank, record.program_rank) if applicant else (record.program_rank, record.applicant_rank)
+        )
+        rows.list_rank[targets] = own_rank[mine]
+        rows.other_list_rank[targets] = other_rank[mine]
+        held = mine[record.accepted[mine]]
+        if held.size:
+            i, j = record.i[held].astype(np.int64), record.j[held].astype(np.int64)
+            _u, _u_star, u_post, _v, _v_star, v_post = pair_views(
+                self.params, self.model, i, j, self.run.seed, self.run.replicate
+            )
+            where = j if applicant else i
+            rows.post[where] = u_post if applicant else v_post
+            rows.other_post[where] = v_post if applicant else u_post
+        if applicant:
+            matched = int(record.match_program[agent])
+            if matched >= 0:
+                rows.matched[matched] = True
+        else:
+            rows.matched[np.flatnonzero(record.match_program == agent)] = True
+        return rows
 
     @cached_property
     def model(self) -> MarketModel:
@@ -451,6 +584,151 @@ class RunData:
                         int(program_observed[j, i]),
                     ]
 
+    def application_rows(self, chunk: int = 50_000) -> Iterator[list[Any]]:
+        """Yield one row per application (APPLICATION_COLUMNS): the decisions of every stage and both sides' views."""
+        record = self.stages
+        if record is None:
+            return
+        applicants, programs = self.population.applicants, self.population.programs
+        tiers = [tier.name for tier in self.params.signals.tiers]
+        portfolio = self.params.apps.strategy == "portfolio"
+        model, seed, replicate = self.model, self.run.seed, self.run.replicate
+        for start in range(0, record.i.shape[0], chunk):
+            rows = np.arange(start, min(start + chunk, record.i.shape[0]))
+            i, j = record.i[rows].astype(np.int64), record.j[rows].astype(np.int64)
+            u = model.applicants.pair_utilities(i, j)
+            u_hat = u + model.applicant_view.pair_error(i, j)
+            v = model.programs.pair_utilities(j, i)
+            v_hat = v + model.program_view.pair_error(j, i)
+            u_star, u_post, v_star, v_post = (np.full(rows.shape[0], np.nan) for _ in range(4))
+            held = np.flatnonzero(record.accepted[rows])
+            if held.size:
+                _u, u_star[held], u_post[held], _v, v_star[held], v_post[held] = pair_views(
+                    self.params, model, i[held], j[held], seed, replicate
+                )
+            for k, pair in enumerate(rows.tolist()):
+                applicant, program = int(i[k]), int(j[k])
+                tier, wave = int(record.signal_tier[pair]), int(record.invite_wave[pair])
+                yield [
+                    applicants.name(applicant),
+                    programs.name(program),
+                    int(record.pre_rank[pair]),
+                    CATEGORY_NAMES[int(record.category[pair])] if portfolio else "",
+                    tiers[tier] if 0 <= tier < len(tiers) else "",
+                    wave or "",
+                    int(record.accepted[pair]),
+                    _number(u[k]),
+                    _number(u_hat[k]),
+                    _number(u_star[k]),
+                    _number(u_post[k]),
+                    _number(v[k]),
+                    _number(v_hat[k]),
+                    _number(v_star[k]),
+                    _number(v_post[k]),
+                    int(record.applicant_rank[pair]) or "",
+                    int(record.program_rank[pair]) or "",
+                    int(record.match_program[applicant] == program),
+                ]
+
+    def match_rows(self) -> Iterator[list[Any]]:
+        """Yield one row per applicant (MATCH_COLUMNS): the stages' totals and the match."""
+        totals = self.applicant_totals()
+        record = self.stages
+        if totals is None or record is None:
+            return
+        applicants, programs = self.population.applicants, self.population.programs
+        for i in range(applicants.size):
+            matched = int(record.match_program[i])
+            other = int(record.alternative[i]) if record.alternative is not None else None
+            yield [
+                applicants.name(i),
+                applicants.group_names[applicants.group[i]],
+                repr(float(applicants.strength[i])),
+                int(totals["applications"][i]),
+                int(totals["signals"][i]),
+                int(totals["interviews"][i]),
+                int(totals["list_length"][i]),
+                programs.name(matched) if matched >= 0 else "",
+                int(record.match_applicant_rank[i]) or "",
+                int(record.match_program_rank[i]) or "",
+                "" if other is None else programs.name(other) if other >= 0 else "unmatched",
+            ]
+
+    def program_result_rows(self) -> Iterator[list[Any]]:
+        """Yield one row per program (PROGRAM_RESULT_COLUMNS): the stages' totals and the positions filled."""
+        totals = self.program_totals()
+        if totals is None:
+            return
+        programs = self.population.programs
+        for j in range(programs.size):
+            yield [
+                programs.name(j),
+                programs.tier_names[programs.tier[j]],
+                repr(float(programs.quality[j])),
+                int(programs.capacity[j]),
+                int(totals["applications"][j]),
+                int(totals["signals"][j]),
+                int(totals["invitations"][j]),
+                int(totals["interviews"][j]),
+                int(totals["list_length"][j]),
+                int(totals["filled"][j]),
+            ]
+
+
+def _number(value: float) -> str:
+    """Return a float for a CSV cell: the exact repr, or blank for NaN."""
+    return "" if np.isnan(value) else repr(float(value))
+
+
+CATEGORY_NAMES = {TARGET: "target", REACH: "reach", SAFETY: "safety"}
+
+APPLICATION_COLUMNS = [
+    "applicant",
+    "program",
+    "applicant_pre_interview_rank",
+    "category",
+    "signal",
+    "invitation_wave",
+    "interviewed",
+    "applicant_true_utility",
+    "applicant_pre_interview_view",
+    "applicant_realised_utility",
+    "applicant_post_interview_view",
+    "program_true_utility",
+    "program_pre_interview_view",
+    "program_realised_utility",
+    "program_post_interview_view",
+    "applicant_list_rank",
+    "program_list_rank",
+    "matched",
+]
+
+MATCH_COLUMNS = [
+    "applicant",
+    "group",
+    "strength",
+    "applications",
+    "signals",
+    "interviews",
+    "list_length",
+    "matched_program",
+    "applicant_rank_of_match",
+    "program_rank_of_applicant",
+    "program_if_the_other_side_proposes",
+]
+
+PROGRAM_RESULT_COLUMNS = [
+    "program",
+    "tier",
+    "quality",
+    "positions",
+    "applications",
+    "signals",
+    "invitations",
+    "interviews",
+    "list_length",
+    "filled",
+]
 
 PAIR_COLUMNS = [
     "applicant",
