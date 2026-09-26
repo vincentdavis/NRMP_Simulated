@@ -74,29 +74,24 @@ class SimulationForm(forms.ModelForm):
 
 
 class StudentsUploadForm(forms.Form):
-    """Upload CSV for students: expects headers name,score and optional meta fields.
-
-    Optional columns:
-    - score_meta: JSON object mapping meta names to values
-    """
+    """Upload a CSV of applicants; see `population_csv` for the format and validation."""
 
     file = forms.FileField(
         label="Students CSV",
-        help_text="CSV: name, score, [score_meta]",
+        help_text="CSV with a header row: name, score, and optionally score_meta and meta_preference (JSON objects).",
         widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
     )
 
 
 class SchoolsUploadForm(forms.Form):
-    """Upload CSV for schools: expects headers name,capacity,score and optional meta fields.
-
-    Optional columns:
-    - score_meta: JSON object mapping meta names to values
-    """
+    """Upload a CSV of programs; see `population_csv` for the format and validation."""
 
     file = forms.FileField(
         label="Schools CSV",
-        help_text="CSV: name, capacity, score, [score_meta]",
+        help_text=(
+            "CSV with a header row: name, capacity, score, and optionally score_meta and meta_preference "
+            "(JSON objects)."
+        ),
         widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
     )
 

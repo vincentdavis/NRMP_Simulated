@@ -10,6 +10,7 @@ from django.db import models, transaction
 from scipy.stats import beta
 
 from .exceptions import MissingConfigError
+from .limits import check_market_size
 from .validators import validate_attribute_list
 
 
@@ -380,203 +381,53 @@ class Simulation(models.Model):
         self.schools.all().delete()
 
     @_population_change
-    def upload_students(self) -> int:
-        """Upload students from a CSV file located in BASE_DIR/data.
+    def upload_students(self, rows: list[dict]) -> int:
+        """Replace the applicants with validated rows from `population_csv.parse_population_csv(..., "students")`.
 
-        Expected CSV format (with header): name,score[,score_meta]
-        - score_meta: JSON object string mapping meta names to values.
-        File path convention: data/simulation_{self.id}_students.csv
-        - Replaces existing students for this simulation.
-        - Returns the number of students created. Returns 0 if the file does not exist.
+        Runs in one transaction, so the old population survives if anything fails. Raises SizeLimitError if the
+        new applicants x the current programs would exceed the size limit. Returns the number of applicants.
         """
-        import csv
-        import json
-        from pathlib import Path
-
-        from django.conf import settings
-
-        data_dir = Path(getattr(settings, "BASE_DIR", ".")) / "data"
-        csv_path = data_dir / f"simulation_{self.id}_students.csv"
-        if not csv_path.exists():
-            return 0
-
+        check_market_size(len(rows), self.schools.count())
         self.students.all().delete()
-
-        to_create = []
-        with csv_path.open("r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            # Minimal validation for expected headers
-            field_map = {k.strip().lower(): k for k in reader.fieldnames or []}
-            name_key = field_map.get("name")
-            score_key = field_map.get("score")
-            score_meta_key = field_map.get("score_meta")
-            if not name_key or not score_key:
-                # If headers missing, attempt to read as positional columns
-                f.seek(0)
-                raw_reader = csv.reader(f)
-                # Skip header row if present but unknown names
-                next(raw_reader, None)
-                for idx, row in enumerate(raw_reader, start=1):
-                    if not row:
-                        continue
-                    name = row[0].strip() if len(row) > 0 else f"Student {idx}"
-                    try:
-                        score = float(row[1]) if len(row) > 1 and row[1] != "" else 0.0
-                    except ValueError:
-                        score = 0.0
-                    score_meta = {}
-                    # If a third column exists, treat it as score_meta JSON and ignore any legacy meta_stddev column
-                    if len(row) > 2 and row[2]:
-                        try:
-                            score_meta = json.loads(row[2])
-                        except Exception:
-                            score_meta = {}
-                    to_create.append(
-                        Student(
-                            simulation=self,
-                            name=name,
-                            score=score,
-                            score_meta=score_meta,
-                        )
-                    )
-            else:
-                for row in reader:
-                    name = (row.get(name_key) or "").strip() or None
-                    score_val = row.get(score_key)
-                    try:
-                        score = float(score_val) if score_val not in (None, "") else 0.0
-                    except ValueError:
-                        score = 0.0
-                    score_meta_str = row.get(score_meta_key) if score_meta_key else None
-                    score_meta = {}
-                    if score_meta_str:
-                        try:
-                            score_meta = json.loads(score_meta_str)
-                        except Exception:
-                            score_meta = {}
-                    if not name:
-                        name = f"Student {len(to_create) + 1}"
-                    to_create.append(
-                        Student(
-                            simulation=self,
-                            name=name,
-                            score=score,
-                            score_meta=score_meta,
-                        )
-                    )
-
-        if to_create:
-            Student.objects.bulk_create(to_create, batch_size=1000)
-        return len(to_create)
+        Student.objects.bulk_create(
+            (
+                Student(
+                    simulation=self,
+                    name=row["name"],
+                    score=row["score"],
+                    score_meta=row["score_meta"],
+                    meta_preference=row["meta_preference"],
+                )
+                for row in rows
+            ),
+            batch_size=2000,
+        )
+        return len(rows)
 
     @_population_change
-    def upload_schools(self) -> int:
-        """Upload schools from a CSV file located in BASE_DIR/data.
+    def upload_schools(self, rows: list[dict]) -> int:
+        """Replace the programs with validated rows from `population_csv.parse_population_csv(..., "schools")`.
 
-        Expected CSV format (with header): name,capacity,score[,score_meta]
-        - score_meta: JSON object string mapping meta names to values.
-        File path convention: data/simulation_{self.id}_schools.csv
-        - Replaces existing schools for this simulation.
-        - Returns the number of schools created. Returns 0 if the file does not exist.
+        Runs in one transaction, so the old population survives if anything fails. Raises SizeLimitError if the
+        current applicants x the new programs would exceed the size limit. Returns the number of programs.
         """
-        import csv
-        import json
-        from pathlib import Path
-
-        from django.conf import settings
-
-        data_dir = Path(getattr(settings, "BASE_DIR", ".")) / "data"
-        csv_path = data_dir / f"simulation_{self.id}_schools.csv"
-        if not csv_path.exists():
-            return 0
-
+        check_market_size(self.students.count(), len(rows))
         self.schools.all().delete()
-
-        to_create = []
-        with csv_path.open("r", newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            field_map = {k.strip().lower(): k for k in reader.fieldnames or []}
-            name_key = field_map.get("name")
-            cap_key = field_map.get("capacity")
-            score_key = field_map.get("score")
-            score_meta_key = field_map.get("score_meta")
-            if not name_key:
-                # Fallback: positional
-                f.seek(0)
-                raw_reader = csv.reader(f)
-                next(raw_reader, None)
-                for idx, row in enumerate(raw_reader, start=1):
-                    if not row:
-                        continue
-                    name = row[0].strip() if len(row) > 0 else f"School {idx}"
-                    try:
-                        capacity = int(float(row[1])) if len(row) > 1 and row[1] != "" else 0
-                    except ValueError:
-                        capacity = 0
-                    try:
-                        score = float(row[2]) if len(row) > 2 and row[2] != "" else 0.0
-                    except ValueError:
-                        score = 0.0
-                    try:
-                        meta_stddev = float(row[3]) if len(row) > 3 and row[3] != "" else 0.0
-                    except (ValueError, TypeError):
-                        meta_stddev = 0.0
-                    score_meta = {}
-                    if len(row) > 4 and row[4]:
-                        try:
-                            score_meta = json.loads(row[4])
-                        except Exception:
-                            score_meta = {}
-                    if capacity < 0:
-                        capacity = 0
-                    to_create.append(
-                        School(
-                            simulation=self,
-                            name=name,
-                            capacity=capacity,
-                            score=score,
-                            score_meta=score_meta,
-                        )
-                    )
-            else:
-                for row in reader:
-                    name = (row.get(name_key) or "").strip() or None
-                    cap_val = row.get(cap_key) if cap_key else None
-                    score_val = row.get(score_key) if score_key else None
-                    try:
-                        capacity = int(float(cap_val)) if cap_val not in (None, "") else 0
-                    except ValueError:
-                        capacity = 0
-                    try:
-                        score = float(score_val) if score_val not in (None, "") else 0.0
-                    except ValueError:
-                        score = 0.0
-                    # Ignore legacy meta_stddev column if present; we no longer store it
-                    pass
-                    score_meta_str = row.get(score_meta_key) if score_meta_key else None
-                    score_meta = {}
-                    if score_meta_str:
-                        try:
-                            score_meta = json.loads(score_meta_str)
-                        except Exception:
-                            score_meta = {}
-                    if capacity < 0:
-                        capacity = 0
-                    if not name:
-                        name = f"School {len(to_create) + 1}"
-                    to_create.append(
-                        School(
-                            simulation=self,
-                            name=name,
-                            capacity=capacity,
-                            score=score,
-                            score_meta=score_meta,
-                        )
-                    )
-
-        if to_create:
-            School.objects.bulk_create(to_create, batch_size=1000)
-        return len(to_create)
+        School.objects.bulk_create(
+            (
+                School(
+                    simulation=self,
+                    name=row["name"],
+                    capacity=row["capacity"],
+                    score=row["score"],
+                    score_meta=row["score_meta"],
+                    meta_preference=row["meta_preference"],
+                )
+                for row in rows
+            ),
+            batch_size=2000,
+        )
+        return len(rows)
 
 
 class SimulationConfig(models.Model):

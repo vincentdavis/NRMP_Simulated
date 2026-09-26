@@ -575,3 +575,6 @@ staticfiles/
 
 # macOS Finder metadata
 .DS_Store
+
+# Legacy location of uploaded CSV files (no longer written)
+data/

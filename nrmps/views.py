@@ -2,9 +2,7 @@ import csv
 import inspect
 import json
 import logging
-from pathlib import Path
 
-from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -17,6 +15,8 @@ from . import models
 from .exceptions import SimulationError
 from .forms import SchoolsUploadForm, SignupForm, SimulationConfigForm, SimulationForm, StudentsUploadForm
 from .models import Interview, Simulation, SimulationConfig
+from .population_csv import COLUMNS as POPULATION_COLUMNS
+from .population_csv import csv_lines, parse_population_csv
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,14 @@ logger = logging.getLogger(__name__)
 PAGE_SIZES = [25, 50, 100, 200, 500]
 
 
-def _render_stage_cards(request, simulation, *, error: str | None = None, error_stage: str | None = None):
+def _render_stage_cards(
+    request,
+    simulation,
+    *,
+    error: str | None = None,
+    error_stage: str | None = None,
+    error_details: list[str] | None = None,
+):
     """Render every stage card, plus an out-of-band swap of the workflow stepper.
 
     Every HTMX step action returns this, so no card goes stale when a step changes another stage's data (for example
@@ -36,6 +43,7 @@ def _render_stage_cards(request, simulation, *, error: str | None = None, error_
         "stages": simulation.get_workflow_stages(),
         "error": error,
         "error_stage": error_stage,
+        "error_details": error_details or [],
     }
     cards = render(request, "nrmps/partials/_stage_cards.html", context).content.decode()
     stepper = render(request, "nrmps/partials/_workflow_steps.html", context | {"oob": True}).content.decode()
@@ -53,7 +61,8 @@ def _run_step(request, pk: int, stage: str, action):
         action(sim)
     except SimulationError as exc:
         logger.info("Simulation step failed simulation_id=%s stage=%s: %s", sim.pk, stage, exc)
-        return _render_stage_cards(request, sim, error=str(exc), error_stage=stage)
+        details = getattr(exc, "details", None)
+        return _render_stage_cards(request, sim, error=str(exc), error_stage=stage, error_details=details)
     return _render_stage_cards(request, sim)
 
 
@@ -324,23 +333,18 @@ def simulation_create_schools(request, pk: int):
     return _run_step(request, pk, "populations", lambda sim: sim.create_schools())
 
 
-def _upload(request, pk: int, form_class, side: str):
-    """Save an uploaded population CSV and load it (replacing the current population)."""
+def _upload(request, pk: int, form_class, kind: str):
+    """Replace a population with an uploaded CSV, validated in memory before anything is deleted."""
 
     def action(sim):
         form = form_class(request.POST, request.FILES)
         if not form.is_valid():
             raise SimulationError("Choose a CSV file to upload.")
-        data_dir = Path(getattr(settings, "BASE_DIR", ".")) / "data"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        dest = data_dir / f"simulation_{sim.id}_{side}.csv"
-        with dest.open("wb") as out:
-            for chunk in form.cleaned_data["file"].chunks():
-                out.write(chunk)
-        if side == "students":
-            sim.upload_students()
+        rows = parse_population_csv(form.cleaned_data["file"], kind)
+        if kind == "students":
+            sim.upload_students(rows)
         else:
-            sim.upload_schools()
+            sim.upload_schools(rows)
 
     return _run_step(request, pk, "populations", action)
 
@@ -362,32 +366,28 @@ def simulation_upload_schools(request, pk: int):
 # --- CSV downloads ---
 
 
+def _download_population(request, pk: int, kind: str):
+    """Stream a population in the CSV format that the upload accepts."""
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
+    queryset = sim.students if kind == "students" else sim.schools
+    records = queryset.order_by("id").values_list(*POPULATION_COLUMNS[kind]).iterator(chunk_size=2000)
+    response = StreamingHttpResponse(csv_lines(kind, records), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="simulation_{sim.id}_{kind}.csv"'
+    return response
+
+
 @login_required
 @require_GET
 def simulation_download_students(request, pk: int):
-    """Download the applicants as CSV."""
-    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
-    rows = (
-        [name, score, json.dumps(score_meta or {}, ensure_ascii=False)]
-        for name, score, score_meta in sim.students.order_by("id")
-        .values_list("name", "score", "score_meta")
-        .iterator(chunk_size=2000)
-    )
-    return _stream_csv(f"simulation_{sim.id}_students.csv", ["name", "score", "score_meta"], rows)
+    """Download the applicants as CSV (the format the upload accepts)."""
+    return _download_population(request, pk, "students")
 
 
 @login_required
 @require_GET
 def simulation_download_schools(request, pk: int):
-    """Download the programs as CSV."""
-    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
-    rows = (
-        [name, capacity, score, json.dumps(score_meta or {}, ensure_ascii=False)]
-        for name, capacity, score, score_meta in sim.schools.order_by("id")
-        .values_list("name", "capacity", "score", "score_meta")
-        .iterator(chunk_size=2000)
-    )
-    return _stream_csv(f"simulation_{sim.id}_schools.csv", ["name", "capacity", "score", "score_meta"], rows)
+    """Download the programs as CSV (the format the upload accepts)."""
+    return _download_population(request, pk, "schools")
 
 
 @login_required
