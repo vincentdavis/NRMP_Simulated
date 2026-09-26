@@ -1,0 +1,6 @@
+{% comment %}Error from the last action on this stage card (a SimulationError message), shown in the card.{% endcomment %}
+{% if error %}
+  <div role="alert" class="alert alert-error mb-3">
+    <span>{{ error }}</span>
+  </div>
+{% endif %}

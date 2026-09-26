@@ -26,7 +26,7 @@
 
       <div class="form-control mb-4">
         <label class="label" for="id_description">
-          <span class="label-text font-medium">Description</span>
+          <span class="label-text font-medium">Description (optional)</span>
         </label>
         <textarea name="description" class="textarea textarea-bordered" id="id_description"
                   rows="3">{{ form.description.value|default:'' }}</textarea>
@@ -43,7 +43,9 @@
             <span class="label-text font-medium">Iterations</span>
           </label>
           <input type="number" name="iterations" class="input input-bordered w-full" id="id_iterations"
-                 value="{{ form.iterations.value|default:'1' }}" required>
+                 value="{{ form.iterations.value|default:'1' }}" min="1" max="100" required
+                 aria-describedby="id_iterations_helptext">
+          <p class="text-sm text-base-content/70 mt-1" id="id_iterations_helptext">{{ form.iterations.help_text }}</p>
           {% if form.iterations.errors %}
             <label class="label">
               <span class="label-text-alt text-error">{{ form.iterations.errors|striptags }}</span>
@@ -54,9 +56,10 @@
         <div class="form-control">
           <label class="label cursor-pointer justify-start gap-2" for="id_public">
             <input type="checkbox" name="public" class="checkbox" id="id_public"
-                   {% if form.public.value %}checked{% endif %}>
+                   {% if form.public.value %}checked{% endif %} aria-describedby="id_public_helptext">
             <span class="label-text">Public</span>
           </label>
+          <p class="text-sm text-base-content/70 mt-1" id="id_public_helptext">{{ form.public.help_text }}</p>
           {% if form.public.errors %}
             <label class="label">
               <span class="label-text-alt text-error">{{ form.public.errors|striptags }}</span>

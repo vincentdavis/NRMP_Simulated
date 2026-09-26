@@ -9,12 +9,14 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.http import Http404, HttpResponse
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
 
 from . import models
+from .exceptions import SimulationError
 from .forms import SchoolsUploadForm, SignupForm, SimulationConfigForm, SimulationForm, StudentsUploadForm
-from .models import Interview, Simulation
+from .models import Interview, Simulation, SimulationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +98,12 @@ def simulation_create(request):
     if request.method == "POST":
         form = SimulationForm(request.POST)
         if form.is_valid():
-            sim = form.save(commit=False)
-            sim.owner = request.user
-            sim.save()
+            # Every simulation starts with a valid default configuration, so the population steps work at once.
+            with transaction.atomic():
+                sim = form.save(commit=False)
+                sim.owner = request.user
+                sim.save()
+                SimulationConfig.objects.create(simulation=sim)
             return redirect("nrmps:simulation_manage", pk=sim.pk)
     else:
         form = SimulationForm()
@@ -244,7 +249,10 @@ def simulation_create_students(request, pk: int):
     sim = get_object_or_404(Simulation, pk=pk)
     if sim.owner_id != request.user.id:
         raise Http404()
-    sim.create_students()
+    try:
+        sim.create_students()
+    except SimulationError as exc:
+        return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim, {"error": str(exc)})
     if sim.students.exists() and sim.schools.exists():
         sim.advance_status("populations")
     return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
@@ -257,7 +265,10 @@ def simulation_create_schools(request, pk: int):
     sim = get_object_or_404(Simulation, pk=pk)
     if sim.owner_id != request.user.id:
         raise Http404()
-    sim.create_schools()
+    try:
+        sim.create_schools()
+    except SimulationError as exc:
+        return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim, {"error": str(exc)})
     if sim.students.exists() and sim.schools.exists():
         sim.advance_status("populations")
     return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)

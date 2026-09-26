@@ -37,12 +37,14 @@
               <div class="form-control">
                 <label class="label" for="id_iterations"><span class="label-text">Iterations</span></label>
                 {{ form.iterations }}
+                <p class="text-sm text-base-content/70 mt-1">{{ form.iterations.help_text }}</p>
               </div>
               <div class="form-control">
                 <label class="label cursor-pointer">
                   {{ form.public }}
                   <span class="label-text">Public</span>
                 </label>
+                <p class="text-sm text-base-content/70 mt-1">{{ form.public.help_text }}</p>
               </div>
             </div>
           </div>

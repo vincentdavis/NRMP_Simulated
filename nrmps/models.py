@@ -1,10 +1,14 @@
+import math
 import random
 
 import numpy as np
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from scipy.stats import beta
+
+from .exceptions import MissingConfigError
 
 
 def default_school_meta_preference():
@@ -103,10 +107,20 @@ class Simulation(models.Model):
     """
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="simulations")
-    name = models.CharField(max_length=255)
-    public = models.BooleanField(default=True)
-    description = models.TextField(default="")
-    iterations = models.IntegerField(default=1, validators=[MinValueValidator(1), MaxValueValidator(100)])
+    name = models.CharField(max_length=255, help_text="A short name for this experiment.")
+    public = models.BooleanField(
+        default=False,
+        help_text="Planned: let others view this simulation read-only. Currently has no effect; only you can see it.",
+    )
+    description = models.TextField(default="", blank=True, help_text="Notes on what you are testing (optional).")
+    iterations = models.IntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+        help_text=(
+            "Planned: number of independent repeats with different random seeds; results will be aggregated. "
+            "Not used yet."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=50, choices=SIMULATION_STAGES, default="setup")
 
@@ -175,14 +189,14 @@ class Simulation(models.Model):
           config.school_meta_preference: each meta gets beta-distributed scores with base_score as mean.
         - Also generates meta_preference weights per student using config.applicant_meta_preference and
           config.applicant_meta_preference_stddev, storing the stddev into meta_stddev_preference.
+        - Raises MissingConfigError if the simulation has no configuration.
         - Returns the number of students created.
         """
         import random
 
         config = self.configs.order_by("-id").first()
         if config is None:
-            # No configuration: nothing to create
-            return 0
+            raise MissingConfigError()
 
         # Remove existing population for a fresh generation
         self.students.all().delete()
@@ -257,13 +271,14 @@ class Simulation(models.Model):
           config.applicant_meta_preference: each meta gets beta-distributed scores with base_score as mean.
         - Also generates meta_preference weights per school using config.school_meta_preference and
           config.school_meta_preference_stddev, storing the stddev into meta_stddev_preference.
+        - Raises MissingConfigError if the simulation has no configuration.
         - Returns the number of schools created.
         """
         import random
 
         config = self.configs.order_by("-id").first()
         if config is None:
-            return 0
+            raise MissingConfigError()
 
         self.schools.all().delete()
 
@@ -540,106 +555,143 @@ class Simulation(models.Model):
 class SimulationConfig(models.Model):
     """Simulation configuration model.
 
-    This contains the configuration of the simulation
+    Parameters for generating the applicant (student) and program (school) populations and for the pre-interview
+    ratings. Scores and attribute scores live on a 0-1 scale and are drawn from Beta distributions, so a standard
+    deviation must stay below the Beta limit sqrt(mean * (1 - mean)); `clean()` enforces that for the base scores.
     """
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="configs")
     number_of_applicants = models.IntegerField(
         default=200,
         validators=[MinValueValidator(1), MaxValueValidator(10000)],
-        help_text="Total number of applicants to generate.",
+        help_text="How many applicants (medical students) to generate.",
     )
     number_of_schools = models.IntegerField(
         default=10,
         validators=[MinValueValidator(1), MaxValueValidator(1000)],
-        help_text="Total number of schools to generate.",
+        help_text="How many residency programs to generate.",
     )
     # Applicant score configuration
     applicant_score_mean = models.FloatField(
         default=0.7,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Mean of the applicants' base scores.",
+        validators=[MinValueValidator(0.01), MaxValueValidator(0.99)],
+        help_text="Average applicant base (overall strength) score on a 0-1 scale.",
     )
     applicant_score_stddev = models.FloatField(
-        default=2,
-        validators=[MinValueValidator(0), MaxValueValidator(99)],
-        help_text="Std. dev. of the applicants' base scores (>= 0).",
+        default=0.1,
+        validators=[MinValueValidator(0), MaxValueValidator(0.45)],
+        help_text="How spread out applicant base scores are (SD on the 0-1 scale).",
     )
     applicant_interview_limit = models.IntegerField(
         default=5,
-        validators=[MinValueValidator(0)],
-        help_text="Max number of interviews each applicant can attend.",
+        validators=[MinValueValidator(0), MaxValueValidator(50)],
+        help_text="Not used yet: the most interviews an applicant can accept and attend.",
     )
+    # The program attributes that applicants evaluate: every program gets a score for each name, and every applicant
+    # gets a preference weight for each name.
     applicant_meta_preference = models.JSONField(
         default=default_applicant_meta_preference,
-        help_text="List of applicant preference meta fields (e.g., program_size, prestige).",
-    )  # This is the list of meta-fields that are used to by applicants to rank school. "The applicants' preferences".
+        help_text="Program attributes applicants care about, e.g. program_size, reputation, location.",
+    )
+    # SD of the raw preference weights each applicant gives the program attributes.
     applicant_meta_preference_stddev = models.FloatField(
-        validators=[MinValueValidator(0), MaxValueValidator(99)],
-        default=3,
-        help_text="Std. dev. of meta preference scores (>= 0).",
-    )  # This is the stddev of the meta-preferences "weights" each student gives to preferacnes.
+        default=0.3,
+        validators=[MinValueValidator(0), MaxValueValidator(1.0)],
+        help_text="How much applicants disagree about which program attributes matter.",
+    )
+    # SD of each applicant's attribute scores around their base score.
     applicant_meta_scores_stddev = models.FloatField(
-        default=10,
-        validators=[MinValueValidator(0), MaxValueValidator(99)],
-        help_text="Std. dev. of meta scores per applicant (>= 0).",
-    )  # This is the stddev of the meta-scores for each applicant.
+        default=0.1,
+        validators=[MinValueValidator(0), MaxValueValidator(0.45)],
+        help_text="How much an applicant's attribute scores vary around their base score.",
+    )
     applicant_pre_interview_rating_error = models.FloatField(
         default=0.1,
         validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Pre-interview rating error stddev",
-    )  # The mean error is 0, this calculates the stdsdev used to computer the students error
+        help_text="How noisy applicants' view of programs is before interviewing (0 = perfect information).",
+    )
     applicant_post_interview_rating_error = models.FloatField(
         default=0.02,
         validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Pre-interview rating error stddev",
-    )  # The mean error is 0, this calculates the stdsdev used to computer the students error
+        help_text="Not used yet: how noisy applicants' view of programs is after interviewing.",
+    )
 
     # School configuration
     school_score_mean = models.FloatField(
-        default=0,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Mean of the schools' base scores.",
+        default=0.5,
+        validators=[MinValueValidator(0.01), MaxValueValidator(0.99)],
+        help_text="Average program base (overall quality) score on a 0-1 scale.",
     )
     school_score_stddev = models.FloatField(
-        default=2,
-        validators=[MinValueValidator(0), MaxValueValidator(99)],
-        help_text="Std. dev. of the schools' base scores (>= 0).",
+        default=0.1,
+        validators=[MinValueValidator(0), MaxValueValidator(0.45)],
+        help_text="How spread out program base scores are (SD on the 0-1 scale).",
     )
-    school_capacity_mean = models.FloatField(default=20, help_text="Mean capacity per school.")
+    school_capacity_mean = models.FloatField(
+        default=20,
+        validators=[MinValueValidator(1)],
+        help_text="Average number of residency positions per program.",
+    )
     school_capacity_stddev = models.FloatField(
-        default=10,
+        default=4,
         validators=[MinValueValidator(0)],
-        help_text="Std. dev. of capacity per school (>= 0).",
+        help_text="How much program sizes vary (at most half the mean is recommended).",
     )
     school_interview_limit = models.FloatField(
         default=0.1,
         validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Max number of interviews each school can conduct In percent of capacity.",
+        help_text="Not used yet: Phase 2 replaces it with interviews per position.",
     )
+    # The applicant attributes that programs evaluate: every applicant gets a score for each name, and every program
+    # gets a preference weight for each name.
     school_meta_preference = models.JSONField(
         default=default_school_meta_preference,
-        help_text="List of school preference meta fields (e.g., board_scores, research).",
-    )  # This is the list of meta-fields that are used by schools to rank a student. "The schools preferances".
+        help_text="Applicant attributes programs care about, e.g. board_scores, research, honors.",
+    )
+    # SD of the raw preference weights each program gives the applicant attributes.
     school_meta_preference_stddev = models.FloatField(
-        default=2,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-    )  # This is the stddev of the meta-preferences "weights" each schools gives to preferences.
+        default=0.3,
+        validators=[MinValueValidator(0), MaxValueValidator(1.0)],
+        help_text="How much programs disagree about which applicant attributes matter.",
+    )
+    # SD of each program's attribute scores around its base score.
     school_meta_scores_stddev = models.FloatField(
-        default=2,
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="Std. dev. of meta scores per school (>= 0).",
-    )  # This is the stddev of the meta-scores for each school.
+        default=0.1,
+        validators=[MinValueValidator(0), MaxValueValidator(0.45)],
+        help_text="How much a program's attribute scores vary around its base score.",
+    )
     school_pre_interview_rating_error = models.FloatField(
         default=0.1,
         validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="The stddev scoreing error used to calculate the observed score for each student",
+        help_text="How noisy programs' view of applicants is from the application alone (0 = perfect information).",
     )
     school_post_interview_rating_error = models.FloatField(
         default=0.02,
         validators=[MinValueValidator(0), MaxValueValidator(0.99)],
-        help_text="The stddev scoreing error used to calculate the observed score for each student",
+        help_text="Not used yet: how noisy programs' view of applicants is after interviewing.",
     )
+
+    def clean(self):
+        """Reject base-score standard deviations that no Beta distribution with the requested mean can have.
+
+        A Beta distribution with mean m has a standard deviation below sqrt(m * (1 - m)). Larger requests used to be
+        silently cut, which produced U-shaped populations with a shifted mean.
+        """
+        errors = {}
+        for side, label in (("applicant", "applicant"), ("school", "program")):
+            mean = getattr(self, f"{side}_score_mean")
+            stddev = getattr(self, f"{side}_score_stddev")
+            if mean is None or stddev is None or not 0 < mean < 1:
+                continue
+            limit = math.sqrt(mean * (1 - mean))
+            if stddev >= limit:
+                errors[f"{side}_score_stddev"] = ValidationError(
+                    "With a %(label)s score mean of %(mean)s the standard deviation must be below %(limit)s.",
+                    code="beta_infeasible",
+                    params={"label": label, "mean": f"{mean:g}", "limit": f"{limit:.3f}"},
+                )
+        if errors:
+            raise ValidationError(errors)
 
     def __str__(self):
         return f"{self.simulation.name}-{self.id}"
@@ -661,23 +713,30 @@ class Student(models.Model):
     """
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="students")
-    name = models.CharField(max_length=255, help_text="Name of the student.")
+    name = models.CharField(max_length=255, help_text="Applicant name.")
     score = models.FloatField(
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)], help_text="Score of the student."
-    )  # This sets the mean for the score meta
+        validators=[MinValueValidator(0), MaxValueValidator(1.0)],
+        help_text="Applicant's base (true overall) strength, 0-1; centre of their attribute scores.",
+    )
     meta_stddev = models.FloatField(
         default=0.0, help_text="Standard deviation of the score."
     )  # This will define how close each score is to the base "score"
     score_meta = models.JSONField(
         default=dict,
-        help_text='Meta score names and value {"USMLE Setp 2":5, "Grades": 10} for the score.',
+        help_text=(
+            "Applicant attribute scores (0-1) keyed by the attributes programs value, "
+            'e.g. {"board_scores": 0.72, "research": 0.55, "honors": 0.61}.'
+        ),
     )
     meta_stddev_preference = models.FloatField(
-        default=0.0, help_text="Standard deviation of the preference."
-    )  # This is the stddev of the meta-preferences "weights" this student applies to preferences.
+        default=0.0, help_text="SD used when this applicant's preference weights were drawn (copied from config)."
+    )
     meta_preference = models.JSONField(
         default=dict,
-        help_text='Meta score names and value {"School size":5, "Reputation": 10} for the preference.',
+        help_text=(
+            "Applicant preference weights (sum to 1) keyed by the program attributes applicants value, "
+            'e.g. {"program_size": 0.31, "reputation": 0.45, "location": 0.24}.'
+        ),
     )
 
     def __str__(self):
@@ -691,11 +750,12 @@ class School(models.Model):
     """
 
     simulation = models.ForeignKey(Simulation, on_delete=models.CASCADE, related_name="schools")
-    name = models.CharField(max_length=255, help_text="Name of the school.")
-    capacity = models.IntegerField(help_text="Capacity of the school.")
+    name = models.CharField(max_length=255, help_text="Program name.")
+    capacity = models.IntegerField(help_text="Number of positions the program can fill (>= 0).")
     score = models.FloatField(
-        validators=[MinValueValidator(0), MaxValueValidator(0.99)], help_text="Score of the school."
-    )  # This sets the mean for the score meta
+        validators=[MinValueValidator(0), MaxValueValidator(1.0)],
+        help_text="Program's base (true overall) quality, 0-1; centre of its attribute scores.",
+    )
     meta_stddev = models.FloatField(
         validators=[MinValueValidator(0), MaxValueValidator(99)],
         default=1.0,
@@ -703,16 +763,22 @@ class School(models.Model):
     )  # This will define how close each score is to the base "score"
     score_meta = models.JSONField(
         default=dict,
-        help_text='Meta score names and value {"Research":5, "Reputation": 10} for the score.',
+        help_text=(
+            "Program attribute scores (0-1) keyed by the attributes applicants value, "
+            'e.g. {"program_size": 0.4, "reputation": 0.8, "location": 0.6}.'
+        ),
     )
     meta_stddev_preference = models.FloatField(
         validators=[MinValueValidator(0), MaxValueValidator(99)],
         default=1.0,
-        help_text="Standard deviation of the preference.",
-    )  # This is the stddev of the meta-preferences "weights" this school applies to preferences.
+        help_text="SD used when this program's preference weights were drawn (copied from config).",
+    )
     meta_preference = models.JSONField(
         default=dict,
-        help_text='Meta score names and value {"USMLE Setp 2":5, "Grades": 10} for the preference.',
+        help_text=(
+            "Program preference weights (sum to 1) keyed by the applicant attributes programs value, "
+            'e.g. {"board_scores": 0.5, "research": 0.3, "honors": 0.2}.'
+        ),
     )
 
     def __str__(self):
@@ -731,55 +797,75 @@ class Interview(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="interviews")
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="interviews")
     # Logic flags
-    status = models.CharField(max_length=50, default="initialized")
+    status = models.CharField(
+        max_length=50,
+        default="initialized",
+        help_text="Stage reached for this pair (currently always initialized).",
+    )
 
     # Student steps
     student_applied = models.BooleanField(
-        default=False, help_text="Whether the student has been applied to the school."
+        default=False, help_text="True if the applicant applied to this program."
     )
-    student_signal = models.IntegerField(default=0, help_text="Signal value from the student to the school")
+    student_signal = models.IntegerField(
+        default=0, help_text="Preference signal the applicant sent this program (0 = none). Not used yet."
+    )
     student_accepted = models.BooleanField(
         default=False,
-        help_text="Whether the student has been accepted to the school invitation to interview.",
+        help_text="True if the applicant accepted this program's interview invitation.",
     )
     student_true_score_of_school = models.FloatField(
-        null=True, blank=True, help_text="True score of school with respect to student"
+        null=True,
+        blank=True,
+        help_text="Applicant's noise-free utility for this program (sum of weight x program attribute).",
     )
 
     # Schools Steps
     school_invited = models.BooleanField(
         default=False,
-        help_text="Whether the school has been invited to the interview. Must have applied to school first",
+        help_text="True if the program invited this applicant to interview (requires an application).",
     )
     # Properties of the interview step
     ## Pre interview Observed score.
     student_pre_observed_score_of_school = models.FloatField(
-        null=True, blank=True, help_text='Pre interview "total" score of student'
+        null=True, blank=True, help_text="Applicant's pre-interview (noisy) rating of this program."
     )
     school_pre_observed_score_of_student = models.FloatField(
-        null=True, blank=True, help_text='Pre interview "total" score of school'
+        null=True, blank=True, help_text="Program's pre-interview (noisy) rating of this applicant."
     )
     school_true_score_of_student = models.FloatField(
-        null=True, blank=True, help_text="True score of student with respect to school"
+        null=True,
+        blank=True,
+        help_text="Program's noise-free utility for this applicant (sum of weight x applicant attribute).",
     )
 
     ## Pre interview rank.
-    students_pre_rank_of_school = models.IntegerField(null=True, blank=True, help_text="Pre interview rank of student")
-    schools_pre_rank_of_student = models.IntegerField(null=True, blank=True, help_text="Pre interview rank of school")
+    students_pre_rank_of_school = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Where this program falls in the applicant's pre-interview ordering (1 = favourite).",
+    )
+    schools_pre_rank_of_student = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Where this applicant falls in the program's pre-interview ordering (1 = top applicant).",
+    )
 
     ## Post interview Observed score.
     student_post_observed_score_of_school = models.FloatField(
-        null=True, blank=True, help_text='Post interview "total score" of student'
+        null=True, blank=True, help_text="Applicant's post-interview rating of this program."
     )
     school_post_observed_score_of_student = models.FloatField(
-        null=True, blank=True, help_text='Post interview "total" score of school'
+        null=True, blank=True, help_text="Program's post-interview rating of this applicant."
     )
 
     ## Post interview rank.
     students_post_rank_of_school = models.IntegerField(
-        null=True, blank=True, help_text="Post interview rank of student"
+        null=True, blank=True, help_text="Where this program falls in the applicant's post-interview ordering."
     )
-    schools_post_rank_of_student = models.IntegerField(null=True, blank=True, help_text="Post interview rank of school")
+    schools_post_rank_of_student = models.IntegerField(
+        null=True, blank=True, help_text="Where this applicant falls in the program's post-interview ordering."
+    )
 
     class Meta:
         unique_together = ["student", "school"]

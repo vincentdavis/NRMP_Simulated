@@ -14,6 +14,7 @@
     </h2>
   </div>
   <div class="card-body">
+    {% include "nrmps/partials/_stage_alert.html" %}
     <div class="flex justify-between items-center">
       <div><strong>Interviews:</strong> {{ simulation.interviews.count }}</div>
       <div class="flex gap-2 flex-wrap">

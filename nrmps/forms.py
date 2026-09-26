@@ -1,7 +1,11 @@
 import logging
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
+from django.core.exceptions import FieldDoesNotExist
+from django.core.validators import MaxValueValidator, MinValueValidator
+from django.db import models as db_models
 
 from .models import Simulation, SimulationConfig
 
@@ -32,6 +36,30 @@ class SignupForm(UserCreationForm):
         if commit:
             user.save()
         return user
+
+
+class ValidatorLimitsMixin:
+    """Give number inputs the `min`, `max` and `step` attributes implied by the model field.
+
+    Browsers then enforce the same limits as the model validators, so the two cannot drift apart.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            try:
+                model_field = self._meta.model._meta.get_field(name)
+            except FieldDoesNotExist:  # a form-only field
+                continue
+            if not isinstance(model_field, db_models.IntegerField | db_models.FloatField):
+                continue
+            attrs = field.widget.attrs
+            for validator in model_field.validators:
+                if isinstance(validator, MinValueValidator):
+                    attrs["min"] = validator.limit_value
+                elif isinstance(validator, MaxValueValidator):
+                    attrs["max"] = validator.limit_value
+            attrs["step"] = "1" if isinstance(model_field, db_models.IntegerField) else "any"
 
 
 class SimulationForm(forms.ModelForm):
@@ -76,7 +104,7 @@ class SchoolsUploadForm(forms.Form):
     )
 
 
-class SimulationConfigForm(forms.ModelForm):
+class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
     """Form for creating/updating a SimulationConfig associated with a Simulation.
 
     The simulation FK is set in the view, not editable here.
@@ -160,24 +188,32 @@ class SimulationConfigForm(forms.ModelForm):
             "school_post_interview_rating_error",
         )
         widgets = {
-            "number_of_applicants": forms.NumberInput(attrs={"class": "input input-bordered w-full", "min": 0}),
-            "number_of_schools": forms.NumberInput(attrs={"class": "input input-bordered w-full", "min": 0}),
-            "applicant_score_mean": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any"}),
-            "applicant_score_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "applicant_interview_limit": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "applicant_meta_preference": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 2, "placeholder": "program_size, prestige"}),
-            "applicant_meta_preference_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "applicant_meta_scores_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "applicant_pre_interview_rating_error": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "applicant_post_interview_rating_error": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "school_score_mean": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any"}),
-            "school_score_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "school_capacity_mean": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "school_capacity_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "school_interview_limit": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "school_meta_preference": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 2, "placeholder": "board_scores, research"}),
-            "school_meta_preference_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "school_meta_scores_stddev": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "school_pre_interview_rating_error": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
-            "school_post_interview_rating_error": forms.NumberInput(attrs={"class": "input input-bordered w-full", "step": "any", "min": 0}),
+            "applicant_meta_preference": forms.Textarea(
+                attrs={"class": "textarea textarea-bordered w-full", "rows": 2, "placeholder": "program_size, prestige"}
+            ),
+            "school_meta_preference": forms.Textarea(
+                attrs={"class": "textarea textarea-bordered w-full", "rows": 2, "placeholder": "board_scores, research"}
+            ),
+        } | {
+            name: forms.NumberInput(attrs={"class": "input input-bordered w-full"})
+            for name in (
+                "number_of_applicants",
+                "number_of_schools",
+                "applicant_score_mean",
+                "applicant_score_stddev",
+                "applicant_interview_limit",
+                "applicant_meta_preference_stddev",
+                "applicant_meta_scores_stddev",
+                "applicant_pre_interview_rating_error",
+                "applicant_post_interview_rating_error",
+                "school_score_mean",
+                "school_score_stddev",
+                "school_capacity_mean",
+                "school_capacity_stddev",
+                "school_interview_limit",
+                "school_meta_preference_stddev",
+                "school_meta_scores_stddev",
+                "school_pre_interview_rating_error",
+                "school_post_interview_rating_error",
+            )
         }
