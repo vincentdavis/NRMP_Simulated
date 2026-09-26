@@ -50,7 +50,7 @@ filterwarnings = [
 ]
 
 [tool.mypy]
-plugins = ["mypy_django_plugin.main"]
+plugins = ["mypy_django_plugin.main", "pydantic.mypy"]
 exclude = ["migrations/", "^docs/"]
 warn_unused_ignores = true
 warn_redundant_casts = true
