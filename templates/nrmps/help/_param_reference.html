@@ -1,0 +1,55 @@
+{% comment %}
+  The parameter reference, generated from the schema (nrmps.help_views.parameter_sections); each row has the anchor
+  the parameter form links to. Rendered into the guide's Parameter reference page by nrmps.guide.
+{% endcomment %}
+<div>
+    {% for section in sections %}
+      <h3 class="text-lg font-semibold mt-6 mb-2">
+        {{ section.title }}{% if not section.implemented %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}
+      </h3>
+      {% if section.rows %}
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr><th scope="col">Parameter</th><th scope="col">Meaning</th><th scope="col" class="text-right">Range</th><th scope="col" class="text-right">Default</th></tr>
+            </thead>
+            <tbody>
+              {% for row in section.rows %}
+                <tr id="{{ row.anchor }}" class="scroll-mt-4">
+                  <td class="font-medium">{{ row.title }}{% if not row.implemented and section.implemented %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}</td>
+                  <td>{{ row.description }}{% if row.unit %} <span class="text-base-content/70">({{ row.unit }})</span>{% endif %}</td>
+                  <td class="text-right tabular-nums">{{ row.limits }}</td>
+                  <td class="text-right tabular-nums">{{ row.default }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+      {% for table in section.tables %}
+        <h4 class="font-semibold mt-4">{{ table.title }}</h4>
+        <p class="text-sm mb-1">{{ table.description }}</p>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr><th scope="col">Column</th><th scope="col">Meaning</th><th scope="col" class="text-right">Range</th></tr>
+            </thead>
+            <tbody>
+              {% for column in table.columns %}
+                <tr>
+                  <td class="font-medium">{{ column.title }}{% if not column.implemented and section.implemented %} <span class="badge badge-outline badge-sm">Not used yet</span>{% endif %}</td>
+                  <td>{{ column.description }}</td>
+                  <td class="text-right tabular-nums">{{ column.limits }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if table.default %}
+          <p class="text-sm text-base-content/70">Default:
+            {% for item in table.default %}{% for key, value in item.items %}{% if value is not None %}{% if forloop.first %}<code>{{ value }}</code>{% else %} {{ value }}{% endif %}{% endif %}{% endfor %}{% if not forloop.last %}; {% endif %}{% endfor %}
+          </p>
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+</div>

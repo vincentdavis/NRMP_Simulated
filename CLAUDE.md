@@ -139,7 +139,9 @@ nrmps/
 │                         #   the applicant and program lists, one agent's stages, downloads
 ├── charts.py             # payloads of the run page's diagnostic charts (drawn by static/js/nrmp-charts.js)
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
-├── help_views.py         # /help/ (reference generated from the schema) and the staff-only developer reference
+├── help_views.py         # the /help/ guide pages and the staff-only developer reference
+├── guide.py              # renders the guide: Markdown in help_content/, TeX formulas to MathML, shortcodes
+├── help_content/         # the guide's pages (Markdown with front matter; {{value}} and [[block]] shortcodes)
 ├── help_registry.py      # help for actions, table columns and pages ("?" popovers, Help panels)
 ├── checks.py             # system checks of the help (nrmps.H001-H003)
 ├── ops_views.py          # staff-only /ops/: runs per day, failures, durations, queue, workers, quota use

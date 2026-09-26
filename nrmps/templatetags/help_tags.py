@@ -34,3 +34,11 @@ def page_help(key: str) -> dict[str, Any]:
         "actions": [help_registry.ACTIONS[name] for name in page.actions],
         "columns": [help_registry.COLUMNS[name] for name in page.columns],
     }
+
+
+@register.simple_tag
+def help_url(target: str) -> str:
+    """Return the URL of a help target: a guide page's slug, optionally with "#anchor"."""
+    from nrmps.help_views import help_url as url
+
+    return url(target)

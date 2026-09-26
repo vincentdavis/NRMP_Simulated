@@ -5,7 +5,7 @@ import copy
 from django import template
 from django.forms import widgets
 
-from nrmps.help_registry import param_anchor, param_limits, param_value
+from nrmps.help_registry import param_limits, param_target, param_value
 
 register = template.Library()
 
@@ -64,7 +64,7 @@ def _parameter_facts(field) -> dict[str, str] | None:
         "range": "" if spec.choices else limits,
         "unit": spec.unit,
         "default": default,
-        "anchor": param_anchor(spec.path),
+        "target": param_target(spec.path),
     }
 
 

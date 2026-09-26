@@ -8,26 +8,34 @@ from nrmps.engine import MODEL_VERSION
 pytestmark = pytest.mark.django_db
 
 
-def test_help_page_is_public_and_generated_from_the_schema(client):
-    body = " ".join(client.get(reverse("nrmps:help")).content.decode().split())
-    for text in (
-        "Quick start",
-        "How the simulation works",
-        f"model {MODEL_VERSION}",
-        "1,000 applicants for 926 positions in 142 programs",
-        "Applicant agreement",
-        "Mean positions per program",
-        "Applicant groups",
-        "Correlation with strength",
-        "samples/applicants_sample.csv",
-        "name,group,strength,board_scores,research,honors,weight:reputation,weight:program_size,weight:location",
-        "name,tier,quality,capacity,reputation,location",
-        "Preference signals",
-        "Applicant-proposing deferred acceptance",
-        "Match rate",
-    ):
-        assert text in body, text
-    assert "Not used yet" in body  # planned parameters are marked
+def _page(client, slug: str = "") -> str:
+    url = reverse("nrmps:help_page", kwargs={"slug": slug}) if slug else reverse("nrmps:help")
+    response = client.get(url)
+    assert response.status_code == 200
+    return " ".join(response.content.decode().split())
+
+
+def test_the_guide_is_public_and_generated_from_the_schema(client):
+    checks = {
+        "": ["Quick start", "1,000 applicants for 926 positions in 142 programs", "Current limitations"],
+        "nrmp": ["deferred acceptance", "stable", "Rank order lists"],
+        "model": [f"model {MODEL_VERSION}", "Preferences", "Applications and signals", "A worked example"],
+        "results": ["Match rate", "Regret", "Positions filled"],
+        "parameters": ["Applicant agreement", "Mean positions per program", "Applicant groups", "Not used yet"],
+        "csv": [
+            "name,group,strength,board_scores,research,honors,weight:reputation,weight:program_size,weight:location",
+            "name,tier,quality,capacity,reputation,location",
+            "samples/applicants_sample.csv",
+            "applications.csv",
+        ],
+        "glossary": ["Blocking pair", "Rural hospitals theorem"],
+        "faq": ["Why do two runs give the same results?"],
+        "about": ["How to cite", f"model {MODEL_VERSION}", "CITATION.cff"],
+    }
+    for slug, texts in checks.items():
+        body = _page(client, slug)
+        for text in texts:
+            assert text in body, (slug, text)
 
 
 def test_old_documentation_url_redirects_to_help(client):

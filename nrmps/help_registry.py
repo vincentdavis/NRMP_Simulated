@@ -16,8 +16,8 @@ from django.utils.translation import gettext_lazy as _
 from .params import ParamField
 from .params_forms import choice_label
 
-# Sections of the /help/ page that entries may link to ("Learn more"); nrmps.checks keeps this in step with it.
-HELP_ANCHORS = ("quick-start", "model", "results", "parameters", "csv", "limitations", "contact")
+# "Learn more" targets are guide pages (nrmps/help_content/<slug>.md), optionally with "#anchor"; nrmps.checks
+# verifies that each exists.
 
 Text = str | Promise
 
@@ -28,7 +28,7 @@ class HelpEntry:
 
     title: Text
     text: Text
-    more: str = ""  # an anchor in HELP_ANCHORS, or ""
+    more: str = ""  # a guide page, optionally with "#anchor" ("model", "index#quick-start"), or ""
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ ACTIONS: dict[str, HelpEntry] = {
             "Runs every stage, from the population to the match, with the saved parameters and seed. The same "
             "parameters and seed always give the same results. Earlier runs stay until you delete them."
         ),
-        "quick-start",
+        "index#quick-start",
     ),
     "notify": HelpEntry(
         _("Email me when it finishes"),
@@ -250,13 +250,13 @@ PAGES: dict[str, PageHelp] = {
         _("Your simulations"),
         _("Every simulation you created, with its latest run. A simulation holds parameters and runs."),
         (_("Open a simulation to change its parameters and run it."), _("Or create a new one from a preset.")),
-        more="quick-start",
+        more="index#quick-start",
     ),
     "simulation_create": PageHelp(
         _("New simulation"),
         _("Name the simulation and pick the preset its parameters start from. Every parameter can change later."),
         (_("Press Create; the simulation page opens with the preset's parameters."),),
-        more="quick-start",
+        more="index#quick-start",
     ),
     "simulation_manage": PageHelp(
         _("The simulation page"),
@@ -356,8 +356,13 @@ def action(key: str) -> HelpEntry:
 
 
 def param_anchor(path: str) -> str:
-    """Return the id of a parameter's row in the help page's parameter reference."""
+    """Return the id of a parameter's row in the guide's parameter reference."""
     return "param-" + path.replace(".", "-")
+
+
+def param_target(path: str) -> str:
+    """Return the help target of a parameter's row in the parameter reference."""
+    return f"parameters#{param_anchor(path)}"
 
 
 def param_limits(spec: ParamField) -> str:

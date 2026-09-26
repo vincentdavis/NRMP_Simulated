@@ -35,12 +35,16 @@ def test_a_parameter_without_a_description_is_reported(monkeypatch):
     assert [message.id for message in checks.check_help()] == ["nrmps.H001"]
 
 
-def test_every_help_link_and_parameter_anchor_exists_on_the_help_page(client):
-    body = client.get(reverse("nrmps:help")).content.decode()
+def test_every_parameter_has_an_anchor_in_the_reference(client):
+    body = client.get(reverse("nrmps:help_page", kwargs={"slug": "parameters"})).content.decode()
     ids = set(re.findall(r'id="([^"]+)"', body))
-    assert set(help_registry.HELP_ANCHORS) <= ids
     for spec in iter_fields(SimulationParams):
         assert help_registry.param_anchor(spec.path) in ids, spec.path
+
+
+def test_a_link_to_a_missing_guide_section_is_reported(monkeypatch):
+    monkeypatch.setitem(help_registry.ACTIONS, "lost", help_registry.HelpEntry("Lost", "x", "model#nowhere"))
+    assert [message.id for message in checks.check_help()] == ["nrmps.H003"]
 
 
 def test_help_icons_need_a_registered_key():
@@ -109,7 +113,8 @@ def test_parameter_fields_show_their_range_default_and_a_link(auth_client, simul
     body = auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})).content.decode()
     body = " ".join(body.split())
     assert "Range 0\u20131; default 0.6." in body  # an en dash
-    assert f'href="{reverse("nrmps:help")}#param-prefs-applicant_pref_correlation"' in body
+    url = reverse("nrmps:help_page", kwargs={"slug": "parameters"})
+    assert f'href="{url}#param-prefs-applicant_pref_correlation"' in body
 
 
 def test_popover_elements_have_no_display_class():

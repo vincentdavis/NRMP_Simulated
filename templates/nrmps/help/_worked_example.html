@@ -1,0 +1,18 @@
+{% comment %}
+  One applicant's utility for one program, term by term (nrmps.guide.worked_example): the engine's own values.
+{% endcomment %}
+<div class="overflow-x-auto my-4" tabindex="0" role="region" aria-label="Worked example">
+  <table class="table table-sm w-auto">
+    <caption class="text-left text-sm mb-1">{{ example.applicant }} and {{ example.program }}, default parameters, seed {{ example.seed }}</caption>
+    <tbody>
+      <tr><th scope="row" class="font-normal">Agreement, ρ</th><td class="text-right tabular-nums">{{ example.rho|floatformat:3 }}</td></tr>
+      <tr><th scope="row" class="font-normal">Taste share of the personal part, τ</th><td class="text-right tabular-nums">{{ example.tau|floatformat:3 }}</td></tr>
+      <tr><th scope="row" class="font-normal">Common view of the program, C</th><td class="text-right tabular-nums">{{ example.common|floatformat:4 }}</td></tr>
+      <tr><th scope="row" class="font-normal">The applicant's taste for it, T</th><td class="text-right tabular-nums">{{ example.taste|floatformat:4 }}</td></tr>
+      <tr><th scope="row" class="font-normal">Personal fit, ε</th><td class="text-right tabular-nums">{{ example.fit|floatformat:4 }}</td></tr>
+      <tr><th scope="row" class="font-medium">True utility, √ρ·C + √(1−ρ)·(√τ·T + √(1−τ)·ε)</th><td class="text-right tabular-nums font-medium">{{ example.utility|floatformat:4 }}</td></tr>
+      <tr><th scope="row" class="font-normal">Pre-interview error, σ·e (σ = {{ example.sigma }})</th><td class="text-right tabular-nums">{{ example.error|floatformat:4 }}</td></tr>
+      <tr><th scope="row" class="font-medium">Pre-interview view, û = u + σ·e</th><td class="text-right tabular-nums font-medium">{{ example.observed|floatformat:4 }}</td></tr>
+    </tbody>
+  </table>
+</div>

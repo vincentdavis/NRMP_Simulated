@@ -13,6 +13,13 @@ PUBLIC = [
     "/login/",
     "/signup/",
     "/help/",
+    "/help/nrmp/",
+    "/help/model/",
+    "/help/results/",
+    "/help/parameters/",
+    "/help/csv/",
+    "/help/glossary/",
+    "/help/about/",
     "/account/password/reset/",
     "/account/password/reset/sent/",
 ]

@@ -2,7 +2,7 @@
 
 - nrmps.H001: a parameter of the schema (or a column of a list parameter) has no title or description.
 - nrmps.H002: a page's Help panel names an action or column the registry does not describe.
-- nrmps.H003: a help entry links to a section the help page does not have.
+- nrmps.H003: a help entry links to a guide page (or a section of one) that does not exist.
 """
 
 from typing import Any
@@ -10,6 +10,7 @@ from typing import Any
 from django.core.checks import CheckMessage, Error, register
 
 from . import help_registry
+from .guide import help_url_parts, render_page
 from .params import SimulationParams, iter_fields, list_fields
 
 
@@ -40,6 +41,15 @@ def _page_problems() -> list[CheckMessage]:
     return problems
 
 
+def _target_exists(target: str) -> bool:
+    slug, anchor = help_url_parts(target)
+    try:
+        page = render_page(slug)
+    except KeyError:
+        return False
+    return not anchor or anchor in page.ids
+
+
 def _link_problems() -> list[CheckMessage]:
     links = [
         *((key, entry.more) for key, entry in help_registry.ACTIONS.items()),
@@ -47,9 +57,9 @@ def _link_problems() -> list[CheckMessage]:
         *((key, page.more) for key, page in help_registry.PAGES.items()),
     ]
     return [
-        Error(f"Help entry {key!r} links to the unknown section #{more}.", id="nrmps.H003")
-        for key, more in links
-        if more and more not in help_registry.HELP_ANCHORS
+        Error(f"Help entry {key!r} links to the missing help target {target!r}.", id="nrmps.H003")
+        for key, target in links
+        if target and not _target_exists(target)
     ]
 
 

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% comment %}
+  One page of the guide (plan step 4.4): the pages' menu, the page's contents list and its rendered Markdown
+  (nrmps.guide.render_page; SafeString from our own content with raw HTML off).
+{% endcomment %}
+{% block title %}{% if rendered.page.slug != "index" %}{{ rendered.page.title }} - {% endif %}Help - NRMP Simulations{% endblock %}
+{% block content %}
+<div class="py-4 grid grid-cols-1 lg:grid-cols-4 gap-8">
+  <nav aria-label="Help pages" class="lg:col-span-1 min-w-0">
+    <ul class="menu bg-base-200 rounded-box w-full">
+      {% for page in pages %}
+        <li><a href="{{ page.url }}"{% if page.slug == rendered.page.slug %} class="menu-active" aria-current="page"{% endif %}>{{ page.title }}</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  <article class="lg:col-span-3 min-w-0 help-prose">
+    <h1 class="text-3xl font-bold mb-2">{{ rendered.page.title }}</h1>
+    {% if rendered.page.summary %}<p class="text-base-content/80 mb-4">{{ summary }}</p>{% endif %}
+    {% if rendered.sections|length > 2 %}
+      <nav aria-label="On this page" class="bg-base-200 rounded-box p-4 mb-6">
+        <h2 class="font-semibold mb-2">On this page</h2>
+        <ul class="list-disc ml-5 space-y-1">
+          {% for anchor, title in rendered.sections %}<li><a class="link" href="#{{ anchor }}">{{ title }}</a></li>{% endfor %}
+        </ul>
+      </nav>
+    {% endif %}
+    {{ rendered.html }}
+  </article>
+</div>
+{% endblock %}

@@ -32,8 +32,9 @@ Every match is checked for stability, capacities and list rules; `manage.py nrmp
 matching theory and an independent solver on hundreds of random markets ([docs/VALIDATION.md](docs/VALIDATION.md)).
 Replicates with uncertainty bands, the full chart suite and the remaining phases are next: see the
 [phased plan](docs/PROJECT_REVIEW.md#9-phased-implementation-plan) and
-[implementation status](docs/IMPLEMENTATION_STATUS.md). The in-app help page (`/help/`) explains the model, every
-parameter and the CSV formats; `docs/model_spec.md` is the full specification.
+[implementation status](docs/IMPLEMENTATION_STATUS.md). The in-app guide (`/help/`) explains the real Match, the model
+with its formulas, the results, every parameter and the CSV formats; `docs/model_spec.md` is the full specification.
+To cite the simulator, see [CITATION.cff](CITATION.cff).
 
 ## Development
 

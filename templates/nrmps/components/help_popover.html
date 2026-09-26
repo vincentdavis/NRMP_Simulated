@@ -1,3 +1,4 @@
+{% load help_tags %}
 {% comment %}
   A "?" button with a popover (plan step 4.3; nrmps.templatetags.help_tags.help_icon). The native Popover API puts
   it in the top layer (never clipped by a scrolling table) and closes it on Escape or a click outside; where the
@@ -12,7 +13,7 @@
     <div class="card-body text-sm font-normal text-left whitespace-normal">
       <p class="font-semibold">{{ entry.title }}</p>
       <p>{{ entry.text }}</p>
-      {% if entry.more %}<a class="link" href="{% url 'nrmps:help' %}#{{ entry.more }}">Learn more in the help</a>{% endif %}
+      {% if entry.more %}<a class="link" href="{% help_url entry.more %}">Learn more in the help</a>{% endif %}
     </div>
   </div>
 </div>

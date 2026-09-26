@@ -1,3 +1,4 @@
+{% load help_tags %}
 {% comment %}
   One form field (daisyUI 5 fieldset). Rendered by {% field_row form.name %} from nrmps/templatetags/form_tags.py.
   The help and error elements carry the ids referenced by the widget's aria-describedby.
@@ -22,7 +23,7 @@
       {% if facts %}
         <span class="block text-xs mt-0.5">
           {% if facts.range %}Range {{ facts.range }}{% if facts.unit %} ({{ facts.unit }}){% endif %}; {% endif %}default {{ facts.default }}.
-          <a class="link" href="{% url 'nrmps:help' %}#{{ facts.anchor }}">More in the help</a>
+          <a class="link" href="{% help_url facts.target %}">More in the help</a>
         </span>
       {% endif %}
     </div>

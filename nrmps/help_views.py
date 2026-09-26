@@ -4,16 +4,16 @@ import inspect
 from types import ModuleType
 from typing import Any
 
-from django.conf import settings
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_not_required
 from django.db import models as db_models
+from django.http import Http404
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET
 
 from . import models, params, pipeline, runs, validation
 from .engine import (
-    MODEL_VERSION,
     applications,
     interviews,
     invitations,
@@ -29,11 +29,10 @@ from .engine import (
     validate,
 )
 from .engine import pipeline as engine_pipeline
+from .guide import INDEX, apply_values, guide_pages, help_url_parts, render_page
 from .help_registry import param_anchor, param_limits, param_value
-from .limits import max_pairs
 from .params import ParamField, SimulationParams, iter_fields, list_fields
 from .params_forms import IMPLEMENTED_SECTIONS, SECTIONS
-from .population_csv import MAX_UPLOAD_BYTES, MAX_UPLOAD_ROWS, columns
 
 
 def _row(spec: ParamField) -> dict[str, Any]:
@@ -81,26 +80,37 @@ def parameter_sections() -> list[dict[str, Any]]:
     return sections
 
 
+def help_url(target: str) -> str:
+    """Return the URL of a help target: a guide page's slug, optionally with "#anchor" (for example "model")."""
+    slug, anchor = help_url_parts(target)
+    url = reverse("nrmps:help") if slug == INDEX else reverse("nrmps:help_page", kwargs={"slug": slug})
+    return f"{url}#{anchor}" if anchor else url
+
+
+def _guide_response(request, slug: str):
+    try:
+        rendered = render_page(slug)
+    except KeyError as exc:
+        raise Http404("No such help page") from exc
+    pages = [{"slug": page.slug, "title": page.title, "url": help_url(page.slug)} for page in guide_pages()]
+    context = {"rendered": rendered, "pages": pages, "summary": apply_values(rendered.page.summary)}
+    return render(request, "nrmps/help/page.html", context)
+
+
 @login_not_required
 @require_GET
 def help_index(request):
-    """The user guide: quick start, the model, parameters, CSV formats and known limitations."""
-    defaults = SimulationParams()
-    context = {
-        "sections": parameter_sections(),
-        "csv_columns": {side: columns(defaults, side) for side in ("applicants", "programs")},
-        "max_upload_mb": MAX_UPLOAD_BYTES // (1024 * 1024),
-        "max_upload_rows": MAX_UPLOAD_ROWS,
-        "max_pairs": max_pairs(),
-        "background": settings.TASK_BACKEND == "database",
-        "model_version": MODEL_VERSION,
-        "default_market": {
-            "applicants": defaults.market.n_applicants,
-            "positions": defaults.n_positions(),
-            "programs": defaults.n_programs(),
-        },
-    }
-    return render(request, "nrmps/help/index.html", context)
+    """The guide's home page: what the simulator does, a quick start, the guide's pages and the limitations."""
+    return _guide_response(request, INDEX)
+
+
+@login_not_required
+@require_GET
+def help_page(request, slug: str):
+    """One page of the guide (nrmps/help_content/<slug>.md)."""
+    if slug == INDEX:
+        return redirect("nrmps:help", permanent=True)
+    return _guide_response(request, slug)
 
 
 @login_not_required
