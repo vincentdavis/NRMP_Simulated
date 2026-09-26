@@ -93,8 +93,8 @@
 ## Technical Debt & Code Quality
 
 ### Bug Fixes
-- [ ] **Fix typo in `_score()` parameter** (`simulation_engine.py:4`)
-  - Rename `meta_preferances` to `meta_preferences`
+- [x] **Fix typo in `_score()` parameter** (`simulation_engine.py:4`)
+  - Renamed `meta_preferances` to `meta_preferences`
 
 ### Testing
 - [ ] **Unit tests** (currently `nrmps/tests.py` is empty)

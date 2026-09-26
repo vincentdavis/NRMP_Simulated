@@ -1,13 +1,13 @@
 from nrmps.models import Interview, Simulation
 
 
-def _score(meta_scores: dict[str, float], meta_preferances: dict[str, float], rating_error) -> float:
+def _score(meta_scores: dict[str, float], meta_preferences: dict[str, float], rating_error) -> float:
     """Compute the score for a student based on the meta-scores and the score.
 
     Calculating:
     - sum(meta_score * meta_preference)*rating_error.
     """
-    return sum(meta_scores[meta] * meta_preferances[meta] for meta in meta_preferances) * rating_error
+    return sum(meta_scores[meta] * meta_preferences[meta] for meta in meta_preferences) * rating_error
 
 
 def initialize_interview(simulation: Simulation):
