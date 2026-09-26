@@ -1,0 +1,27 @@
+# Version control, local environments and caches
+.git
+.venv
+**/__pycache__
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.hypothesis
+**/.DS_Store
+
+# Local configuration and secrets
+.env
+.logfire
+.idea
+.junie
+.claude
+
+# Local data: databases, uploads, build output (the image builds its own)
+*.sqlite3
+identifier.sqlite
+data/
+staticfiles/
+theme/static/css/dist/
+theme/static_src/node_modules/
+
+# Not needed at runtime
+docs/

@@ -1,27 +1,31 @@
 # Deploying NRMP Simulated
 
-> **Status: target state, not yet true.** This guide was written for the lost implementation (see
-> [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md)). It describes where Phases 0.1, 1.2, 1.9 and 2.5 end up.
-> Until those steps land in this repository, `railway.json`, `railway.worker.json`, `.env.example`, `/healthz`, the
-> `predeploy`, `nrmp_cleanup` and `db_worker` commands, `/ops/` and docker-compose do not exist. Each step updates
-> this file as it lands.
-
 Production runs on [Railway](https://railway.com) at **https://nrmp-simulated.heteroskedastic.org**, built from
-the `Dockerfile` in this repository. Every environment variable is listed in [`.env.example`](../.env.example).
+the `Dockerfile` in this repository. Environment variables are listed in [`.env.example`](../.env.example).
+
+> **Status.** This guide describes the deployment as of the latest step in
+> [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). Sections marked *Planned* describe where later steps take
+> it; they were written for an earlier implementation that was lost, and nothing in them exists yet.
 
 ## Services
 
-| Service | Source | Config file | Start command |
-|---|---|---|---|
-| **web** | this repo | `railway.json` | Dockerfile `CMD` (`entrypoint.sh` → gunicorn) |
-| **Postgres** | Railway PostgreSQL | – | – |
-| **worker** (optional) | this repo | `railway.worker.json` | `python manage.py db_worker --queue-name default` |
+| Service | Source | Start command |
+|---|---|---|
+| **web** | this repo (Dockerfile) | `entrypoint.sh`: `manage.py migrate`, then gunicorn |
+| **Postgres** | Railway PostgreSQL | – |
 
-`railway.json` sets:
-- the pre-deploy command `python manage.py predeploy`, which applies migrations and creates the cache table before
-  the new version receives traffic;
-- the health check `GET /healthz`. It returns 200 only when the database answers. If the new deployment never
-  becomes healthy, Railway keeps the previous one running.
+*Planned (steps 1.2 and 2.5):* a `railway.json` with a pre-deploy migrate command and a `/healthz` health check, and
+an optional worker service for background jobs.
+
+## The image
+
+The `Dockerfile` installs the runtime and `prod` dependencies only (`uv sync --no-dev --group prod`), builds the
+Tailwind CSS and runs `collectstatic` at build time. The build runs Django with placeholder settings
+(`DEBUG=False`, a throwaway `SECRET_KEY`, an in-memory SQLite `DATABASE_URL`); none of them end up in the image.
+`UV_NO_SYNC=1` stops `uv run` from installing anything when the container starts.
+
+`entrypoint.sh` applies migrations and starts gunicorn. `WEB_CONCURRENCY` (default 4) sets the number of workers and
+`GUNICORN_TIMEOUT` (default 30 s) the request timeout.
 
 ## Checklist before the first deploy of this version (decision D0)
 
@@ -34,76 +38,37 @@ version refuses to start without real settings. In Railway, open **web → Varia
 2. **Check `DATABASE_URL`.** It must reference the Postgres service, for example `${{Postgres.DATABASE_URL}}`.
    Without it the app stops at startup instead of silently using a throwaway SQLite file.
 3. **Remove `DEBUG`**, or set it to `False`.
-4. Optional: set `LOGFIRE_TOKEN`, the email variables (below) and `CONTACT_EMAIL`.
+4. Optional: set `LOGFIRE_TOKEN`. Without it, Logfire sends nothing.
 
-Then deploy. The custom domain and the Railway domain are already allowed: `ALLOWED_HOSTS` defaults to
-`nrmp-simulated.heteroskedastic.org`, and `RAILWAY_PUBLIC_DOMAIN` and `healthcheck.railway.app` are always added.
-CSRF origins are derived from the same list.
+Then deploy. `ALLOWED_HOSTS` defaults to `localhost,127.0.0.1,nrmp-simulated.heteroskedastic.org`, and
+`RAILWAY_PUBLIC_DOMAIN` is always added. Set `ALLOWED_HOSTS` explicitly to serve other domains.
+
+If the deploy fails because a variable is missing, the logs say which one (`SECRET_KEY must be set when DEBUG is
+off`, `DATABASE_URL must be set when DEBUG is off`).
 
 Create an admin account from a Railway shell on the web service: `python manage.py createsuperuser`.
 
 ## HTTPS
 
 Railway terminates TLS and forwards `X-Forwarded-Proto`. With `DEBUG` off the app:
-- trusts that header (`SECURE_PROXY_SSL_HEADER`);
-- redirects HTTP to HTTPS, except `/healthz`;
+- trusts that header (`SECURE_PROXY_SSL_HEADER`), so same-origin form posts pass Django's CSRF origin check;
+- redirects HTTP to HTTPS (`SECURE_SSL_REDIRECT`, exempting a future `/healthz`);
 - sets secure session and CSRF cookies;
-- sends HSTS with `max-age=3600`.
+- sends HSTS with `max-age=3600` (`SECURE_HSTS_SECONDS`).
 
 Once HTTPS is confirmed everywhere, raise `SECURE_HSTS_SECONDS` to `31536000`. Subdomains and preload stay off on
 purpose. `manage.py check --deploy` therefore reports `security.W005` and `security.W021`, and those two are the
 only accepted warnings.
 
-## Email
+## Email (*Planned*, step 1.9)
 
-Verification and password-reset links need outgoing email. Set:
-- `EMAIL_HOST`, `EMAIL_PORT` (587), `EMAIL_HOST_USER` and `EMAIL_HOST_PASSWORD` for any SMTP provider (Postmark,
-  SendGrid, Mailgun, SES…);
-- `EMAIL_USE_TLS=True`;
-- `DEFAULT_FROM_EMAIL`, on a domain the provider is allowed to send for.
+Verification and password-reset links will need outgoing email: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
+`EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` and `DEFAULT_FROM_EMAIL` for any SMTP provider.
 
-Check delivery with `python manage.py sendtestemail you@example.com`.
+## Background jobs, clean-up and operations (*Planned*, step 2.5)
 
-Without `EMAIL_HOST`:
-- emails are written to the log;
-- `NRMP_REQUIRE_VERIFIED_EMAIL` defaults to off, so unverified accounts can still run simulations, with the smaller
-  unverified quota.
-
-With email configured, verification is required before a user can generate populations or start runs.
-
-## Background jobs
-
-Simulation runs use Django's task framework (`django.tasks`):
-- `TASK_BACKEND=immediate` (default) runs a job inside the web request that starts it. Runs are then capped at
-  `NRMP_MAX_PAIRS_IMMEDIATE` applicant × program pairs (2 million by default), so they finish well inside the
-  gunicorn timeout.
-- `TASK_BACKEND=database` stores jobs in the database (django-tasks-db), and a worker process executes them. Larger
-  markets are then allowed, up to `NRMP_MAX_PAIRS_WORKER` (20 million by default).
-
-To enable the worker:
-1. Add a service from this repository and set its config file path to `railway.worker.json`.
-2. Give it the same variables as the web service. Shared variables work well for this: `SECRET_KEY`,
-   `DATABASE_URL`, `LOGFIRE_TOKEN`, email.
-3. Set `TASK_BACKEND=database` on both services.
-
-The worker needs no public domain or health check.
-
-## Periodic clean-up
-
-`python manage.py nrmp_cleanup` does four things:
-
-- marks runs stuck in queued or running for more than two hours as failed (a worker stopped);
-- deletes runs older than `NRMP_RUN_RETENTION_DAYS` (180 by default);
-- deletes django-axes sign-in records older than 30 days (the privacy page promises this);
-- with the database task backend, prunes finished task records.
-
-Run it daily: add a Railway service from this repository with that start command and a cron schedule (for example
-`17 4 * * *`), the same variables as the web service, and no health check.
-
-## Operations page
-
-Staff users see `/ops/`: runs per day, failures, run-time percentiles, the task queue, the heaviest users and the
-largest markets. `/healthz` also reports the queue (without failing) when `TASK_BACKEND=database`.
+Long simulation steps will run as `django.tasks` jobs, optionally in a worker service (`manage.py db_worker`), with a
+periodic clean-up command and a staff operations page.
 
 ## Backups and restore
 
@@ -118,8 +83,10 @@ largest markets. `/healthz` also reports the queue (without failing) when `TASK_
 Redeploy an earlier deployment from the Railway dashboard. Migrations are forward-only, so check the release notes
 of the version you are rolling back from before rolling back across a migration.
 
-## Local production-like stack
+## Local development
 
-`docker compose up --build` starts PostgreSQL, the web app (DEBUG off, gunicorn) and the worker. The app is then at
-http://localhost:8000. Day-to-day development uses `DEBUG=True` in `.env` with SQLite and `manage.py runserver`;
-see the README.
+Copy `.env.example` to `.env`; it sets `DEBUG=True`, which uses a development `SECRET_KEY` and a local
+`db.sqlite3`. Then `uv run python manage.py runserver`. The test suite (`uv run pytest`) runs the production
+configuration against an in-memory SQLite database; set `NRMP_TEST_DATABASE_URL` to run it against PostgreSQL.
+
+*Planned (step 1.2):* a docker-compose stack with PostgreSQL for production-like local runs.

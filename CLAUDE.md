@@ -9,6 +9,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies using uv
 uv sync
 
+# Local configuration: DEBUG defaults to off, and with DEBUG off the app refuses to start without SECRET_KEY and
+# DATABASE_URL. For development copy .env.example to .env (it sets DEBUG=True).
+cp .env.example .env
+
 # Activate virtual environment (if needed)
 source .venv/bin/activate
 ```
@@ -55,7 +59,8 @@ ruff check --fix .
 # Run type checking
 mypy .
 
-# Run tests
+# Run tests (pytest-django; NRMP_Simulated/settings_test.py runs the production configuration
+# against an in-memory SQLite database)
 pytest
 ```
 
@@ -64,12 +69,12 @@ pytest
 # Build Docker image
 docker build -t nrmp-simulated .
 
-# Run container
-docker run -p 8000:8000 nrmp-simulated
-
-# Run with environment variables
-docker run -p 8000:8000 -e DEBUG=False -e DATABASE_URL=postgresql://... nrmp-simulated
+# Run container (production mode: SECRET_KEY and DATABASE_URL are required; add -e SECURE_SSL_REDIRECT=False to
+# browse it over plain http://localhost)
+docker run -p 8000:8000 -e SECRET_KEY=... -e DATABASE_URL=postgresql://... nrmp-simulated
 ```
+
+Deployment (Railway) is described in `docs/DEPLOY.md`.
 
 ## Architecture Overview
 

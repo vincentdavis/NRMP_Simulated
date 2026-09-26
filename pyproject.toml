@@ -26,6 +26,17 @@ dev = [
     "django-stubs>=6.1.1",
     "django-tailwind[cookiecutter,honcho,reload]>=4.5.0",
     "pytest>=9.1.1",
+    "pytest-django>=4.14.0",
     "ruff>=0.16.9",
     "ty>=0.0.84",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "NRMP_Simulated.settings_test"
+python_files = ["test_*.py"]
+testpaths = ["nrmps"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    # WhiteNoise warns that STATIC_ROOT does not exist until collectstatic has run.
+    "ignore:No directory at:UserWarning",
 ]
