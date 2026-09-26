@@ -218,6 +218,10 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Largest applicants x programs product a single simulation step may process (decision D4). Steps run inside the web
+# request until background jobs exist, so this keeps every step well within the gunicorn timeout.
+NRMP_MAX_PAIRS = int(os.environ.get("NRMP_MAX_PAIRS", "250000"))
+
 # Authentication redirects
 LOGIN_REDIRECT_URL = "nrmps:index"
 LOGOUT_REDIRECT_URL = "nrmps:index"

@@ -1,3 +1,4 @@
+import functools
 import math
 import random
 
@@ -5,7 +6,7 @@ import numpy as np
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from scipy.stats import beta
 
 from .exceptions import MissingConfigError
@@ -80,6 +81,20 @@ SIMULATION_STAGES = [
 STAGE_ORDER = [s[0] for s in SIMULATION_STAGES]
 
 
+def _population_change(method):
+    """Run a population method in one transaction that locks the simulation, then reset the pipeline stage."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with transaction.atomic():
+            self.lock()
+            result = method(self, *args, **kwargs)
+            self.refresh_population_stage()
+        return result
+
+    return wrapper
+
+
 class User(AbstractUser):
     """Custom user model extending Django's AbstractUser.
     Note: Django's AbstractUser already includes username, password, email fields
@@ -134,31 +149,34 @@ class Simulation(models.Model):
         except ValueError:
             return 0
 
-    def advance_status(self, to_stage: str):
-        """Advance the simulation status to *to_stage* if it is ahead of the current stage.
+    def lock(self) -> None:
+        """Lock this simulation's row until the surrounding transaction ends.
 
-        Saves only the status field. Does nothing if *to_stage* is at or behind
-        the current position.
+        Call inside `transaction.atomic()`. Two requests that change the same simulation then run one after the
+        other instead of interleaving (review finding CRIT-1). SQLite has no row locks and serialises writes instead.
         """
-        if to_stage not in STAGE_ORDER:
-            return
-        target = STAGE_ORDER.index(to_stage)
-        if target > self.stage_index():
-            self.status = to_stage
+        Simulation.objects.select_for_update().only("id").get(pk=self.pk)
+
+    def set_stage(self, stage: str) -> None:
+        """Set the pipeline stage, forwards or backwards.
+
+        Re-running a step replaces its results and invalidates every later stage, so the stage moves to exactly
+        the step that ran, even if the simulation had got further before.
+        """
+        if stage not in STAGE_ORDER:
+            raise ValueError(f"Unknown stage {stage!r}")
+        if self.status != stage:
+            self.status = stage
             self.save(update_fields=["status"])
 
-    def regress_status(self, to_stage: str):
-        """Regress the simulation status to *to_stage*.
+    def refresh_population_stage(self) -> None:
+        """Reset the stage after a population change.
 
-        Used when destructive actions (e.g. deleting populations) invalidate
-        later stages.
+        Replacing or deleting applicants or programs deletes every interview row (by cascade), so the pipeline goes
+        back to "populations" when both populations exist, or to "setup" otherwise.
         """
-        if to_stage not in STAGE_ORDER:
-            return
-        target = STAGE_ORDER.index(to_stage)
-        if target < self.stage_index():
-            self.status = to_stage
-            self.save(update_fields=["status"])
+        both = self.students.exists() and self.schools.exists()
+        self.set_stage("populations" if both else "setup")
 
     def get_workflow_stages(self) -> list[dict]:
         """Build a list of stage dicts for template rendering.
@@ -179,6 +197,7 @@ class Simulation(models.Model):
             )
         return stages
 
+    @_population_change
     def create_students(self) -> int:
         """Create the student population for this simulation using its latest SimulationConfig.
 
@@ -260,6 +279,7 @@ class Simulation(models.Model):
             Student.objects.bulk_create(to_create, batch_size=1000)
         return len(to_create)
 
+    @_population_change
     def create_schools(self) -> int:
         """Create the school population for this simulation using its latest SimulationConfig.
 
@@ -348,14 +368,17 @@ class Simulation(models.Model):
             School.objects.bulk_create(to_create, batch_size=1000)
         return len(to_create)
 
+    @_population_change
     def delete_students(self) -> int:
         """Delete the student population for this simulation."""
         self.students.all().delete()
 
+    @_population_change
     def delete_schools(self) -> int:
         """Delete the school population for this simulation."""
         self.schools.all().delete()
 
+    @_population_change
     def upload_students(self) -> int:
         """Upload students from a CSV file located in BASE_DIR/data.
 
@@ -445,6 +468,7 @@ class Simulation(models.Model):
             Student.objects.bulk_create(to_create, batch_size=1000)
         return len(to_create)
 
+    @_population_change
     def upload_schools(self) -> int:
         """Upload schools from a CSV file located in BASE_DIR/data.
 

@@ -156,7 +156,7 @@ def _run_django_setup(**overrides: str) -> subprocess.CompletedProcess:
     )
     env.update(overrides)
     code = "import django; django.setup(); from django.conf import settings; print(settings.DATABASES['default'])"
-    return subprocess.run(  # noqa: S603
+    return subprocess.run(
         [sys.executable, "-c", code], cwd=settings.BASE_DIR, env=env, capture_output=True, text=True, check=False
     )
 

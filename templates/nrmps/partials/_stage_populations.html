@@ -12,7 +12,7 @@
     </h2>
   </div>
   <div class="card-body">
-    {% include "nrmps/partials/_stage_alert.html" %}
+    {% include "nrmps/partials/_stage_alert.html" with stage="populations" %}
     {% if not simulation.configs.exists %}
       <div role="alert" class="alert alert-warning mb-3">
         <span>This simulation has no configuration yet. Save the configuration before generating applicants and programs.</span>
@@ -26,23 +26,29 @@
           <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_students' pk=simulation.pk %}">CSV</a>
           <button class="btn btn-sm btn-primary btn-outline"
                   hx-post="{% url 'nrmps:simulation_create_students' pk=simulation.pk %}"
-                  hx-target="#stage-populations"
+                  hx-target="#stage-cards"
                   hx-swap="outerHTML"
+                  hx-disabled-elt="this"
+                  hx-sync="#stage-cards:drop"
                   hx-confirm="(Re)create students from the latest configuration? This will replace existing students.">
             (re)Create
           </button>
           <button class="btn btn-sm btn-error btn-outline"
                   hx-post="{% url 'nrmps:simulation_delete_students' pk=simulation.pk %}"
-                  hx-target="#stage-populations"
+                  hx-target="#stage-cards"
                   hx-swap="outerHTML"
+                  hx-disabled-elt="this"
+                  hx-sync="#stage-cards:drop"
                   hx-confirm="Delete all students for this simulation?">
             Delete
           </button>
         </div>
       </div>
       <form hx-post="{% url 'nrmps:simulation_upload_students' pk=simulation.pk %}"
-            hx-target="#stage-populations"
+            hx-target="#stage-cards"
             hx-swap="outerHTML"
+            hx-disabled-elt="find button"
+            hx-sync="#stage-cards:drop"
             hx-encoding="multipart/form-data"
             class="flex items-center gap-2">
         <input type="file" name="file" accept=".csv" class="file-input file-input-sm file-input-bordered flex-1" required>
@@ -58,23 +64,29 @@
           <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_schools' pk=simulation.pk %}">CSV</a>
           <button class="btn btn-sm btn-primary btn-outline"
                   hx-post="{% url 'nrmps:simulation_create_schools' pk=simulation.pk %}"
-                  hx-target="#stage-populations"
+                  hx-target="#stage-cards"
                   hx-swap="outerHTML"
+                  hx-disabled-elt="this"
+                  hx-sync="#stage-cards:drop"
                   hx-confirm="(Re)create schools from the latest configuration? This will replace existing schools.">
             (re)Create
           </button>
           <button class="btn btn-sm btn-error btn-outline"
                   hx-post="{% url 'nrmps:simulation_delete_schools' pk=simulation.pk %}"
-                  hx-target="#stage-populations"
+                  hx-target="#stage-cards"
                   hx-swap="outerHTML"
+                  hx-disabled-elt="this"
+                  hx-sync="#stage-cards:drop"
                   hx-confirm="Delete all schools for this simulation?">
             Delete
           </button>
         </div>
       </div>
       <form hx-post="{% url 'nrmps:simulation_upload_schools' pk=simulation.pk %}"
-            hx-target="#stage-populations"
+            hx-target="#stage-cards"
             hx-swap="outerHTML"
+            hx-disabled-elt="find button"
+            hx-sync="#stage-cards:drop"
             hx-encoding="multipart/form-data"
             class="flex items-center gap-2">
         <input type="file" name="file" accept=".csv" class="file-input file-input-sm file-input-bordered flex-1" required>

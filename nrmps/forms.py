@@ -7,6 +7,7 @@ from django.core.exceptions import FieldDoesNotExist
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models as db_models
 
+from .limits import market_size_error
 from .models import Simulation, SimulationConfig
 
 logger = logging.getLogger(__name__)
@@ -183,6 +184,15 @@ class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
                 logger.debug("clean_school_meta_preference parsed CSV", extra={"count": len(out)})
                 return out
         return val
+
+    def clean(self):
+        """Reject markets whose applicants x programs product is above the size limit (decision D4)."""
+        cleaned = super().clean()
+        applicants = cleaned.get("number_of_applicants")
+        programs = cleaned.get("number_of_schools")
+        if applicants and programs and (message := market_size_error(applicants, programs)):
+            self.add_error("number_of_applicants", message)
+        return cleaned
 
     class Meta:
         model = SimulationConfig

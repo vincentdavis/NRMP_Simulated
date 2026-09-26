@@ -1,5 +1,5 @@
 {% load simulation_tags %}
-<div id="workflow-steps">
+<div id="workflow-steps"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
   <ul class="steps steps-horizontal w-full mb-6">
     {% for stage in stages %}
       <li class="step{% if stage.complete %} step-primary{% elif stage.active %} step-accent{% endif %}"

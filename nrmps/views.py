@@ -8,8 +8,8 @@ from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.http import Http404, HttpResponse
 from django.db import transaction
+from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
 
@@ -21,19 +21,71 @@ from .models import Interview, Simulation, SimulationConfig
 logger = logging.getLogger(__name__)
 
 
-def _render_stage_response(request, template, simulation, extra_context=None):
-    """Render a stage card partial plus an OOB workflow-steps swap.
+PAGE_SIZES = [25, 50, 100, 200, 500]
 
-    Every HTMX action that changes stage state should use this helper so the
-    step indicator stays in sync without a full page reload.
+
+def _render_stage_cards(request, simulation, *, error: str | None = None, error_stage: str | None = None):
+    """Render every stage card, plus an out-of-band swap of the workflow stepper.
+
+    Every HTMX step action returns this, so no card goes stale when a step changes another stage's data (for example
+    recreating applicants deletes all interview rows). `error` is shown in the card of `error_stage`.
     """
-    context = {"simulation": simulation, "stages": simulation.get_workflow_stages()}
-    if extra_context:
-        context.update(extra_context)
-    card_html = render(request, template, context).content.decode()
-    oob_html = render(request, "nrmps/partials/_workflow_steps.html", context).content.decode()
-    oob_div = f'<div id="workflow-steps" hx-swap-oob="outerHTML">{oob_html}</div>'
-    return HttpResponse(card_html + oob_div)
+    simulation.refresh_from_db()
+    context = {
+        "simulation": simulation,
+        "stages": simulation.get_workflow_stages(),
+        "error": error,
+        "error_stage": error_stage,
+    }
+    cards = render(request, "nrmps/partials/_stage_cards.html", context).content.decode()
+    stepper = render(request, "nrmps/partials/_workflow_steps.html", context | {"oob": True}).content.decode()
+    return HttpResponse(cards + stepper)
+
+
+def _run_step(request, pk: int, stage: str, action):
+    """Run a simulation step for the owner and re-render the stage cards.
+
+    `action(sim)` does the work. A SimulationError (a problem the user can fix) is shown in the card of `stage`;
+    any other exception is a bug and propagates.
+    """
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
+    try:
+        action(sim)
+    except SimulationError as exc:
+        logger.info("Simulation step failed simulation_id=%s stage=%s: %s", sim.pk, stage, exc)
+        return _render_stage_cards(request, sim, error=str(exc), error_stage=stage)
+    return _render_stage_cards(request, sim)
+
+
+def _page_size(request) -> int:
+    """Return the requested page size if it is one of the offered sizes, else 100."""
+    try:
+        size = int(request.GET.get("page_size", 100))
+    except (TypeError, ValueError):
+        return 100
+    return size if size in PAGE_SIZES else 100
+
+
+class _Echo:
+    """A write-only file-like object that returns what it is given (for streaming CSV)."""
+
+    def write(self, value):
+        """Return the value instead of storing it."""
+        return value
+
+
+def _stream_csv(filename: str, header: list[str], rows) -> StreamingHttpResponse:
+    """Return a CSV download that is generated row by row instead of built in memory."""
+    writer = csv.writer(_Echo())
+
+    def lines():
+        yield writer.writerow(header)
+        for row in rows:
+            yield writer.writerow(row)
+
+    response = StreamingHttpResponse(lines(), content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 @require_GET
@@ -224,102 +276,71 @@ def simulation_delete(request, pk: int):
 
 
 # --- HTMX population actions ---
+# Each returns all stage cards (see _render_stage_cards). Replacing or deleting a population deletes every interview
+# row by cascade; the model methods reset the pipeline stage accordingly.
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_delete_students(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    sim.delete_students()
-    sim.regress_status("setup")
-    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
+    """Delete all applicants (and, by cascade, all interview rows)."""
+    return _run_step(request, pk, "populations", lambda sim: sim.delete_students())
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_delete_schools(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    sim.delete_schools()
-    sim.regress_status("setup")
-    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
+    """Delete all programs (and, by cascade, all interview rows)."""
+    return _run_step(request, pk, "populations", lambda sim: sim.delete_schools())
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_create_students(request, pk: int):
-    """(Re)create student population based on the latest SimulationConfig."""
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    try:
-        sim.create_students()
-    except SimulationError as exc:
-        return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim, {"error": str(exc)})
-    if sim.students.exists() and sim.schools.exists():
-        sim.advance_status("populations")
-    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
+    """(Re)create the applicant population from the latest configuration."""
+    return _run_step(request, pk, "populations", lambda sim: sim.create_students())
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_create_schools(request, pk: int):
-    """(Re)create school population based on the latest SimulationConfig."""
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    try:
-        sim.create_schools()
-    except SimulationError as exc:
-        return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim, {"error": str(exc)})
-    if sim.students.exists() and sim.schools.exists():
-        sim.advance_status("populations")
-    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
+    """(Re)create the program population from the latest configuration."""
+    return _run_step(request, pk, "populations", lambda sim: sim.create_schools())
+
+
+def _upload(request, pk: int, form_class, side: str):
+    """Save an uploaded population CSV and load it (replacing the current population)."""
+
+    def action(sim):
+        form = form_class(request.POST, request.FILES)
+        if not form.is_valid():
+            raise SimulationError("Choose a CSV file to upload.")
+        data_dir = Path(getattr(settings, "BASE_DIR", ".")) / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        dest = data_dir / f"simulation_{sim.id}_{side}.csv"
+        with dest.open("wb") as out:
+            for chunk in form.cleaned_data["file"].chunks():
+                out.write(chunk)
+        if side == "students":
+            sim.upload_students()
+        else:
+            sim.upload_schools()
+
+    return _run_step(request, pk, "populations", action)
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_upload_students(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    form = StudentsUploadForm(request.POST, request.FILES)
-    if form.is_valid():
-        file = form.cleaned_data["file"]
-        data_dir = Path(getattr(settings, "BASE_DIR", ".")) / "data"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        dest = data_dir / f"simulation_{sim.id}_students.csv"
-        with dest.open("wb") as out:
-            for chunk in file.chunks():
-                out.write(chunk)
-        sim.upload_students()
-    if sim.students.exists() and sim.schools.exists():
-        sim.advance_status("populations")
-    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
+    """Replace the applicants with an uploaded CSV."""
+    return _upload(request, pk, StudentsUploadForm, "students")
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_upload_schools(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    form = SchoolsUploadForm(request.POST, request.FILES)
-    if form.is_valid():
-        file = form.cleaned_data["file"]
-        data_dir = Path(getattr(settings, "BASE_DIR", ".")) / "data"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        dest = data_dir / f"simulation_{sim.id}_schools.csv"
-        with dest.open("wb") as out:
-            for chunk in file.chunks():
-                out.write(chunk)
-        sim.upload_schools()
-    if sim.students.exists() and sim.schools.exists():
-        sim.advance_status("populations")
-    return _render_stage_response(request, "nrmps/partials/_stage_populations.html", sim)
+    """Replace the programs with an uploaded CSV."""
+    return _upload(request, pk, SchoolsUploadForm, "schools")
 
 
 # --- CSV downloads ---
@@ -328,42 +349,36 @@ def simulation_upload_schools(request, pk: int):
 @login_required
 @require_GET
 def simulation_download_students(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    resp = HttpResponse(content_type="text/csv; charset=utf-8")
-    resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_students.csv"
-    writer = csv.writer(resp)
-    writer.writerow(["name", "score", "score_meta"])
-    for s in sim.students.all().only("name", "score", "score_meta"):
-        score_meta_str = json.dumps(s.score_meta or {}, ensure_ascii=False)
-        writer.writerow([s.name, s.score, score_meta_str])
-    return resp
+    """Download the applicants as CSV."""
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
+    rows = (
+        [name, score, json.dumps(score_meta or {}, ensure_ascii=False)]
+        for name, score, score_meta in sim.students.order_by("id")
+        .values_list("name", "score", "score_meta")
+        .iterator(chunk_size=2000)
+    )
+    return _stream_csv(f"simulation_{sim.id}_students.csv", ["name", "score", "score_meta"], rows)
 
 
 @login_required
 @require_GET
 def simulation_download_schools(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    resp = HttpResponse(content_type="text/csv; charset=utf-8")
-    resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_schools.csv"
-    writer = csv.writer(resp)
-    writer.writerow(["name", "capacity", "score", "score_meta"])
-    for s in sim.schools.all().only("name", "capacity", "score", "score_meta"):
-        score_meta_str = json.dumps(s.score_meta or {}, ensure_ascii=False)
-        writer.writerow([s.name, s.capacity, s.score, score_meta_str])
-    return resp
+    """Download the programs as CSV."""
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
+    rows = (
+        [name, capacity, score, json.dumps(score_meta or {}, ensure_ascii=False)]
+        for name, capacity, score, score_meta in sim.schools.order_by("id")
+        .values_list("name", "capacity", "score", "score_meta")
+        .iterator(chunk_size=2000)
+    )
+    return _stream_csv(f"simulation_{sim.id}_schools.csv", ["name", "capacity", "score", "score_meta"], rows)
 
 
 @login_required
 @require_GET
 def simulation_students(request, pk: int):
     """List students for a simulation with sorting and pagination (default 100)."""
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
 
     # Sorting
     sort = request.GET.get("sort", "name").lower()
@@ -374,17 +389,10 @@ def simulation_students(request, pk: int):
         "score": "score",
     }
     sort_field = allowed.get(sort, "name")
-    ordering = sort_field if order != "desc" else f"-{sort_field}"
+    ordering = [sort_field if order != "desc" else f"-{sort_field}", "id"]
 
-    # Page size
-    try:
-        page_size = int(request.GET.get("page_size", 100))
-    except (TypeError, ValueError):
-        page_size = 100
-    if page_size <= 0:
-        page_size = 100
-
-    qs = sim.students.all().order_by(ordering)
+    page_size = _page_size(request)
+    qs = sim.students.all().order_by(*ordering)
     paginator = Paginator(qs, page_size)
     page = request.GET.get("page")
     page_obj = paginator.get_page(page)
@@ -395,7 +403,7 @@ def simulation_students(request, pk: int):
         "sort": sort,
         "order": order,
         "page_size": page_size,
-        "page_sizes": [25, 50, 100, 200, 500],
+        "page_sizes": PAGE_SIZES,
     }
     return render(request, "nrmps/students_list.html", context)
 
@@ -404,9 +412,7 @@ def simulation_students(request, pk: int):
 @require_GET
 def simulation_schools(request, pk: int):
     """List schools for a simulation with sorting and pagination (default 100)."""
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
 
     sort = request.GET.get("sort", "name").lower()
     order = request.GET.get("order", "asc").lower()
@@ -417,16 +423,10 @@ def simulation_schools(request, pk: int):
         "score": "score",
     }
     sort_field = allowed.get(sort, "name")
-    ordering = sort_field if order != "desc" else f"-{sort_field}"
+    ordering = [sort_field if order != "desc" else f"-{sort_field}", "id"]
 
-    try:
-        page_size = int(request.GET.get("page_size", 100))
-    except (TypeError, ValueError):
-        page_size = 100
-    if page_size <= 0:
-        page_size = 100
-
-    qs = sim.schools.all().order_by(ordering)
+    page_size = _page_size(request)
+    qs = sim.schools.all().order_by(*ordering)
     paginator = Paginator(qs, page_size)
     page = request.GET.get("page")
     page_obj = paginator.get_page(page)
@@ -437,107 +437,46 @@ def simulation_schools(request, pk: int):
         "sort": sort,
         "order": order,
         "page_size": page_size,
-        "page_sizes": [25, 50, 100, 200, 500],
+        "page_sizes": PAGE_SIZES,
     }
     return render(request, "nrmps/schools_list.html", context)
 
 
 # --- Interview section ---
+
+
 @login_required
 @require_http_methods(["POST"])
 def simulation_initialize_interviews(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
+    """(Re)create the interview rows: one per applicant x program pair."""
     from .simulation_engine import initialize_interview
 
-    initialize_interview(sim)
-    sim.advance_status("initialized")
-    return _render_stage_response(request, "nrmps/partials/_stage_initialize.html", sim)
-
-
-@login_required
-@require_http_methods(["POST"])
-def simulation_students_rate_pre_interview(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    from .simulation_engine import students_rate_schools_pre_interview
-
-    students_rate_schools_pre_interview(sim)
-    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
-
-
-@login_required
-@require_http_methods(["POST"])
-def simulation_schools_rate_pre_interview(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    from .simulation_engine import schools_rate_students_pre_interview
-
-    schools_rate_students_pre_interview(sim)
-    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
-
-
-@login_required
-@require_http_methods(["POST"])
-def simulation_compute_students_rankings(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    from .simulation_engine import compute_students_pre_rankings
-
-    compute_students_pre_rankings(sim)
-    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
-
-
-@login_required
-@require_http_methods(["POST"])
-def simulation_compute_schools_rankings(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    from .simulation_engine import compute_schools_pre_rankings
-
-    compute_schools_pre_rankings(sim)
-    return render(request, "nrmps/partials/_interview_counts.html", {"simulation": sim})
+    return _run_step(request, pk, "initialized", initialize_interview)
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_compute_pre_interview_all(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
+    """Compute true utilities, noisy pre-interview ratings and strict ranks for every interview row."""
     from .simulation_engine import compute_pre_interview_scores_and_rankings
 
-    compute_pre_interview_scores_and_rankings(sim)
-    sim.advance_status("pre_interview")
-    return _render_stage_response(request, "nrmps/partials/_stage_pre_interview.html", sim)
+    return _run_step(request, pk, "pre_interview", compute_pre_interview_scores_and_rankings)
 
 
 @login_required
 @require_http_methods(["POST"])
 def simulation_compute_post_interview_all(request, pk: int):
-    """Compute post-interview scores and rankings for all interviewed pairs."""
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
+    """Compute post-interview ratings and ranks for the pairs that interviewed (none until Phase 3)."""
     from .simulation_engine import compute_post_interview_scores_and_rankings
 
-    compute_post_interview_scores_and_rankings(sim)
-    sim.advance_status("post_interview")
-    return _render_stage_response(request, "nrmps/partials/_stage_post_interview.html", sim)
+    return _run_step(request, pk, "post_interview", compute_post_interview_scores_and_rankings)
 
 
 @login_required
 @require_GET
 def simulation_interviews(request, pk: int):
     """List interviews for a simulation with sorting and pagination (default 100)."""
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
 
     # Sorting
     sort = request.GET.get("sort", "id").lower()
@@ -553,16 +492,10 @@ def simulation_interviews(request, pk: int):
         "school_pre_rank": "schools_pre_rank_of_student",
     }
     sort_field = allowed.get(sort, "id")
-    ordering = sort_field if order != "desc" else f"-{sort_field}"
+    ordering = [sort_field if order != "desc" else f"-{sort_field}", "id"]
 
-    try:
-        page_size = int(request.GET.get("page_size", 100))
-    except (TypeError, ValueError):
-        page_size = 100
-    if page_size <= 0:
-        page_size = 100
-
-    qs = Interview.objects.filter(simulation=sim).select_related("student", "school").order_by(ordering)
+    page_size = _page_size(request)
+    qs = Interview.objects.filter(simulation=sim).select_related("student", "school").order_by(*ordering)
     paginator = Paginator(qs, page_size)
     page = request.GET.get("page")
     page_obj = paginator.get_page(page)
@@ -573,54 +506,43 @@ def simulation_interviews(request, pk: int):
         "sort": sort,
         "order": order,
         "page_size": page_size,
-        "page_sizes": [25, 50, 100, 200, 500],
+        "page_sizes": PAGE_SIZES,
     }
     return render(request, "nrmps/interviews_list.html", context)
+
+
+INTERVIEW_CSV_COLUMNS = [
+    "status",
+    "student_true_score_of_school",
+    "school_true_score_of_student",
+    "student_pre_observed_score_of_school",
+    "school_pre_observed_score_of_student",
+    "students_pre_rank_of_school",
+    "schools_pre_rank_of_student",
+    "student_post_observed_score_of_school",
+    "school_post_observed_score_of_student",
+    "students_post_rank_of_school",
+    "schools_post_rank_of_student",
+]
 
 
 @login_required
 @require_GET
 def simulation_download_interviews(request, pk: int):
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-    resp = HttpResponse(content_type="text/csv; charset=utf-8")
-    resp["Content-Disposition"] = f"attachment; filename=simulation_{sim.id}_interviews.csv"
-    writer = csv.writer(resp)
-    writer.writerow(
-        [
-            "student",
-            "school",
-            "status",
-            "student_pre_observed_score_of_school",
-            "school_pre_observed_score_of_student",
-            "students_pre_rank_of_school",
-            "schools_pre_rank_of_student",
-            "student_post_observed_score_of_school",
-            "school_post_observed_score_of_student",
-        ]
+    """Download the interview rows (scores and ranks for every applicant-program pair) as CSV."""
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
+    rows = (
+        Interview.objects.filter(simulation=sim)
+        .order_by("id")
+        .values_list("student__name", "school__name", *INTERVIEW_CSV_COLUMNS)
+        .iterator(chunk_size=2000)
     )
-    for inter in Interview.objects.filter(simulation=sim).select_related("student", "school"):
-        writer.writerow(
-            [
-                inter.student.name,
-                inter.school.name,
-                inter.status,
-                inter.student_pre_observed_score_of_school,
-                inter.school_pre_observed_score_of_student,
-                inter.students_pre_rank_of_school,
-                inter.schools_pre_rank_of_student,
-                inter.student_post_observed_score_of_school,
-                inter.school_post_observed_score_of_student,
-            ]
-        )
-    return resp
+    return _stream_csv(f"simulation_{sim.id}_interviews.csv", ["student", "school", *INTERVIEW_CSV_COLUMNS], rows)
 
 
 @require_GET
 def documentation(request):
     """Auto-generated documentation from model and function docstrings."""
-
     # Configuration for what to include/exclude
     DOC_CONFIG = {
         # Models to exclude completely

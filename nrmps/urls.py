@@ -54,26 +54,6 @@ urlpatterns = [
         name="simulation_initialize_interviews",
     ),
     path(
-        "simulations/<int:pk>/students-rate-pre-interview/",
-        views.simulation_students_rate_pre_interview,
-        name="simulation_students_rate_pre_interview",
-    ),
-    path(
-        "simulations/<int:pk>/schools-rate-pre-interview/",
-        views.simulation_schools_rate_pre_interview,
-        name="simulation_schools_rate_pre_interview",
-    ),
-    path(
-        "simulations/<int:pk>/compute-students-rankings/",
-        views.simulation_compute_students_rankings,
-        name="simulation_compute_students_rankings",
-    ),
-    path(
-        "simulations/<int:pk>/compute-schools-rankings/",
-        views.simulation_compute_schools_rankings,
-        name="simulation_compute_schools_rankings",
-    ),
-    path(
         "simulations/<int:pk>/compute-pre-interview-all/",
         views.simulation_compute_pre_interview_all,
         name="simulation_compute_pre_interview_all",

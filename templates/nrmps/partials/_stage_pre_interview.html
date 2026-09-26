@@ -14,15 +14,17 @@
     </h2>
   </div>
   <div class="card-body">
-    {% include "nrmps/partials/_stage_alert.html" %}
+    {% include "nrmps/partials/_stage_alert.html" with stage="pre_interview" %}
     <div class="flex justify-between items-center">
       <div class="text-sm">Compute pre-interview scores and rankings for all student-school pairs.</div>
       <div class="flex gap-2 flex-wrap">
         <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View Interviews</a>
         <button class="btn btn-sm btn-primary btn-outline"
                 hx-post="{% url 'nrmps:simulation_compute_pre_interview_all' pk=simulation.pk %}"
-                hx-target="#stage-pre_interview"
+                hx-target="#stage-cards"
                 hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-sync="#stage-cards:drop"
                 hx-confirm="Compute pre-interview scores and rankings? This runs: 1) Students rate schools, 2) Schools rate students, 3) Compute all rankings."
                 {% if simulation|stage_locked:"pre_interview" %}disabled{% endif %}>
           Compute Pre-Interview All

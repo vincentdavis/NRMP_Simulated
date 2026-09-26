@@ -14,7 +14,7 @@
     </h2>
   </div>
   <div class="card-body">
-    {% include "nrmps/partials/_stage_alert.html" %}
+    {% include "nrmps/partials/_stage_alert.html" with stage="initialized" %}
     <div class="flex justify-between items-center">
       <div><strong>Interviews:</strong> {{ simulation.interviews.count }}</div>
       <div class="flex gap-2 flex-wrap">
@@ -22,8 +22,10 @@
         <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_interviews' pk=simulation.pk %}">Download CSV</a>
         <button class="btn btn-sm btn-primary btn-outline"
                 hx-post="{% url 'nrmps:simulation_initialize_interviews' pk=simulation.pk %}"
-                hx-target="#stage-initialize"
+                hx-target="#stage-cards"
                 hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-sync="#stage-cards:drop"
                 hx-confirm="(Re)initialize interview data? This will replace existing interviews."
                 {% if simulation|stage_locked:"initialized" %}disabled{% endif %}>
           (re)Initialize Interviews

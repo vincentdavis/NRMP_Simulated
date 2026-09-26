@@ -1,5 +1,5 @@
-{% comment %}Error from the last action on this stage card (a SimulationError message), shown in the card.{% endcomment %}
-{% if error %}
+{% comment %}Error from the last action, shown in the card of the stage it belongs to (`stage`).{% endcomment %}
+{% if error and error_stage == stage %}
   <div role="alert" class="alert alert-error mb-3">
     <span>{{ error }}</span>
   </div>
