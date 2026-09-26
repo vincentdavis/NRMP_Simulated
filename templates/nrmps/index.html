@@ -1,52 +1,96 @@
 {% extends "base.html" %}
+{% load format_tags %}
 {% block title %}Home - NRMP Simulations{% endblock %}
 {% block content %}
-<div class="hero min-h-96">
-  <div class="hero-content text-center">
-    <div class="max-w-6xl">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-        <div class="text-left">
-          <h1 class="text-4xl sm:text-5xl font-bold mb-6">Simulate the residency Match</h1>
-          <p class="text-lg text-base-content/80 mb-4">
-            Build a market of applicants and residency programs, give each side preferences and imperfect
-            information, and see how their rankings form.
-          </p>
-          <p class="text-base-content/70 mb-6">
-            For medical students, program directors, educators and researchers. Results are simulations, not predictions
-            of any real applicant's match.
-          </p>
-          <div class="flex flex-wrap gap-3">
-            {% if request.user.is_authenticated %}
-              <a class="btn btn-primary" href="{% url 'nrmps:simulation_list' %}">Your simulations</a>
-              <a class="btn btn-outline" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
-            {% else %}
-              <a class="btn btn-primary" href="{% url 'nrmps:signup' %}">Create an account</a>
-              <a class="btn btn-outline" href="{% url 'nrmps:login' %}">Log in</a>
-            {% endif %}
-          </div>
+<section class="hero py-10" aria-labelledby="hero-title">
+  <div class="hero-content max-w-6xl w-full">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center w-full">
+      <div>
+        <h1 id="hero-title" class="text-4xl sm:text-5xl font-bold mb-6">Simulate the residency Match</h1>
+        <p class="text-lg text-base-content/80 mb-4">
+          Build a market of applicants and residency programs, give each side preferences and imperfect information,
+          and follow them through applications, signals, interviews and rank order lists to the match.
+        </p>
+        <p class="text-base-content/70 mb-6">
+          For medical students, program directors, educators and researchers. Results are simulations under the
+          assumptions you choose, not predictions of any real applicant's match.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          {% if request.user.is_authenticated %}
+            <a class="btn btn-primary" href="{% url 'nrmps:demo' %}">Try a demo</a>
+            <a class="btn btn-outline" href="{% url 'nrmps:simulation_list' %}">Your simulations</a>
+            <a class="btn btn-ghost" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
+          {% else %}
+            <a class="btn btn-primary" href="{% url 'nrmps:signup' %}?next={% url 'nrmps:demo' %}">Try a demo</a>
+            <a class="btn btn-outline" href="{% url 'nrmps:login' %}">Log in</a>
+          {% endif %}
+          <a class="btn btn-ghost" href="{% url 'nrmps:help' %}">Read the guide</a>
         </div>
+        {% if not request.user.is_authenticated %}
+          <p class="text-sm text-base-content/70 mt-3">A free account keeps your simulations; the demo runs as soon as it is created.</p>
+        {% endif %}
+      </div>
 
-        <div>
-          <div class="card bg-base-200 shadow-xl">
-            <div class="card-body">
-              <h2 class="card-title">Quick start</h2>
-              <ol class="list-decimal list-inside space-y-2 text-left">
-                <li>Create an account (or log in) and open <em>Simulations</em>.</li>
-                <li>Create a simulation. It starts with working default parameters you can adjust.</li>
-                <li>Press <em>Run</em>: applicants and programs are generated (or taken from your CSV files), with
-                  their true preferences and noisy pre-interview views of each other.</li>
-                <li>Explore the results, down to one applicant's view of every program, and download them.</li>
-                <li>Change a parameter and run again: the same seed keeps everything else the same.</li>
-              </ol>
-              <p class="text-sm text-base-content/70 text-left mt-2">
-                Applications, invitations, interviews, rank order lists and the match itself are being built; see the
-                <a class="link" href="{{ PROJECT_URL }}">project page</a>.
-              </p>
-            </div>
-          </div>
+      <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title">What a run does</h2>
+          <ul class="steps steps-vertical">
+            <li class="step step-primary"><span class="text-left"><strong>Population</strong>: applicants in groups, programs with positions</span></li>
+            <li class="step step-primary"><span class="text-left"><strong>Before interviews</strong>: true preferences, seen with noise</span></li>
+            <li class="step step-primary"><span class="text-left"><strong>Applications and signals</strong>: who applies where</span></li>
+            <li class="step step-primary"><span class="text-left"><strong>Invitations</strong>: programs screen and invite in waves</span></li>
+            <li class="step step-primary"><span class="text-left"><strong>Interviews</strong>: fit revealed, views sharpened</span></li>
+            <li class="step step-primary"><span class="text-left"><strong>Rank order lists</strong>: each side ranks the other</span></li>
+            <li class="step step-primary"><span class="text-left"><strong>Match</strong>: deferred acceptance, checked for stability</span></li>
+          </ul>
         </div>
       </div>
     </div>
   </div>
-</div>
+</section>
+
+<section class="max-w-6xl mx-auto mb-10" aria-labelledby="questions-title">
+  <h2 id="questions-title" class="text-2xl font-bold mb-4">Questions you can explore</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">How much does information matter?</h3>
+        <p class="text-sm">Compare the default market with the <em>Perfect information</em> preset: how many more
+          applicants match, and how much closer to their first choice?</p>
+      </div>
+    </div>
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">Do preference signals help?</h3>
+        <p class="text-sm">Run the <em>Preference signals</em> preset and compare interview rates of signalled and
+          other applications.</p>
+      </div>
+    </div>
+    <div class="card bg-base-100 shadow">
+      <div class="card-body">
+        <h3 class="card-title text-lg">What if the market is tighter?</h3>
+        <p class="text-sm">The <em>Competitive specialty</em> preset has 1.5 applicants per position: who goes
+          unmatched, by group and strength?</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if recent %}
+  <section class="max-w-6xl mx-auto mb-10" aria-labelledby="recent-title">
+    <h2 id="recent-title" class="text-2xl font-bold mb-4">Your recent simulations</h2>
+    <ul class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {% for item in recent %}
+        <li class="card bg-base-100 shadow">
+          <div class="card-body">
+            <h3 class="card-title text-lg"><a class="link link-hover" href="{% url 'nrmps:simulation_manage' pk=item.sim.pk %}">{{ item.sim.name }}</a></h3>
+            <p class="text-sm text-base-content/70">
+              {% if item.sim.latest_run_number %}Run {{ item.sim.latest_run_number }}{% if item.match_rate is not None %}: match rate {{ item.match_rate|percent }}{% endif %}{% else %}Not run yet{% endif %}
+            </p>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}
 {% endblock %}

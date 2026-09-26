@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.http import FileResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .accounts import export_user_data, send_verification_email, verify_token
@@ -31,10 +32,19 @@ def signup(request):
             send_verification_email(request, user)
             request.session["verification_sent_at"] = time.time()
             messages.success(request, f"Welcome! We sent a confirmation link to {user.email}.")
-            return redirect("nrmps:simulation_list")
+            return redirect(_safe_next(request) or "nrmps:simulation_list")
     else:
         form = SignupForm()
-    return render(request, "nrmps/signup.html", {"form": form})
+    return render(request, "nrmps/signup.html", {"form": form, "next": _safe_next(request) or ""})
+
+
+def _safe_next(request) -> str | None:
+    """Return the `next` URL of the request if it stays on this site (for example /demo/ after signing up)."""
+    target = request.POST.get("next") or request.GET.get("next") or ""
+    allowed = url_has_allowed_host_and_scheme(
+        target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    )
+    return target if target and allowed else None
 
 
 @require_GET

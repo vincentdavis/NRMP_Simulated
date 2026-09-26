@@ -34,7 +34,7 @@ def test_a_new_simulation_runs_from_the_page(logged_in_page, live):
     expect(page.locator("#toasts")).to_contain_text("Run 1 finished.")
     expect(_stage(page, "Population")).to_contain_text("Done")
     expect(_stage(page, "Pre-interview")).to_contain_text("Done")
-    page.locator("#run-panel").get_by_role("link", name="Results").click()
+    page.locator("#run-panel").get_by_role("link", name="Results", exact=True).click()
     expect(page.get_by_role("heading", level=1)).to_contain_text("Run 1")
     assert Simulation.objects.get(name="Browser run").runs.get().status == "succeeded"
 
@@ -168,3 +168,16 @@ def test_help_popovers_and_the_help_panel_work_by_keyboard(logged_in_page, live,
     expect(panel).to_contain_text("Ranked first by")
     panel.get_by_role("button", name="Close").click()
     expect(panel).to_be_hidden()
+
+
+def test_the_demo_runs_and_opens_its_results(logged_in_page, live):
+    """Plan step 4.5: Try a demo creates a simulation, runs it and shows the results."""
+    page = logged_in_page
+    page.goto(f"{live}/")
+    page.get_by_role("link", name="Try a demo").click()
+    page.get_by_label("Small classroom market").check()
+    page.get_by_role("button", name="Run the demo").click()
+    page.wait_for_url(re.compile(r"/simulations/\d+/runs/1/$"))
+    expect(page.get_by_role("heading", level=1)).to_contain_text("Run 1")
+    expect(page.locator("main")).to_contain_text("Checks passed")
+    assert Simulation.objects.get(name="Demo: Small classroom market").runs.get().status == "succeeded"

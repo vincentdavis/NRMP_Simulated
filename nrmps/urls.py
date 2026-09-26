@@ -70,6 +70,7 @@ urlpatterns = [
     path("ops/", ops_views.ops, name="ops"),
     path("documentation/", help_views.documentation_redirect, name="documentation"),
     # Simulations
+    path("demo/", views.demo, name="demo"),
     path("simulations/", views.simulation_list, name="simulation_list"),
     path("simulations/new/", views.simulation_create, name="simulation_create"),
     path("simulations/<int:pk>/", views.simulation_manage, name="simulation_manage"),

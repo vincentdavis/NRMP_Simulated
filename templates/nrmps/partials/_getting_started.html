@@ -1,0 +1,19 @@
+{% comment %}
+  The getting-started checklist of a new simulation (plan step 4.5; views.getting_started), shown in the run panel
+  until the simulation has two successful runs.
+{% endcomment %}
+<div class="rounded-box border border-base-300 p-4">
+  <h3 class="font-semibold mb-2">Getting started</h3>
+  <ol class="space-y-1">
+    {% for item in getting_started %}
+      <li class="flex items-start gap-2">
+        {% if item.done %}
+          <span class="badge badge-success badge-sm mt-0.5" aria-hidden="true">✓</span><span class="sr-only">Done:</span>
+        {% else %}
+          <span class="badge badge-outline badge-sm mt-0.5" aria-hidden="true">{{ forloop.counter }}</span><span class="sr-only">To do:</span>
+        {% endif %}
+        {% if item.url %}<a class="link{% if item.done %} text-base-content/70{% endif %}" href="{{ item.url }}">{{ item.text }}</a>{% else %}<span>{{ item.text }}</span>{% endif %}
+      </li>
+    {% endfor %}
+  </ol>
+</div>

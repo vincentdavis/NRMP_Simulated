@@ -84,8 +84,19 @@ def task_health() -> dict[str, Any]:
 @login_not_required
 @require_GET
 def index(request):
-    """Home page (index)."""
-    return render(request, "nrmps/index.html")
+    """Home page: what the simulator does, the stages of a run, Try a demo, and your recent simulations."""
+    recent = _recent_simulations(request.user) if request.user.is_authenticated else []
+    return render(request, "nrmps/index.html", {"recent": recent})
+
+
+def _recent_simulations(user: Any, count: int = 3) -> list[dict[str, Any]]:
+    """Return the user's latest simulations, each with its latest run's number and match rate."""
+    recent = []
+    for sim in Simulation.objects.owned_by(user).with_run_summary().order_by("-id")[:count]:
+        latest = sim.latest_run(succeeded=True)
+        outcomes = (latest.metrics or {}).get("outcomes") or {} if latest else {}
+        recent.append({"sim": sim, "match_rate": (outcomes.get("match") or {}).get("match_rate")})
+    return recent
 
 
 @login_not_required
@@ -183,7 +194,8 @@ def manage_context(request: HttpRequest, sim: Simulation, **overrides) -> dict:
         "background": settings.TASK_BACKEND == "database",
         "active_run": sim.active_run(),
         "latest_run": sim.latest_run(),
-        "results_run": sim.latest_run(succeeded=True),
+        "results_run": (results_run := sim.latest_run(succeeded=True)),
+        "getting_started": getting_started(sim, results_run),
         "recent_runs": sim.runs.defer("params", "metrics", "fingerprints").annotate(
             match_rate=F("metrics__outcomes__match__match_rate")
         )[:RECENT_RUNS],
@@ -262,6 +274,50 @@ def simulation_manage(request, pk: int):
     context["param_warnings"] = [w for w in warnings if w.path.split(".")[0] in implemented]
     context["planned_warnings"] = [w for w in warnings if w.path.split(".")[0] not in implemented]
     return render(request, "nrmps/simulation_manage.html", context)
+
+
+# The presets offered by "Try a demo", first the default.
+DEMO_PRESETS = ("nrmp_like", "classroom", "signals")
+
+
+@require_http_methods(["GET", "POST"])
+def demo(request):
+    """Try a demo: create a simulation from a preset, run it, and open its results (GET explains and asks)."""
+    if request.method == "GET":
+        return render(request, "nrmps/demo.html", {"presets": [(key, PRESETS[key]) for key in DEMO_PRESETS]})
+    key = request.POST.get("preset", DEMO_PRESETS[0])
+    key = key if key in DEMO_PRESETS else DEMO_PRESETS[0]
+    try:
+        check_simulation_quota(request.user)
+    except QuotaError as exc:
+        messages.error(request, str(exc))
+        return redirect("nrmps:simulation_list")
+    if over_limit(request, "run", by="user"):
+        messages.error(request, RATE_MESSAGE)
+        return redirect("nrmps:simulation_list")
+    preset = PRESETS[key]
+    sim = Simulation(owner=request.user, name=f"Demo: {preset.title}", description=preset.description)
+    sim.set_params(preset_params(key, seed=new_seed()))
+    sim.save()
+    return _run_and_redirect(request, sim)
+
+
+def getting_started(sim: Simulation, results_run: Any) -> list[dict[str, Any]] | None:
+    """Return the getting-started checklist of a simulation, or None once it has two successful runs."""
+    succeeded = sim.runs.filter(status="succeeded").count()
+    if succeeded >= 2:
+        return None
+    results = reverse("nrmps:run_detail", kwargs={"pk": sim.pk, "number": results_run.number}) if results_run else ""
+    return [
+        {"text": "Choose the parameters, or keep the preset's", "done": True, "url": "#parameters"},
+        {"text": "Run the simulation", "done": sim.runs.exists(), "url": "#run"},
+        {
+            "text": "Explore the results: the match, the funnel, each applicant's path",
+            "done": succeeded >= 1,
+            "url": results,
+        },
+        {"text": "Change a parameter and run again to compare", "done": succeeded >= 2, "url": "#parameters"},
+    ]
 
 
 @require_POST

@@ -26,6 +26,7 @@ PUBLIC = [
 PRIVATE = [
     "/simulations/",
     "/simulations/new/",
+    "/demo/",
     "/simulations/{pk}/",
     "/simulations/{pk}/runs/1/",
     "/simulations/{pk}/runs/1/population/",

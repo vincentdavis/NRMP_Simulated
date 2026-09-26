@@ -31,6 +31,7 @@
       programs ({{ market.pairs|intcomma }} pairs; the limit is {{ max_pairs|intcomma }}). The same parameters and
       seed always give the same results.
     </p>
+    {% if getting_started %}{% include "nrmps/partials/_getting_started.html" %}{% endif %}
     {% if run_error %}
       <div role="alert" class="alert alert-error"><span>{{ run_error }}</span></div>
     {% endif %}

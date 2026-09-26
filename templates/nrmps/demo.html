@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Try a demo - NRMP Simulations{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto py-4">
+  <h1 class="text-3xl font-bold mb-2">Try a demo</h1>
+  <p class="text-base-content/80 mb-6">
+    Pick a market. The demo creates a simulation from it, runs every stage from the population to the match, and opens
+    the results. You can then change its parameters and run it again.
+  </p>
+  <form method="post" class="card bg-base-100 shadow-xl">
+    {% csrf_token %}
+    <div class="card-body">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Market</legend>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {% for key, preset in presets %}
+            <label class="card card-border bg-base-100 cursor-pointer has-checked:border-primary has-checked:bg-base-200">
+              <span class="card-body p-4 gap-1">
+                <span class="flex items-center gap-2">
+                  <input type="radio" name="preset" value="{{ key }}" class="radio radio-sm radio-primary"{% if forloop.first %} checked{% endif %}>
+                  <span class="font-medium">{{ preset.title }}</span>
+                </span>
+                <span class="text-sm text-base-content/70">{{ preset.description }}</span>
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <div class="card-actions justify-end mt-2">
+        <button type="submit" class="btn btn-primary">
+          <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
+          Run the demo
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
