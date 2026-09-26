@@ -1,59 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Login - NRMP Simulations{% endblock %}
+{% load form_tags %}
+{% block title %}Log in - NRMP Simulations{% endblock %}
 {% block content %}
 <div class="flex justify-center items-center min-h-96">
   <div class="w-full max-w-md">
     <div class="card bg-base-100 shadow-xl">
       <div class="card-body">
-        <h2 class="card-title text-center text-2xl font-bold mb-6">Login</h2>
-
+        <h1 class="card-title text-2xl font-bold mb-2">Log in</h1>
         {% if form.non_field_errors %}
-          <div role="alert" class="alert alert-error mb-4">
+          <div role="alert" class="alert alert-error">
             <div>{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>
           </div>
-        {% elif form.errors %}
-          <div role="alert" class="alert alert-error mb-4">
-            <span>Please correct the errors below.</span>
-          </div>
         {% endif %}
-
-        <form method="post" novalidate class="space-y-4">
+        <form method="post" novalidate>
           {% csrf_token %}
-
-          <div class="form-control">
-            <label class="label" for="id_username">
-              <span class="label-text font-medium">Username</span>
-            </label>
-            <input type="text" name="username" autofocus required autocomplete="username"
-                   class="input input-bordered w-full" id="id_username"
-                   value="{{ form.username.value|default:'' }}">
-            {% if form.username.errors %}
-              <label class="label">
-                <span class="label-text-alt text-error">{{ form.username.errors|striptags }}</span>
-              </label>
-            {% endif %}
-          </div>
-
-          <div class="form-control">
-            <label class="label" for="id_password">
-              <span class="label-text font-medium">Password</span>
-            </label>
-            <input type="password" name="password" required autocomplete="current-password"
-                   class="input input-bordered w-full" id="id_password">
-            {% if form.password.errors %}
-              <label class="label">
-                <span class="label-text-alt text-error">{{ form.password.errors|striptags }}</span>
-              </label>
-            {% endif %}
-          </div>
-
-          <button type="submit" class="btn btn-primary w-full">Login</button>
+          {% field_row form.username %}
+          {% field_row form.password %}
+          <button type="submit" class="btn btn-primary w-full mt-4">Log in</button>
         </form>
-
         <div class="divider"></div>
         <p class="text-center text-sm">
-          New to NRMP Simulations?
-          <a href="{% url 'nrmps:signup' %}" class="link link-primary">Create an account</a>.
+          New to NRMP Simulations? <a href="{% url 'nrmps:signup' %}" class="link link-primary">Create an account</a>.
         </p>
       </div>
     </div>

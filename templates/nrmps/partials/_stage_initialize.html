@@ -1,7 +1,7 @@
 {% load simulation_tags %}
 <div id="stage-initialize"
-     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'initialized' or simulation|stage_active:'populations' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'populations' %} opacity-50{% endif %}">
-  <div class="card-header">
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'initialized' or simulation|stage_active:'populations' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'populations' %} border border-dashed border-base-300 shadow-none{% endif %}">
+  <div class="card-body">
     <h2 class="card-title">
       Initialize Interviews
       {% if simulation|stage_complete:"initialized" %}
@@ -9,17 +9,15 @@
       {% elif simulation|stage_active:"initialized" or simulation|stage_active:"populations" %}
         <span class="badge badge-accent badge-sm ml-2">Ready</span>
       {% else %}
-        <span class="badge badge-ghost badge-sm ml-2">Locked</span>
+        <span class="badge badge-outline badge-sm ml-2">Locked</span>
       {% endif %}
     </h2>
-  </div>
-  <div class="card-body">
     {% include "nrmps/partials/_stage_alert.html" with stage="initialized" %}
-    <div class="flex justify-between items-center">
+    <div class="flex flex-wrap gap-2 justify-between items-center">
       <div><strong>Interviews:</strong> {{ simulation.interviews.count }}</div>
       <div class="flex gap-2 flex-wrap">
         <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View List</a>
-        <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_interviews' pk=simulation.pk %}">Download CSV</a>
+        <a class="btn btn-sm" href="{% url 'nrmps:simulation_download_interviews' pk=simulation.pk %}">Download CSV</a>
         <button class="btn btn-sm btn-primary btn-outline"
                 hx-post="{% url 'nrmps:simulation_initialize_interviews' pk=simulation.pk %}"
                 hx-target="#stage-cards"

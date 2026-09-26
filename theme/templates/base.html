@@ -17,32 +17,33 @@
     <header class="navbar bg-base-300 shadow-lg">
         <div class="navbar-start">
             <div class="dropdown">
-                <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div tabindex="0" role="button" class="btn btn-ghost lg:hidden" aria-label="Menu">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                               d="M4 6h16M4 12h8m-8 6h16"></path>
                     </svg>
                 </div>
                 <ul tabindex="0"
                     class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-52 p-2 shadow">
-                    <li><a href="/account/">Account</a></li>
+                    <li><a href="{% url 'nrmps:account' %}">Account</a></li>
                     <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
                     <li><a href="{% url 'nrmps:documentation' %}">Documentation</a></li>
-                    <li><a href="/contact/">Contact</a></li>
+                    <li><a href="{% url 'nrmps:contact' %}">Contact</a></li>
                 </ul>
             </div>
-            <a class="btn btn-ghost text-xl" href="/">
-                <img src="{% static 'NRMP_Simulations_logo.png' %}" alt="NRMP Simulations logo" class="w-8 h-8 mr-2">
-                NRMP Simulations
+            <a class="btn btn-ghost text-xl px-2" href="{% url 'nrmps:index' %}">
+                <img src="{% static 'NRMP_Simulations_logo.png' %}" alt="" class="w-8 h-8">
+                <span class="hidden sm:inline">NRMP Simulations</span>
+                <span class="sr-only sm:hidden">NRMP Simulations home</span>
             </a>
         </div>
 
         <div class="navbar-center hidden lg:flex">
             <ul class="menu menu-horizontal px-1">
-                <li><a href="/account/">Account</a></li>
+                <li><a href="{% url 'nrmps:account' %}">Account</a></li>
                 <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
                 <li><a href="{% url 'nrmps:documentation' %}">Documentation</a></li>
-                <li><a href="/contact/">Contact</a></li>
+                <li><a href="{% url 'nrmps:contact' %}">Contact</a></li>
             </ul>
         </div>
 
@@ -50,14 +51,14 @@
             {% if request.user.is_authenticated %}
                 <div class="flex items-center gap-2">
                     <span class="text-sm hidden sm:inline">Hello, {{ request.user.get_username }}</span>
-                    <form method="post" action="{% url 'nrmps:logout' %}" class="inline">
+                    <form method="post" action="{% url 'nrmps:logout' %}">
                         {% csrf_token %}
                         <button type="submit" class="btn btn-sm btn-outline">Logout</button>
                     </form>
                 </div>
             {% else %}
                 <div class="flex gap-2">
-                    <a class="btn btn-sm btn-primary" href="{% url 'nrmps:login' %}">Login</a>
+                    <a class="btn btn-sm btn-primary" href="{% url 'nrmps:login' %}">Log in</a>
                     <a class="btn btn-sm btn-outline" href="{% url 'nrmps:signup' %}">Sign up</a>
                 </div>
             {% endif %}

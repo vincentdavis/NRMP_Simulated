@@ -1,78 +1,24 @@
 {% extends "base.html" %}
-{% block title %}{% if create %}New Simulation{% else %}Edit Simulation{% endif %} - NRMP Simulations{% endblock %}
+{% load form_tags %}
+{% block title %}{% if create %}New simulation{% else %}Edit simulation{% endif %} - NRMP Simulations{% endblock %}
 {% block content %}
 <div class="max-w-2xl mx-auto">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-3xl font-bold">{% if create %}Create Simulation{% else %}Edit Simulation{% endif %}</h1>
-    <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to List</a>
+  <div class="flex flex-wrap gap-2 justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">{% if create %}New simulation{% else %}Edit simulation{% endif %}</h1>
+    <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
   </div>
-
   <div class="card bg-base-100 shadow-xl">
-    <form method="post" class="card-body">
+    <form method="post" class="card-body" novalidate>
       {% csrf_token %}
-
-      <div class="form-control mb-4">
-        <label class="label" for="id_name">
-          <span class="label-text font-medium">Name</span>
-        </label>
-        <input type="text" name="name" class="input input-bordered w-full" id="id_name"
-               value="{{ form.name.value|default:'' }}" required>
-        {% if form.name.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.name.errors|striptags }}</span>
-          </label>
-        {% endif %}
+      {% field_row form.name %}
+      {% field_row form.description label="Description (optional)" %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% field_row form.iterations %}
+        {% field_row form.public %}
       </div>
-
-      <div class="form-control mb-4">
-        <label class="label" for="id_description">
-          <span class="label-text font-medium">Description (optional)</span>
-        </label>
-        <textarea name="description" class="textarea textarea-bordered" id="id_description"
-                  rows="3">{{ form.description.value|default:'' }}</textarea>
-        {% if form.description.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.description.errors|striptags }}</span>
-          </label>
-        {% endif %}
-      </div>
-
-      <div class="grid md:grid-cols-2 gap-4 mb-6">
-        <div class="form-control">
-          <label class="label" for="id_iterations">
-            <span class="label-text font-medium">Iterations</span>
-          </label>
-          <input type="number" name="iterations" class="input input-bordered w-full" id="id_iterations"
-                 value="{{ form.iterations.value|default:'1' }}" min="1" max="100" required
-                 aria-describedby="id_iterations_helptext">
-          <p class="text-sm text-base-content/70 mt-1" id="id_iterations_helptext">{{ form.iterations.help_text }}</p>
-          {% if form.iterations.errors %}
-            <label class="label">
-              <span class="label-text-alt text-error">{{ form.iterations.errors|striptags }}</span>
-            </label>
-          {% endif %}
-        </div>
-
-        <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-2" for="id_public">
-            <input type="checkbox" name="public" class="checkbox" id="id_public"
-                   {% if form.public.value %}checked{% endif %} aria-describedby="id_public_helptext">
-            <span class="label-text">Public</span>
-          </label>
-          <p class="text-sm text-base-content/70 mt-1" id="id_public_helptext">{{ form.public.help_text }}</p>
-          {% if form.public.errors %}
-            <label class="label">
-              <span class="label-text-alt text-error">{{ form.public.errors|striptags }}</span>
-            </label>
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="card-actions justify-end gap-2">
+      <div class="card-actions justify-end mt-4">
         <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Cancel</a>
-        <button type="submit" class="btn btn-primary">
-          {% if create %}Create{% else %}Save{% endif %}
-        </button>
+        <button type="submit" class="btn btn-primary">{% if create %}Create{% else %}Save{% endif %}</button>
       </div>
     </form>
   </div>

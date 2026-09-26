@@ -1,7 +1,7 @@
 {% load simulation_tags %}
 <div id="stage-pre_interview"
-     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'pre_interview' or simulation|stage_active:'initialized' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'initialized' %} opacity-50{% endif %}">
-  <div class="card-header">
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'pre_interview' or simulation|stage_active:'initialized' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'initialized' %} border border-dashed border-base-300 shadow-none{% endif %}">
+  <div class="card-body">
     <h2 class="card-title">
       Pre-Interview
       {% if simulation|stage_complete:"pre_interview" %}
@@ -9,13 +9,11 @@
       {% elif simulation|stage_active:"pre_interview" or simulation|stage_active:"initialized" %}
         <span class="badge badge-accent badge-sm ml-2">Ready</span>
       {% else %}
-        <span class="badge badge-ghost badge-sm ml-2">Locked</span>
+        <span class="badge badge-outline badge-sm ml-2">Locked</span>
       {% endif %}
     </h2>
-  </div>
-  <div class="card-body">
     {% include "nrmps/partials/_stage_alert.html" with stage="pre_interview" %}
-    <div class="flex justify-between items-center">
+    <div class="flex flex-wrap gap-2 justify-between items-center">
       <div class="text-sm">Compute pre-interview scores and rankings for all student-school pairs.</div>
       <div class="flex gap-2 flex-wrap">
         <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_interviews' pk=simulation.pk %}">View Interviews</a>

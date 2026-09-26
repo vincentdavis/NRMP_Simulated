@@ -1,19 +1,17 @@
 {% load simulation_tags %}
 <div id="stage-post_interview"
-     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'post_interview' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'invitations' %} opacity-50{% endif %}">
-  <div class="card-header">
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'post_interview' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'invitations' %} border border-dashed border-base-300 shadow-none{% endif %}">
+  <div class="card-body">
     <h2 class="card-title">
       Post-Interview
       {% if simulation|stage_complete:"post_interview" %}
         <span class="badge badge-success badge-sm ml-2">Done</span>
       {% else %}
-        <span class="badge badge-ghost badge-sm ml-2">Needs interviews</span>
+        <span class="badge badge-outline badge-sm ml-2">Needs interviews</span>
       {% endif %}
     </h2>
-  </div>
-  <div class="card-body">
     {% include "nrmps/partials/_stage_alert.html" with stage="post_interview" %}
-    <div class="flex justify-between items-center">
+    <div class="flex flex-wrap gap-2 justify-between items-center">
       <div class="text-sm">
         Compute post-interview scores and rankings for the pairs that interviewed. Needs the invitation and interview
         stages, which are not implemented yet.

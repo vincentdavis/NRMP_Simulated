@@ -68,6 +68,9 @@ uv run python manage.py makemigrations --check --dry-run
 # Run tests (pytest-django + hypothesis; NRMP_Simulated/settings_test.py runs the production configuration
 # against an in-memory SQLite database; set NRMP_TEST_DATABASE_URL=postgres://... to use PostgreSQL)
 uv run pytest
+
+# Browser tests (Playwright + axe; need the built CSS and `uv run playwright install chromium`)
+uv run pytest -m e2e
 ```
 
 ### Docker Development
@@ -179,6 +182,11 @@ data/                    # CSV upload storage location
 ```
 
 ### Development Guidelines
+
+**Templates**:
+- Render form fields with `{% load form_tags %}{% field_row form.field %}` (daisyUI 5 fieldset with help text and
+  errors wired to `aria-describedby`); sortable list headers with `{% load list_tags %}{% sort_th key label %}`.
+- Use daisyUI 5 class names only; `nrmps/tests/test_css_classes.py` fails on classes missing from the built CSS.
 
 **Code Style**:
 - Line length: 120 characters

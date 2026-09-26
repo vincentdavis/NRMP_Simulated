@@ -6,3 +6,10 @@
 @source "../../../templates";
 @source "../../../theme/templates";
 @source "../../../nrmps";
+
+/* A visible keyboard focus ring everywhere (some daisyUI components remove the outline). Unlayered, so it wins over
+   the component layer. */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

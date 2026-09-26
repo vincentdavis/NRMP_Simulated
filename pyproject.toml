@@ -21,6 +21,7 @@ prod = [
     "psycopg[binary]>=3.3.6",
 ]
 dev = [
+    "axe-playwright-python>=0.1.8",
     "codespell>=2.4.3",
     "django-browser-reload>=1.21.0",
     "django-debug-toolbar>=8.0.0",
@@ -30,6 +31,7 @@ dev = [
     "hypothesis>=6.168.1",
     "pytest>=9.1.1",
     "pytest-django>=4.14.0",
+    "pytest-playwright>=0.9.0",
     "ruff>=0.16.9",
     "ty>=0.0.84",
 ]
@@ -38,7 +40,8 @@ dev = [
 DJANGO_SETTINGS_MODULE = "NRMP_Simulated.settings_test"
 python_files = ["test_*.py"]
 testpaths = ["nrmps"]
-addopts = "-ra --strict-markers"
+addopts = "-ra --strict-markers -m 'not e2e'"
+markers = ["e2e: browser tests with Playwright (run with `pytest -m e2e`)"]
 filterwarnings = [
     # WhiteNoise warns that STATIC_ROOT does not exist until collectstatic has run.
     "ignore:No directory at:UserWarning",
@@ -54,7 +57,7 @@ warn_redundant_casts = true
 django_settings_module = "NRMP_Simulated.settings_test"
 
 [[tool.mypy.overrides]]
-module = ["scipy.*", "axes.*", "debug_toolbar.*", "django_browser_reload.*", "hypothesis.*"]
+module = ["scipy.*", "axes.*", "debug_toolbar.*", "django_browser_reload.*", "hypothesis.*", "axe_playwright_python.*"]
 ignore_missing_imports = true
 
 [tool.uv]

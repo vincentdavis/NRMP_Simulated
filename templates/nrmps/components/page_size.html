@@ -1,0 +1,13 @@
+{% comment %}Rows-per-page selector for list pages (context: sort, order, page_size, page_sizes).{% endcomment %}
+<form method="get" class="mb-4">
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="order" value="{{ order }}">
+  <fieldset class="fieldset">
+    <legend class="fieldset-legend"><label for="page_size">Rows per page</label></legend>
+    <select id="page_size" name="page_size" class="select select-sm w-32" onchange="this.form.submit()">
+      {% for size in page_sizes %}
+        <option value="{{ size }}"{% if page_size == size %} selected{% endif %}>{{ size }}</option>
+      {% endfor %}
+    </select>
+  </fieldset>
+</form>

@@ -88,3 +88,24 @@ jobs:
           done
           docker logs app
           exit 1
+
+  browser:
+    name: Browser tests (Playwright + axe) and CSS classes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: uv sync --locked
+      - name: Build the CSS
+        run: cd theme/static_src && npm ci --no-audit --no-fund && npm run build
+      - name: Every template class exists in the built CSS
+        env:
+          NRMP_REQUIRE_BUILT_CSS: "1"
+        run: uv run pytest nrmps/tests/test_css_classes.py
+      - name: Install Chromium
+        run: uv run playwright install --with-deps chromium
+      - name: Pages fit 390 px and have no serious axe violations
+        run: uv run pytest -m e2e

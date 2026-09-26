@@ -1,7 +1,7 @@
 {% load simulation_tags %}
 <div id="stage-populations"
-     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'populations' or simulation|stage_active:'setup' %} border-2 border-accent{% endif %}{% if simulation|stage_locked:'populations' %} opacity-50{% endif %}">
-  <div class="card-header">
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'populations' or simulation|stage_active:'setup' %} border-2 border-accent{% endif %}">
+  <div class="card-body">
     <h2 class="card-title">
       Populations
       {% if simulation|stage_complete:"populations" %}
@@ -10,8 +10,6 @@
         <span class="badge badge-accent badge-sm ml-2">Active</span>
       {% endif %}
     </h2>
-  </div>
-  <div class="card-body">
     {% include "nrmps/partials/_stage_alert.html" with stage="populations" %}
     {% if not simulation.configs.exists %}
       <div role="alert" class="alert alert-warning mb-3">
@@ -19,11 +17,11 @@
       </div>
     {% endif %}
     <div class="mb-4">
-      <div class="flex justify-between items-center mb-2">
+      <div class="flex flex-wrap gap-2 justify-between items-center mb-2">
         <div><strong>Students:</strong> {{ simulation.students.count }}</div>
         <div class="flex gap-2 flex-wrap">
           <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_students' pk=simulation.pk %}">View</a>
-          <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_students' pk=simulation.pk %}">CSV</a>
+          <a class="btn btn-sm" href="{% url 'nrmps:simulation_download_students' pk=simulation.pk %}">CSV</a>
           <button class="btn btn-sm btn-primary btn-outline"
                   hx-post="{% url 'nrmps:simulation_create_students' pk=simulation.pk %}"
                   hx-target="#stage-cards"
@@ -33,7 +31,7 @@
                   hx-confirm="(Re)create students from the latest configuration? This will replace existing students.">
             (re)Create
           </button>
-          <button class="btn btn-sm btn-error btn-outline"
+          <button class="btn btn-sm btn-error"
                   hx-post="{% url 'nrmps:simulation_delete_students' pk=simulation.pk %}"
                   hx-target="#stage-cards"
                   hx-swap="outerHTML"
@@ -50,19 +48,20 @@
             hx-disabled-elt="find button"
             hx-sync="#stage-cards:drop"
             hx-encoding="multipart/form-data"
-            class="flex items-center gap-2">
-        <input type="file" name="file" accept=".csv" class="file-input file-input-sm file-input-bordered flex-1" required>
+            class="flex flex-wrap items-center gap-2">
+        <label class="sr-only" for="students-csv">Students CSV file</label>
+        <input id="students-csv" type="file" name="file" accept=".csv,text/csv" class="file-input file-input-sm flex-1 min-w-0" required>
         <button type="submit" class="btn btn-sm btn-primary">Upload CSV</button>
       </form>
       <p class="text-xs text-base-content/70 mt-1">CSV with a header row: <code>name,score</code>, optionally <code>score_meta</code> and <code>meta_preference</code> (JSON objects). The downloaded CSV can be uploaded again. The file is checked first; if it has problems, nothing changes.</p>
     </div>
     <div class="divider my-1"></div>
     <div>
-      <div class="flex justify-between items-center mb-2">
+      <div class="flex flex-wrap gap-2 justify-between items-center mb-2">
         <div><strong>Schools:</strong> {{ simulation.schools.count }}</div>
         <div class="flex gap-2 flex-wrap">
           <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_schools' pk=simulation.pk %}">View</a>
-          <a class="btn btn-sm btn-success btn-outline" href="{% url 'nrmps:simulation_download_schools' pk=simulation.pk %}">CSV</a>
+          <a class="btn btn-sm" href="{% url 'nrmps:simulation_download_schools' pk=simulation.pk %}">CSV</a>
           <button class="btn btn-sm btn-primary btn-outline"
                   hx-post="{% url 'nrmps:simulation_create_schools' pk=simulation.pk %}"
                   hx-target="#stage-cards"
@@ -72,7 +71,7 @@
                   hx-confirm="(Re)create schools from the latest configuration? This will replace existing schools.">
             (re)Create
           </button>
-          <button class="btn btn-sm btn-error btn-outline"
+          <button class="btn btn-sm btn-error"
                   hx-post="{% url 'nrmps:simulation_delete_schools' pk=simulation.pk %}"
                   hx-target="#stage-cards"
                   hx-swap="outerHTML"
@@ -89,8 +88,9 @@
             hx-disabled-elt="find button"
             hx-sync="#stage-cards:drop"
             hx-encoding="multipart/form-data"
-            class="flex items-center gap-2">
-        <input type="file" name="file" accept=".csv" class="file-input file-input-sm file-input-bordered flex-1" required>
+            class="flex flex-wrap items-center gap-2">
+        <label class="sr-only" for="schools-csv">Schools CSV file</label>
+        <input id="schools-csv" type="file" name="file" accept=".csv,text/csv" class="file-input file-input-sm flex-1 min-w-0" required>
         <button type="submit" class="btn btn-sm btn-primary">Upload CSV</button>
       </form>
       <p class="text-xs text-base-content/70 mt-1">CSV with a header row: <code>name,capacity,score</code>, optionally <code>score_meta</code> and <code>meta_preference</code> (JSON objects). The downloaded CSV can be uploaded again. The file is checked first; if it has problems, nothing changes.</p>

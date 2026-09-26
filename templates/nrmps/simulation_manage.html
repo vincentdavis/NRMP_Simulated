@@ -1,15 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Manage Simulation - NRMP Simulations{% endblock %}
+{% load form_tags %}
+{% block title %}{{ simulation.name }} - NRMP Simulations{% endblock %}
 {% block content %}
-  <div class="mt-8">
-    <div class="flex justify-between items-center mb-6">
-      <h3 class="text-2xl font-bold">Manage: {{ simulation.name }}</h3>
-      <div class="flex gap-2">
-        <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to List</a>
-        <form class="inline" method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}" x-data
-              @submit.prevent="if (confirm('Delete this simulation?')) { $el.submit() }">
+  <div class="mt-4">
+    <div class="flex flex-wrap gap-2 justify-between items-center mb-6">
+      <h1 class="text-2xl font-bold min-w-0 break-words">{{ simulation.name }}</h1>
+      <div class="flex flex-wrap gap-2">
+        <a href="{% url 'nrmps:simulation_list' %}" class="btn btn-outline">Back to list</a>
+        <form method="post" action="{% url 'nrmps:simulation_delete' pk=simulation.pk %}" x-data
+              @submit.prevent="if (confirm('Delete this simulation and all its data?')) { $el.submit() }">
           {% csrf_token %}
-          <button type="submit" class="btn btn-error btn-outline">Delete Simulation</button>
+          <button type="submit" class="btn btn-error">Delete simulation</button>
         </form>
       </div>
     </div>
@@ -20,310 +21,88 @@
       of any real applicant's or program's match.
     </p>
 
-    <div class="grid lg:grid-cols-2 gap-6">
-      <div>
-        <form method="post" class="card bg-base-100 shadow-xl">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="min-w-0 space-y-6">
+        <form method="post" class="card bg-base-100 shadow-xl" novalidate>
           {% csrf_token %}
           <input type="hidden" name="form_id" value="simulation">
-          <div class="card-header">
-            <h2 class="card-title">Edit Simulation</h2>
-          </div>
           <div class="card-body">
-            <div class="form-control">
-              <label class="label" for="id_name"><span class="label-text">Name</span></label>
-              {{ form.name }}
+            <h2 class="card-title">Simulation</h2>
+            {% field_row form.name %}
+            {% field_row form.description label="Description (optional)" %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {% field_row form.iterations %}
+              {% field_row form.public %}
             </div>
-            <div class="form-control">
-              <label class="label" for="id_description"><span class="label-text">Description</span></label>
-              {{ form.description }}
+            <div class="card-actions justify-end">
+              <button type="submit" class="btn btn-primary">Save</button>
             </div>
-            <div class="grid md:grid-cols-2 gap-4">
-              <div class="form-control">
-                <label class="label" for="id_iterations"><span class="label-text">Iterations</span></label>
-                {{ form.iterations }}
-                <p class="text-sm text-base-content/70 mt-1">{{ form.iterations.help_text }}</p>
-              </div>
-              <div class="form-control">
-                <label class="label cursor-pointer">
-                  {{ form.public }}
-                  <span class="label-text">Public</span>
-                </label>
-                <p class="text-sm text-base-content/70 mt-1">{{ form.public.help_text }}</p>
-              </div>
-            </div>
-          </div>
-          <div class="card-actions justify-end">
-            <button type="submit" class="btn btn-primary">Save</button>
           </div>
         </form>
 
-        <form method="post" class="card bg-base-100 shadow-xl mt-6">
+        <form method="post" class="card bg-base-100 shadow-xl" novalidate>
           {% csrf_token %}
           <input type="hidden" name="form_id" value="config">
-          <div class="card-header">
-            <h2 class="card-title">Simulation Configuration</h2>
-          </div>
           <div class="card-body">
+            <h2 class="card-title">Configuration</h2>
             {% if config_form.errors %}
-              <div class="alert alert-error">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none"
-                     viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+              <div role="alert" class="alert alert-error">
                 <div>
-                  <strong>There are errors in the configuration form:</strong>
-                  <ul class="ml-4 list-disc">
-                    {% for field, errors in config_form.errors.items %}
-                      <li>
-                        <span class="capitalize">{{ field|escape }}</span>: {{ errors.as_text|escape }}
-                      </li>
+                  <p class="font-semibold">The configuration was not saved. Please fix:</p>
+                  <ul class="list-disc ml-5">
+                    {% for field in config_form %}
+                      {% if field.errors %}
+                        <li><a class="link" href="#{{ field.id_for_label }}">{{ field.label }}</a>: {{ field.errors.0 }}</li>
+                      {% endif %}
                     {% endfor %}
+                    {% for error in config_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
                   </ul>
                 </div>
               </div>
             {% endif %}
-            {% if config_form.non_field_errors %}
-              <div class="alert alert-error">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none"
-                     viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-                <span>{{ config_form.non_field_errors }}</span>
-              </div>
-            {% endif %}
-            <div class="grid md:grid-cols-2 gap-4">
-              <div class="form-control">
-                <label class="label" for="id_number_of_applicants"><span class="label-text">Number of Applicants</span></label>
-                {{ config_form.number_of_applicants }}
-                {% if config_form.number_of_applicants.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.number_of_applicants.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_number_of_schools"><span
-                    class="label-text">Number of Schools</span></label>
-                {{ config_form.number_of_schools }}
-                {% if config_form.number_of_schools.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.number_of_schools.errors.0 }}</span></label>
-                {% endif %}
-              </div>
+
+            <h3 class="font-semibold mt-2">Market size</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+              {% field_row config_form.number_of_applicants %}
+              {% field_row config_form.number_of_schools %}
             </div>
-            <div class="divider"></div>
-            <div class="grid md:grid-cols-3 gap-4">
-              <div class="form-control">
-                <label class="label" for="id_applicant_score_mean"><span class="label-text">Applicant Score Mean</span></label>
-                {{ config_form.applicant_score_mean }}
-                {% if config_form.applicant_score_mean.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.applicant_score_mean.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_applicant_score_stddev"><span
-                    class="label-text">Applicant Score StdDev</span></label>
-                {{ config_form.applicant_score_stddev }}
-                {% if config_form.applicant_score_stddev.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.applicant_score_stddev.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_applicant_interview_limit"><span class="label-text">Applicant Interview Limit</span></label>
-                {{ config_form.applicant_interview_limit }}
-                {% if config_form.applicant_interview_limit.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.applicant_interview_limit.errors.0 }}</span></label>
-                {% endif %}
-              </div>
+
+            <div class="divider my-2"></div>
+            <h3 class="font-semibold">Applicants</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+              {% field_row config_form.applicant_score_mean %}
+              {% field_row config_form.applicant_score_stddev %}
+              {% field_row config_form.applicant_meta_scores_stddev %}
+              {% field_row config_form.applicant_meta_preference_stddev %}
+              {% field_row config_form.applicant_pre_interview_rating_error %}
+              {% field_row config_form.applicant_post_interview_rating_error %}
+              {% field_row config_form.applicant_interview_limit %}
             </div>
-            <div class="grid md:grid-cols-2 gap-4 mt-4">
-              <div class="form-control">
-                <label class="label" for="id_applicant_meta_preference_stddev"><span class="label-text">Applicant Meta Preference StdDev</span></label>
-                {{ config_form.applicant_meta_preference_stddev }}
-                {% if config_form.applicant_meta_preference_stddev.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.applicant_meta_preference_stddev.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_applicant_meta_scores_stddev"><span class="label-text">Applicant Meta Scores StdDev</span></label>
-                {{ config_form.applicant_meta_scores_stddev }}
-                {% if config_form.applicant_meta_scores_stddev.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.applicant_meta_scores_stddev.errors.0 }}</span></label>
-                {% endif %}
-              </div>
+            {% include "nrmps/components/attribute_editor.html" with side="applicant" field=config_form.applicant_meta_preference items=meta_lists.applicant json=meta_json.applicant label="Program attributes applicants value" %}
+
+            <div class="divider my-2"></div>
+            <h3 class="font-semibold">Programs</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+              {% field_row config_form.school_score_mean %}
+              {% field_row config_form.school_score_stddev %}
+              {% field_row config_form.school_capacity_mean %}
+              {% field_row config_form.school_capacity_stddev %}
+              {% field_row config_form.school_meta_scores_stddev %}
+              {% field_row config_form.school_meta_preference_stddev %}
+              {% field_row config_form.school_pre_interview_rating_error %}
+              {% field_row config_form.school_post_interview_rating_error %}
+              {% field_row config_form.school_interview_limit %}
             </div>
-            <div class="grid md:grid-cols-2 gap-4 mt-4">
-              <div class="form-control">
-                <label class="label" for="id_applicant_pre_interview_rating_error"><span class="label-text">Applicant Pre-interview Rating Error</span></label>
-                {{ config_form.applicant_pre_interview_rating_error }}
-                {% if config_form.applicant_pre_interview_rating_error.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.applicant_pre_interview_rating_error.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_applicant_post_interview_rating_error"><span class="label-text">Applicant Post-interview Rating Error</span></label>
-                {{ config_form.applicant_post_interview_rating_error }}
-                {% if config_form.applicant_post_interview_rating_error.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.applicant_post_interview_rating_error.errors.0 }}</span></label>
-                {% endif %}
-              </div>
+            {% include "nrmps/components/attribute_editor.html" with side="school" field=config_form.school_meta_preference items=meta_lists.school json=meta_json.school label="Applicant attributes programs value" %}
+
+            <div class="card-actions justify-end mt-2">
+              <button type="submit" class="btn btn-primary">Save configuration</button>
             </div>
-            {{ meta_lists.applicant|json_script:"applicant-meta-initial" }}
-            <div class="form-control mt-4" x-data="metaEditor('applicant-meta-initial')">
-              <label class="label" for="id_applicant_meta_preference"><span class="label-text">Applicant Meta Preferences</span></label>
-              <div class="flex flex-wrap gap-2 items-center">
-                <template x-if="!items.length"><span
-                    class="text-base-content/60 text-sm">No items. Add some below.</span></template>
-                <template x-for="(item, index) in items" :key="index">
-                  <div class="join">
-                    <input type="text" class="input input-sm input-bordered join-item" x-model="items[index]"
-                           @input="dedupeAndNormalize()" aria-label="meta item">
-                    <button type="button" class="btn btn-sm btn-error btn-outline join-item" @click="remove(index)"
-                            aria-label="Remove">&times;
-                    </button>
-                  </div>
-                </template>
-              </div>
-              <div class="flex gap-2 mt-2">
-                <input type="text" class="input input-sm input-bordered flex-1" x-model="newItem"
-                       @keydown.enter.prevent="addItem()" placeholder="Type a preference (Enter to add)">
-                <button type="button" class="btn btn-sm btn-primary btn-outline" @click="addItem()">Add</button>
-              </div>
-              <input type="hidden" name="applicant_meta_preference" id="id_applicant_meta_preference"
-                     :value="jsonValue()" value="{{ meta_json.applicant }}">
-              <label class="label"><span class="label-text-alt">Enter as tags; press Enter to add. Up to 10 names of lowercase letters, digits and underscores.</span></label>
-              {% if config_form.applicant_meta_preference.errors %}
-                <label class="label"><span
-                    class="label-text-alt text-error">{{ config_form.applicant_meta_preference.errors.0 }}</span></label>
-              {% endif %}
-            </div>
-            <div class="divider"></div>
-            <div class="grid md:grid-cols-2 gap-4">
-              <div class="form-control">
-                <label class="label" for="id_school_score_mean"><span
-                    class="label-text">School Score Mean</span></label>
-                {{ config_form.school_score_mean }}
-                {% if config_form.school_score_mean.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.school_score_mean.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_school_score_stddev"><span
-                    class="label-text">School Score StdDev</span></label>
-                {{ config_form.school_score_stddev }}
-                {% if config_form.school_score_stddev.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.school_score_stddev.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-            </div>
-            <div class="grid md:grid-cols-3 gap-4 mt-4">
-              <div class="form-control">
-                <label class="label" for="id_school_capacity_mean"><span class="label-text">Capacity Mean</span></label>
-                {{ config_form.school_capacity_mean }}
-                {% if config_form.school_capacity_mean.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.school_capacity_mean.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_school_capacity_stddev"><span
-                    class="label-text">Capacity StdDev</span></label>
-                {{ config_form.school_capacity_stddev }}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_school_interview_limit"><span
-                    class="label-text">School Interview Limit</span></label>
-                {{ config_form.school_interview_limit }}
-                {% if config_form.school_interview_limit.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.school_interview_limit.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-            </div>
-            <div class="grid md:grid-cols-2 gap-4 mt-4">
-              <div class="form-control">
-                <label class="label" for="id_school_meta_preference_stddev"><span class="label-text">School Meta Preference StdDev</span></label>
-                {{ config_form.school_meta_preference_stddev }}
-                {% if config_form.school_meta_preference_stddev.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.school_meta_preference_stddev.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_school_meta_scores_stddev"><span class="label-text">School Meta Scores StdDev</span></label>
-                {{ config_form.school_meta_scores_stddev }}
-                {% if config_form.school_meta_scores_stddev.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.school_meta_scores_stddev.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-            </div>
-            <div class="grid md:grid-cols-2 gap-4 mt-4">
-              <div class="form-control">
-                <label class="label" for="id_school_pre_interview_rating_error"><span class="label-text">School Pre-interview Rating Error</span></label>
-                {{ config_form.school_pre_interview_rating_error }}
-                {% if config_form.school_pre_interview_rating_error.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.school_pre_interview_rating_error.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-              <div class="form-control">
-                <label class="label" for="id_school_post_interview_rating_error"><span class="label-text">School Post-interview Rating Error</span></label>
-                {{ config_form.school_post_interview_rating_error }}
-                {% if config_form.school_post_interview_rating_error.errors %}
-                  <label class="label"><span
-                      class="label-text-alt text-error">{{ config_form.school_post_interview_rating_error.errors.0 }}</span></label>
-                {% endif %}
-              </div>
-            </div>
-            {{ meta_lists.school|json_script:"school-meta-initial" }}
-            <div class="form-control mt-4" x-data="metaEditor('school-meta-initial')">
-              <label class="label" for="id_school_meta_preference"><span
-                  class="label-text">School Meta Preferences</span></label>
-              <div class="flex flex-wrap gap-2 items-center">
-                <template x-if="!items.length"><span
-                    class="text-base-content/60 text-sm">No items. Add some below.</span></template>
-                <template x-for="(item, index) in items" :key="index">
-                  <div class="join">
-                    <input type="text" class="input input-sm input-bordered join-item" x-model="items[index]"
-                           @input="dedupeAndNormalize()" aria-label="meta item">
-                    <button type="button" class="btn btn-sm btn-error btn-outline join-item" @click="remove(index)"
-                            aria-label="Remove">&times;
-                    </button>
-                  </div>
-                </template>
-              </div>
-              <div class="flex gap-2 mt-2">
-                <input type="text" class="input input-sm input-bordered flex-1" x-model="newItem"
-                       @keydown.enter.prevent="addItem()" placeholder="Type a preference (Enter to add)">
-                <button type="button" class="btn btn-sm btn-primary btn-outline" @click="addItem()">Add</button>
-              </div>
-              <input type="hidden" name="school_meta_preference" id="id_school_meta_preference"
-                     :value="jsonValue()" value="{{ meta_json.school }}">
-              <label class="label"><span class="label-text-alt">Enter as tags; press Enter to add. Up to 10 names of lowercase letters, digits and underscores.</span></label>
-              {% if config_form.school_meta_preference.errors %}
-                <label class="label"><span
-                    class="label-text-alt text-error">{{ config_form.school_meta_preference.errors.0 }}</span></label>
-              {% endif %}
-            </div>
-          </div>
-          <div class="card-actions justify-end">
-            <button type="submit" class="btn btn-primary">Save Configuration</button>
           </div>
         </form>
       </div>
 
-      <div>
+      <div class="min-w-0">
         {% include "nrmps/partials/_stage_cards.html" %}
       </div>
     </div>

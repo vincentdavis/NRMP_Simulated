@@ -66,12 +66,7 @@ class SimulationForm(forms.ModelForm):
     class Meta:
         model = Simulation
         fields = ("name", "public", "description", "iterations")
-        widgets = {
-            "name": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
-            "description": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 3}),
-            "iterations": forms.NumberInput(attrs={"class": "input input-bordered w-full", "min": 1}),
-            "public": forms.CheckboxInput(attrs={"class": "checkbox"}),
-        }
+        widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 
 
 class StudentsUploadForm(forms.Form):
@@ -80,7 +75,7 @@ class StudentsUploadForm(forms.Form):
     file = forms.FileField(
         label="Students CSV",
         help_text="CSV with a header row: name, score, and optionally score_meta and meta_preference (JSON objects).",
-        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
+        widget=forms.FileInput(attrs={"accept": ".csv,text/csv"}),
     )
 
 
@@ -93,7 +88,7 @@ class SchoolsUploadForm(forms.Form):
             "CSV with a header row: name, capacity, score, and optionally score_meta and meta_preference "
             "(JSON objects)."
         ),
-        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
+        widget=forms.FileInput(attrs={"accept": ".csv,text/csv"}),
     )
 
 
@@ -138,33 +133,3 @@ class SimulationConfigForm(ValidatorLimitsMixin, forms.ModelForm):
             "school_pre_interview_rating_error",
             "school_post_interview_rating_error",
         )
-        widgets = {
-            "applicant_meta_preference": forms.Textarea(
-                attrs={"class": "textarea textarea-bordered w-full", "rows": 2, "placeholder": "program_size, prestige"}
-            ),
-            "school_meta_preference": forms.Textarea(
-                attrs={"class": "textarea textarea-bordered w-full", "rows": 2, "placeholder": "board_scores, research"}
-            ),
-        } | {
-            name: forms.NumberInput(attrs={"class": "input input-bordered w-full"})
-            for name in (
-                "number_of_applicants",
-                "number_of_schools",
-                "applicant_score_mean",
-                "applicant_score_stddev",
-                "applicant_interview_limit",
-                "applicant_meta_preference_stddev",
-                "applicant_meta_scores_stddev",
-                "applicant_pre_interview_rating_error",
-                "applicant_post_interview_rating_error",
-                "school_score_mean",
-                "school_score_stddev",
-                "school_capacity_mean",
-                "school_capacity_stddev",
-                "school_interview_limit",
-                "school_meta_preference_stddev",
-                "school_meta_scores_stddev",
-                "school_pre_interview_rating_error",
-                "school_post_interview_rating_error",
-            )
-        }
