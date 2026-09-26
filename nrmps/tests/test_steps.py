@@ -116,3 +116,36 @@ def test_csv_exports_stream(auth_client, populated_simulation, name, lines):
     assert response.streaming
     body = b"".join(response.streaming_content).decode()
     assert len(body.splitlines()) == lines
+
+
+def _button_disabled(body: str, label: str) -> bool:
+    """Return whether the step button with this label is rendered disabled."""
+    import re
+
+    match = re.search(r"<button[^>]*>\s*" + re.escape(label) + r"\s*</button>", body, re.S)
+    assert match, label
+    return re.search(r"\sdisabled[\s>]", match.group(0)) is not None
+
+
+@pytest.mark.parametrize(
+    ("status", "initialize", "pre_interview", "post_interview"),
+    [
+        ("setup", False, False, False),
+        ("populations", True, False, False),
+        ("initialized", True, True, False),
+        ("pre_interview", True, True, False),
+    ],
+)
+def test_next_step_button_is_enabled_once_its_prerequisite_is_reached(
+    auth_client, simulation, status, initialize, pre_interview, post_interview
+):
+    """Each step can be started from the page as soon as the stage it needs is reached (L-4).
+
+    The buttons used to stay disabled until their own stage had been reached, so after generating populations the
+    "Initialize Interviews" button could never be clicked.
+    """
+    simulation.set_stage(status)
+    body = auth_client.get(reverse("nrmps:simulation_manage", kwargs={"pk": simulation.pk})).content.decode()
+    assert _button_disabled(body, "(re)Initialize Interviews") is not initialize
+    assert _button_disabled(body, "Compute Pre-Interview All") is not pre_interview
+    assert _button_disabled(body, "Compute Post-Interview All") is not post_interview

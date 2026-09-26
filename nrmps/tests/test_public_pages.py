@@ -9,9 +9,14 @@ pytestmark = pytest.mark.django_db
 PUBLIC = ["nrmps:index", "nrmps:contact", "nrmps:privacy", "nrmps:terms", "nrmps:login", "nrmps:signup"]
 
 
+def _text(response) -> str:
+    """Return the response body with runs of whitespace collapsed, as a browser would show it."""
+    return " ".join(response.content.decode().split())
+
+
 @pytest.mark.parametrize("name", PUBLIC)
 def test_every_page_carries_the_non_affiliation_disclaimer(client, name):
-    body = client.get(reverse(name)).content.decode()
+    body = _text(client.get(reverse(name)))
     assert "Not affiliated with, sponsored or endorsed by the" in body
     assert "National Resident Matching Program&reg;" in body
     assert "not predictions" in body
@@ -29,7 +34,7 @@ def test_home_page_for_a_signed_in_user_links_to_their_simulations(auth_client):
 
 
 def test_privacy_page_describes_real_storage_and_processors(client):
-    body = client.get(reverse("nrmps:privacy")).content.decode()
+    body = _text(client.get(reverse("nrmps:privacy")))
     assert "kept in your environment" not in body
     for fact in ("Railway", "Logfire", "not kept as files", "session cookie", "salted hash"):
         assert fact in body
@@ -37,7 +42,7 @@ def test_privacy_page_describes_real_storage_and_processors(client):
 
 def test_terms_cover_predictions_acceptable_use_and_license(client, settings):
     settings.NRMP_MAX_PAIRS = 250000
-    body = client.get(reverse("nrmps:terms")).content.decode()
+    body = _text(client.get(reverse("nrmps:terms")))
     for fact in ("not predictions", "real applicant data", "MIT License", "250,000 applicant"):
         assert fact in body
 

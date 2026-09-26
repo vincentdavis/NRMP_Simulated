@@ -64,8 +64,10 @@ def _update_columns(model, pks: Sequence[int], columns: dict[str, Sequence]) -> 
     assignments = ", ".join(f"{q(field.column)} = %s" for field in fields)
     sql = f"UPDATE {q(model._meta.db_table)} SET {assignments} WHERE {q('id')} = %s"  # noqa: S608 (identifiers from model meta)
     with connection.cursor() as cursor:
+        # Use the database driver's cursor directly: query-recording wrappers (django-debug-toolbar in development)
+        # cannot render an executemany parameter list on SQLite and would fail the step.
         for batch in _batches(rows, WRITE_BATCH_SIZE):
-            cursor.executemany(sql, [(*row[1:], row[0]) for row in batch])
+            cursor.cursor.executemany(sql, [(*row[1:], row[0]) for row in batch])
 
 
 def _update_columns_postgresql(model, fields, rows) -> None:

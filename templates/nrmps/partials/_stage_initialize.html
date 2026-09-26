@@ -1,6 +1,6 @@
 {% load simulation_tags %}
 <div id="stage-initialize"
-     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'initialized' or simulation|stage_active:'populations' %} border-2 border-accent{% endif %}{% if simulation|stage_locked:'initialized' %} opacity-50{% endif %}">
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'initialized' or simulation|stage_active:'populations' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'populations' %} opacity-50{% endif %}">
   <div class="card-header">
     <h2 class="card-title">
       Initialize Interviews
@@ -27,7 +27,7 @@
                 hx-disabled-elt="this"
                 hx-sync="#stage-cards:drop"
                 hx-confirm="(Re)initialize interview data? This will replace existing interviews."
-                {% if simulation|stage_locked:"initialized" %}disabled{% endif %}>
+                {% if not simulation|stage_reached:"populations" %}disabled{% endif %}>
           (re)Initialize Interviews
         </button>
       </div>

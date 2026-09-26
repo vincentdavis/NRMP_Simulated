@@ -71,6 +71,11 @@ New findings from the reconciliation:
   `advance_status("populations")` never moves backwards. A simulation at `pre_interview` keeps that status with
   0 interviews. → Step 0.4 (regress on every destructive action), then 2.4.
 - **L-3 (low, hygiene).** The dead partials and endpoints above. → Steps 1.6 and 1.8.
+- **L-4 (high, defect; found during the rebuild).** Each stage card disabled its button until the simulation had
+  already *reached* that stage (`stage_locked`), so after generating populations "(re)Initialize Interviews" was
+  disabled and the workflow could not be completed from the page at all. It went unnoticed because the step
+  endpoints themselves work. → Fixed in Phase 0 (a button is enabled once its prerequisite stage is reached), with a
+  test that renders the page at each stage.
 
 Changes to the plan for the rebuild:
 

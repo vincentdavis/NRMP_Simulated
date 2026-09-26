@@ -1,6 +1,6 @@
 {% load simulation_tags %}
 <div id="stage-post_interview"
-     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'post_interview' %} border-2 border-accent{% endif %}{% if simulation|stage_locked:'post_interview' %} opacity-50{% endif %}">
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'post_interview' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'invitations' %} opacity-50{% endif %}">
   <div class="card-header">
     <h2 class="card-title">
       Post-Interview
@@ -26,7 +26,7 @@
                 hx-disabled-elt="this"
                 hx-sync="#stage-cards:drop"
                 hx-confirm="Compute post-interview scores and rankings?"
-                {% if simulation|stage_locked:"post_interview" %}disabled{% endif %}>
+                {% if not simulation|stage_reached:"invitations" %}disabled{% endif %}>
           Compute Post-Interview All
         </button>
       </div>

@@ -29,3 +29,15 @@ def stage_locked(simulation, stage_key):
         return STAGE_ORDER.index(stage_key) > simulation.stage_index()
     except ValueError:
         return True
+
+
+@register.filter
+def stage_reached(simulation, stage_key):
+    """Return True if the simulation's current status is *stage_key* or a later stage.
+
+    A step's controls are enabled once the stage it depends on has been reached.
+    """
+    try:
+        return simulation.stage_index() >= STAGE_ORDER.index(stage_key)
+    except ValueError:
+        return False

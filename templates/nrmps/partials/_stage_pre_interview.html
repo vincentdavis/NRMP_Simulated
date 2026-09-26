@@ -1,6 +1,6 @@
 {% load simulation_tags %}
 <div id="stage-pre_interview"
-     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'pre_interview' or simulation|stage_active:'initialized' %} border-2 border-accent{% endif %}{% if simulation|stage_locked:'pre_interview' %} opacity-50{% endif %}">
+     class="card bg-base-100 shadow-xl mb-4{% if simulation|stage_active:'pre_interview' or simulation|stage_active:'initialized' %} border-2 border-accent{% endif %}{% if not simulation|stage_reached:'initialized' %} opacity-50{% endif %}">
   <div class="card-header">
     <h2 class="card-title">
       Pre-Interview
@@ -26,7 +26,7 @@
                 hx-disabled-elt="this"
                 hx-sync="#stage-cards:drop"
                 hx-confirm="Compute pre-interview scores and rankings? This runs: 1) Students rate schools, 2) Schools rate students, 3) Compute all rankings."
-                {% if simulation|stage_locked:"pre_interview" %}disabled{% endif %}>
+                {% if not simulation|stage_reached:"initialized" %}disabled{% endif %}>
           Compute Pre-Interview All
         </button>
       </div>

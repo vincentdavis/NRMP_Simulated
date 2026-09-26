@@ -37,6 +37,14 @@ the owner has to do. Step numbers refer to that section.
 | 0.7 Honest public pages | Done | Footer on every page: NRMP® non-affiliation disclaimer and "simulated outcomes are not predictions"; the same notice on the manage page and in the terms. Privacy page rewritten to match the code (database on Railway, uploads not kept as files, Logfire as a processor, two necessary cookies, deletion on request until self-service arrives in 1.9). Terms: purpose, non-affiliation, acceptable use (no real applicant data), the size limit, no warranty, MIT license. Contact: the real issue tracker, plus `CONTACT_EMAIL` when set. Home page Quick Start matches the real flow. Static 400/403/404/500 and CSRF-failure pages that need no database (tested without database access). Logfire redacts account fields and skips static files; engine errors use ids, not names (step 0.3). |
 | 0.8 Account basics | Done | The login page shows Django's own error message and has autocomplete hints. Password change at `/account/password/` (the account page no longer links to the admin). django-axes 8.3: the 5th failed sign-in for a username from one client locks that pair for 15 minutes (HTTP 429 with a friendly page); success clears earlier failures; successful sign-ins are not logged. The client address comes from `nrmps.security.client_ip`: the `X-Forwarded-For` entry added by our own proxy (`TRUSTED_PROXY_COUNT`, 1 in production), which a client cannot forge; django-ipware is not needed. The privacy page describes the failed-sign-in records. |
 
+**Also fixed in Phase 0:** L-4 (step buttons disabled until their own stage was reached, so the workflow could not be
+completed from the page), found while checking the UI in a browser.
+
+**Phase 0 exit criteria:** the production-mode smoke test passes; `check --deploy` reports only `security.W005` and
+`security.W021`; a new simulation goes from the defaults to pre-interview ranks in the browser; every step at the
+250k-pair cap took at most 3.4 s locally on PostgreSQL; σ = 0 gives observed == true and σ > 0 gives Spearman < 1;
+no `|safe` in templates; a failed upload changes nothing. The manage page still overflows at 375 px (UX-9, step 1.4).
+
 ## Phases 1–8
 
 Not started.
