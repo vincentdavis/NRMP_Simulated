@@ -17,5 +17,11 @@ from .settings import *  # noqa: F403
 # The test client speaks plain HTTP.
 SECURE_SSL_REDIRECT = False
 
+# Tests do not run collectstatic, so use plain static storage instead of the production manifest storage.
+STORAGES = {
+    **STORAGES,  # noqa: F405
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
 # Fast password hashing for tests.
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

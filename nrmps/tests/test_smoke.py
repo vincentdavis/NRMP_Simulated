@@ -139,7 +139,7 @@ def test_implemented_workflow_end_to_end(auth_client):
     assert not Simulation.objects.filter(pk=sim.pk).exists()
 
 
-def _run_django_setup(**overrides: str) -> subprocess.CompletedProcess:
+def _run_django_setup(code: str | None = None, **overrides: str) -> subprocess.CompletedProcess:
     """Start Django with the real settings module in a subprocess and the given environment overrides.
 
     Variables are set to empty strings rather than removed, so a developer's .env file cannot fill them in.
@@ -155,7 +155,8 @@ def _run_django_setup(**overrides: str) -> subprocess.CompletedProcess:
         }
     )
     env.update(overrides)
-    code = "import django; django.setup(); from django.conf import settings; print(settings.DATABASES['default'])"
+    code = code or "print(settings.DATABASES['default'])"
+    code = f"import django; django.setup(); from django.conf import settings; {code}"
     return subprocess.run(
         [sys.executable, "-c", code], cwd=settings.BASE_DIR, env=env, capture_output=True, text=True, check=False
     )

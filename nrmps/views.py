@@ -6,8 +6,8 @@ import logging
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db import transaction
-from django.http import Http404, HttpResponse, StreamingHttpResponse
+from django.db import DatabaseError, connection, transaction
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
 
@@ -98,6 +98,19 @@ def _stream_csv(filename: str, header: list[str], rows) -> StreamingHttpResponse
 
 
 @require_GET
+def healthz(request):
+    """Health check for the platform: 200 when the database answers, 503 otherwise."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+    except DatabaseError:
+        logger.exception("Health check failed: the database is unavailable")
+        return JsonResponse({"status": "error", "database": "unavailable"}, status=503)
+    return JsonResponse({"status": "ok"})
+
+
+@require_GET
 def index(request):
     """Home page (index)."""
     return render(request, "nrmps/index.html")
@@ -174,93 +187,28 @@ def simulation_create(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def simulation_manage(request, pk: int):
-    """Manage a Simulation: edit basic fields, perform population actions."""
-    sim = get_object_or_404(Simulation, pk=pk)
-    if sim.owner_id != request.user.id:
-        raise Http404()
-
-    # Latest config if it exists
+    """Manage a Simulation: edit its basic fields and configuration, and run the steps."""
+    sim = get_object_or_404(Simulation, pk=pk, owner=request.user)
     config_instance = sim.configs.order_by("-id").first()
+    form = SimulationForm(instance=sim)
+    config_form = SimulationConfigForm(instance=config_instance)
 
     if request.method == "POST":
-        form_id = request.POST.get("form_id")
-        # Fallback: infer form by field names if form_id missing or unexpected
-        if not form_id:
-            if any(k in request.POST for k in ("number_of_applicants", "number_of_schools", "applicant_score_mean")):
-                form_id = "config"
-            else:
-                form_id = "simulation"
-        logger.info(
-            "simulation_manage POST",
-            extra={
-                "user_id": getattr(request.user, "id", None),
-                "simulation_id": sim.id,
-                "form_id": form_id,
-            },
-        )
-        if form_id == "config":
-            # Handle SimulationConfig form
-            if config_instance is not None:
-                logger.debug(
-                    "Binding SimulationConfigForm with existing instance", extra={"config_id": config_instance.id}
-                )
-                config_form = SimulationConfigForm(request.POST, instance=config_instance)
-            else:
-                logger.debug("Binding SimulationConfigForm for create")
-                config_form = SimulationConfigForm(request.POST)
-            # Keep simulation form for rendering
-            form = SimulationForm(instance=sim)
-            valid = config_form.is_valid()
-            # Log validity and errors in the message so they are visible even without structured formatting
-            logger.info(
-                "SimulationConfigForm validated valid=%s errors=%s post_keys=%s",
-                valid,
-                None if valid else config_form.errors.as_json(),
-                list(request.POST.keys()),
-                extra={
-                    "valid": valid,
-                    "errors": config_form.errors.get_json_data() if not valid else None,
-                    "post_sizes": {k: len(v) if hasattr(v, "__len__") else None for k, v in request.POST.items()},
-                },
-            )
-            if valid:
-                cfg = config_form.save(commit=False)
-                cfg.simulation = sim
-                is_update = bool(getattr(cfg, "id", None))
-                cfg.save()
-                logger.info(
-                    "SimulationConfig saved config_id=%s simulation_id=%s updated=%s",
-                    cfg.id,
-                    sim.id,
-                    is_update,
-                    extra={
-                        "config_id": cfg.id,
-                        "simulation_id": sim.id,
-                        "updated": is_update,
-                    },
-                )
+        # The page has two forms; each posts a hidden form_id.
+        if request.POST.get("form_id") == "config":
+            config_form = SimulationConfigForm(request.POST, instance=config_instance)
+            if config_form.is_valid():
+                config = config_form.save(commit=False)
+                config.simulation = sim
+                config.save()
                 return redirect("nrmps:simulation_manage", pk=sim.pk)
+            logger.warning("Configuration form invalid simulation_id=%s fields=%s", sim.pk, sorted(config_form.errors))
         else:
-            # Default: handle Simulation basic form
             form = SimulationForm(request.POST, instance=sim)
-            config_form = SimulationConfigForm(instance=config_instance)
-            valid = form.is_valid()
-            logger.info(
-                "SimulationForm validated valid=%s errors=%s",
-                valid,
-                None if valid else form.errors.as_json(),
-                extra={
-                    "valid": valid,
-                    "errors": form.errors.get_json_data() if not valid else None,
-                },
-            )
-            if valid:
+            if form.is_valid():
                 form.save()
-                logger.info("Simulation saved simulation_id=%s", sim.id, extra={"simulation_id": sim.id})
                 return redirect("nrmps:simulation_manage", pk=sim.pk)
-    else:
-        form = SimulationForm(instance=sim)
-        config_form = SimulationConfigForm(instance=config_instance)
+            logger.warning("Simulation form invalid simulation_id=%s fields=%s", sim.pk, sorted(form.errors))
 
     meta_lists = {side: _attribute_list(config_form, f"{side}_meta_preference") for side in ("applicant", "school")}
     context = {

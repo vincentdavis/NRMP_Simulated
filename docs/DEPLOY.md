@@ -9,23 +9,35 @@ the `Dockerfile` in this repository. Environment variables are listed in [`.env.
 
 ## Services
 
-| Service | Source | Start command |
-|---|---|---|
-| **web** | this repo (Dockerfile) | `entrypoint.sh`: `manage.py migrate`, then gunicorn |
-| **Postgres** | Railway PostgreSQL | – |
+| Service | Source | Config | Start command |
+|---|---|---|---|
+| **web** | this repo (Dockerfile) | `railway.json` | `entrypoint.sh`: gunicorn |
+| **Postgres** | Railway PostgreSQL | – | – |
 
-*Planned (steps 1.2 and 2.5):* a `railway.json` with a pre-deploy migrate command and a `/healthz` health check, and
-an optional worker service for background jobs.
+`railway.json` (Railway reads it from the repository root) sets:
+- the **pre-deploy command** `python manage.py migrate --noinput`. It runs once per deploy, in the new image, before
+  the new version receives traffic, so replicas never race to migrate;
+- the **health check** `GET /healthz`, which returns 200 only when the database answers. If a new deployment never
+  becomes healthy, Railway keeps the previous one running;
+- restart on failure (up to 5 times).
+
+*Planned (step 2.5):* an optional worker service for background jobs.
 
 ## The image
 
-The `Dockerfile` installs the runtime and `prod` dependencies only (`uv sync --no-dev --group prod`), builds the
-Tailwind CSS and runs `collectstatic` at build time. The build runs Django with placeholder settings
-(`DEBUG=False`, a throwaway `SECRET_KEY`, an in-memory SQLite `DATABASE_URL`); none of them end up in the image.
-`UV_NO_SYNC=1` stops `uv run` from installing anything when the container starts.
+The multi-stage `Dockerfile`:
+1. builds the Tailwind CSS in a Node stage, so Node is not in the final image;
+2. installs the runtime and `prod` dependencies only (`uv sync --locked --no-dev --group prod`) in a cached layer;
+3. runs `collectstatic` with placeholder settings (`DEBUG=False`, a throwaway `SECRET_KEY`, an in-memory SQLite
+   `DATABASE_URL`; none of them end up in the image). WhiteNoise then serves compressed files with hashed names and
+   year-long cache headers;
+4. runs as an unprivileged user.
 
-`entrypoint.sh` applies migrations and starts gunicorn. `WEB_CONCURRENCY` (default 4) sets the number of workers and
-`GUNICORN_TIMEOUT` (default 30 s) the request timeout.
+`entrypoint.sh` starts gunicorn. Variables: `WEB_CONCURRENCY` (workers, default 2; each takes roughly 150 MB),
+`GUNICORN_TIMEOUT` (seconds, default 30) and `MIGRATE_ON_START=1` to run migrations at start-up instead of in the
+pre-deploy command (docker-compose does this).
+
+CI builds the image on every push, starts it with SQLite and checks `/healthz` and the home page.
 
 ## Checklist before the first deploy of this version (decision D0)
 
@@ -41,8 +53,12 @@ version refuses to start without real settings. In Railway, open **web → Varia
 4. Optional: set `LOGFIRE_TOKEN` (without it, Logfire sends nothing) and `CONTACT_EMAIL`, the address the contact
    and privacy pages give for account and data requests (without it they point to the issue tracker only).
 
-Then deploy. `ALLOWED_HOSTS` defaults to `localhost,127.0.0.1,nrmp-simulated.heteroskedastic.org`, and
-`RAILWAY_PUBLIC_DOMAIN` is always added. Set `ALLOWED_HOSTS` explicitly to serve other domains.
+Then deploy, and check in the deploy logs that the pre-deploy step ran the migrations. `ALLOWED_HOSTS` defaults to
+`localhost,127.0.0.1,nrmp-simulated.heteroskedastic.org`; on Railway, `RAILWAY_PUBLIC_DOMAIN` and the health-check
+host `healthcheck.railway.app` are always added. Set `ALLOWED_HOSTS` explicitly to serve other domains.
+
+The number of gunicorn workers is now 2 by default (it was 4). Set `WEB_CONCURRENCY` if the plan has memory for
+more.
 
 If the deploy fails because a variable is missing, the logs say which one (`SECRET_KEY must be set when DEBUG is
 off`, `DATABASE_URL must be set when DEBUG is off`).
@@ -90,4 +106,5 @@ Copy `.env.example` to `.env`; it sets `DEBUG=True`, which uses a development `S
 `db.sqlite3`. Then `uv run python manage.py runserver`. The test suite (`uv run pytest`) runs the production
 configuration against an in-memory SQLite database; set `NRMP_TEST_DATABASE_URL` to run it against PostgreSQL.
 
-*Planned (step 1.2):* a docker-compose stack with PostgreSQL for production-like local runs.
+`docker compose up --build` starts PostgreSQL and the production image (DEBUG off, gunicorn) at
+http://localhost:8000, over plain HTTP (`SECURE_SSL_REDIRECT=False`, `SECURE_COOKIES=False`).

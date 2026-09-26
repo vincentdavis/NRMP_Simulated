@@ -65,3 +65,26 @@ jobs:
         env:
           NRMP_TEST_DATABASE_URL: ${{ matrix.database == 'postgresql' && 'postgres://postgres:postgres@localhost:5432/postgres' || '' }}
         run: uv run pytest
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: docker build -t nrmp-simulated:ci .
+      - name: The image migrates, starts and passes its health check
+        run: |
+          docker run -d --name app -p 8000:8000 \
+            -e SECRET_KEY=ci-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz \
+            -e DATABASE_URL=sqlite:////tmp/ci.sqlite3 -e LOGFIRE_SEND_TO_LOGFIRE=false \
+            -e ALLOWED_HOSTS=localhost -e SECURE_SSL_REDIRECT=False -e MIGRATE_ON_START=1 \
+            nrmp-simulated:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/healthz; then
+              curl -fsS -o /dev/null http://localhost:8000/ && exit 0
+            fi
+            sleep 2
+          done
+          docker logs app
+          exit 1

@@ -1,0 +1,34 @@
+# Production-like local stack: PostgreSQL and the app image (DEBUG off, gunicorn), at http://localhost:8000.
+# Day-to-day development uses `manage.py runserver` with DEBUG=True instead (see .env.example).
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nrmp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      retries: 10
+
+  web:
+    build: .
+    environment:
+      SECRET_KEY: local-compose-only-secret-key-not-for-production-0123456789
+      DATABASE_URL: postgres://postgres:postgres@db:5432/nrmp
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      # Plain HTTP on localhost: no HTTPS redirect, cookies without the Secure flag, no proxy in front.
+      SECURE_SSL_REDIRECT: "False"
+      SECURE_COOKIES: "False"
+      TRUSTED_PROXY_COUNT: "0"
+      MIGRATE_ON_START: "1"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

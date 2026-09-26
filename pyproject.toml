@@ -1,7 +1,7 @@
 [project]
 name = "nrmp-simulated"
 version = "0.1.0"
-description = "Add your description here"
+description = "Simulate the residency Match: applicants, programs, preferences, interviews and rankings."
 requires-python = ">=3.14"
 dependencies = [
     "dj-database-url>=3.1.2",

@@ -70,6 +70,9 @@ ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1,nrmp-simulated.he
 railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
 if railway_domain:
     ALLOWED_HOSTS.insert(0, railway_domain)
+if os.environ.get("RAILWAY_ENVIRONMENT_NAME") or os.environ.get("RAILWAY_ENVIRONMENT_ID"):
+    # Railway's deploy health check (GET /healthz) arrives with this host name.
+    ALLOWED_HOSTS.append("healthcheck.railway.app")
 
 # CSRF trusted origins. With SECURE_PROXY_SSL_HEADER (below), same-origin HTTPS posts pass the origin check without
 # being listed here; list extra origins in CSRF_TRUSTED_ORIGINS if needed.
@@ -165,7 +168,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 if DATABASE_URL:
     import dj_database_url
 
-    DATABASES = {"default": dj_database_url.parse(DATABASE_URL)}
+    # Reuse connections across requests; check them before reuse so a restarted database is not an error.
+    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600, conn_health_checks=True)}
 elif DEBUG:
     DATABASES = {
         "default": {
@@ -238,6 +242,17 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 # Directory where collectstatic will gather files for production
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# In production WhiteNoise serves compressed files with content-hashed names and long cache lifetimes; that needs the
+# manifest `collectstatic` writes (the image build runs it).
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        if DEBUG
+        else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    },
+}
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.1/ref/settings/#default-auto-field
 
@@ -264,9 +279,9 @@ if not DEBUG:
     # check see https.
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=True)
-    SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SECURE_REDIRECT_EXEMPT = [r"^healthz/?$"]
+    # Cookies only over HTTPS. SECURE_COOKIES=False is for running the production image over plain http://localhost.
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = env_bool("SECURE_COOKIES", default=True)
     # Start low and raise to 31536000 once HTTPS is confirmed everywhere. Subdomains and preload stay off on
     # purpose (other services may share the parent domain), so their deploy-check warnings are silenced; any other
     # `check --deploy` warning fails CI.

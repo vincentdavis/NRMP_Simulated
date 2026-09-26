@@ -75,9 +75,8 @@ uv run pytest
 # Build Docker image
 docker build -t nrmp-simulated .
 
-# Run container (production mode: SECRET_KEY and DATABASE_URL are required; add -e SECURE_SSL_REDIRECT=False to
-# browse it over plain http://localhost)
-docker run -p 8000:8000 -e SECRET_KEY=... -e DATABASE_URL=postgresql://... nrmp-simulated
+# Production-like local stack (PostgreSQL + the image, DEBUG off) at http://localhost:8000
+docker compose up --build
 ```
 
 Deployment (Railway) is described in `docs/DEPLOY.md`.
