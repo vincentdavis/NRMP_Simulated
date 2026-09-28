@@ -28,11 +28,19 @@ def test_the_checks_find_gaps(monkeypatch):
 
 
 def test_an_incomplete_chart_is_reported(monkeypatch):
-    """A chart needs its question, what it shows and how to read it, a known place and a known colour (H004)."""
-    monkeypatch.setitem(help_registry.CHARTS, "vague", help_registry.ChartHelp("Vague?", "", "x", tab="nowhere"))
-    monkeypatch.setitem(help_registry.CHARTS, "odd", help_registry.ChartHelp("Odd?", "x", "y", tab="agent", side="?"))
+    """A chart needs its question, what it shows and how to read it, a known place and a known colour, and a switch
+    needs a label and a name that is an identifier (H004)."""
+    chart = help_registry.ChartHelp
+    monkeypatch.setitem(help_registry.CHARTS, "vague", chart("Vague?", "", "x", tab="nowhere"))
+    monkeypatch.setitem(help_registry.CHARTS, "odd", chart("Odd?", "x", "y", tab="agent", side="?"))
+    monkeypatch.setitem(help_registry.CHARTS, "mute", chart("Mute?", "x", "y", tab="agent", switch="bands"))
+    monkeypatch.setitem(help_registry.CHARTS, "loose", chart("Loose?", "x", "y", tab="agent", switch_label="Loose"))
+    monkeypatch.setitem(
+        help_registry.CHARTS, "dashed", chart("Dashed?", "x", "y", tab="agent", switch="by-strength", switch_label="x")
+    )
     messages = [message for message in checks.check_help() if message.id == "nrmps.H004"]
-    assert len(messages) == 3
+    assert len(messages) == 6
+    assert sum("switch" in message.msg for message in messages) == 3
 
 
 def test_every_chart_is_described_and_linked_from_the_guide(client):

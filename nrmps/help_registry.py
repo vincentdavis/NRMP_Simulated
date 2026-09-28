@@ -390,6 +390,8 @@ class ChartHelp:
     caveats: Text = ""
     tab: str = ""  # where it appears: a key of CHART_PLACES
     side: str = "applicant"  # the colour of a one-sided chart: "applicant" or "program"
+    switch: str = ""  # an option a switch beside the chart turns on (nrmp-charts.js reads data-<switch>="on")
+    switch_label: Text = ""  # the switch's label
 
     @property
     def text(self) -> str:
@@ -529,6 +531,30 @@ CHARTS: dict[str, ChartHelp] = {
         _("Each band's width is a number of applications; hover a band for its count and share. Grey marks drop-offs."),
         _("It counts applications (applicant\u2013program pairs), not applicants."),
         tab="applications",
+    ),
+    "applicant_flow": ChartHelp(
+        _("Which applicants get an interview and a match?"),
+        _(
+            "Every applicant counted once: whether they had at least one interview, and whether they matched. With "
+            "Colour by strength on, each stage splits into fifths of applicant strength (applicants of equal strength "
+            "stay in the same fifth), in shades of blue from the weakest fifth to the strongest, so the quality of the "
+            "applicants can be followed through the stages."
+        ),
+        _(
+            "Each band's width is a number of applicants. Hover a stage or a band for its count and its share of all "
+            "applicants (with the switch on, of its fifth); a band after the first stage also gives its share of the "
+            "stage it leaves. No interview splits into never invited and invited without an interview. With the "
+            "switch on, a grey drop-off lists each fifth's count and the share of that fifth it holds: a fifth that "
+            "loses a larger share of its applicants to the drop-offs does worse."
+        ),
+        _(
+            "Strength is the applicant's latent strength. The view all programs share is mostly strength, mixed with "
+            "the applicant's attributes, and each program sees it only through its own noisy view. The funnel above "
+            "counts applications instead: strong applicants hold many interviews but match only once."
+        ),
+        tab="applications",
+        switch="bands",
+        switch_label=_("Colour by strength"),
     ),
     "ego_applicant": ChartHelp(
         _("How far did each of this applicant's applications get?"),

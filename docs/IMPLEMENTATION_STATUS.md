@@ -164,6 +164,28 @@ entries `funnel_applicant` and `funnel_program`). A program's funnel shows at a 
 143 applicants yet filled 7 of 17 positions because most of them matched elsewhere. Tested: the funnel counts the
 same applications as the network, stage by stage; both draw in the browser, in both themes and at phone width.
 
+**After 5.1 (owner request): the applicants' flow, with Colour by strength.** A second flow chart on the Applications
+and interviews tab counts each applicant once: Applicants → Interviewed (at least one interview) → Matched, with the
+drop-offs "No interview" and "Interviewed, not matched" (`charts.applicant_flow`, chart kind `flow` in
+`nrmp-charts.js`). Its **Colour by strength** switch splits every stage into fifths of applicant strength (by rank,
+each rank at its centre so the leftover applicants are spread and a tie at the top is treated like one at the bottom;
+ties kept together in the fifth of their middle rank; refused, with the reason beside the disabled switch, for fewer
+than five applicants or ties that would leave a fifth under 10% or over 30%), so the quality of the applicants can be
+followed through the stages; a key appears with it, the choice is remembered in the browser, and "The numbers" gives
+every fifth's counts, splitting "No interview" into never invited and invited without an interview (which the model
+allows when a program's slots fill first). Chart switches are generic: a catalog entry names the option
+(`ChartHelp.switch`, checked by H004) and the figure renders the toggle. Per application, strength misleads at the
+match (strong applicants hold many interviews but match once), which is why this view counts applicants. A review
+workflow (three reviewers, each finding checked by a skeptic) confirmed 11 of 15 findings, all fixed: unequal or
+lopsided fifths with ties, the disabled-switch reason, labels running together at 390 px, zero flows drawn as
+hairlines (also in the application funnel, whose nodes are now pinned to their columns), tooltip shares without a
+base, a help sentence that misdescribed strength, tests that only checked identities, the guide's colour rule, and
+an untested H004 rule. A second workflow checked each fix and found three more, also fixed: the fifths still
+favoured the lower ones when n was not a multiple of five (so ties at either end were still treated differently),
+the phone layout was chosen only when a chart was first drawn (a chart drawn wide and then narrowed kept overlapping
+labels: charts now declare the widths at which their layout changes, `register(kind, build, {widths})`, and are
+redrawn when resized across one), and a drop-off's per-fifth tooltip rows did not name their base.
+
 ## Phases 6–8
 
 Not started.

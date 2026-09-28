@@ -11,6 +11,9 @@
 //   markup (VIZ-12). Numbers are formatted with format.* (Intl.NumberFormat in the page's language).
 // - Charts resize with their box, are redrawn when the theme or the patterns setting changes, and are disposed of
 //   when HTMX removes them. The page gives each chart's numbers as text too, so nothing depends on the drawing.
+// - A switch (<input type="checkbox" data-chart-switch="bands"> in the chart's figure) turns an option of its chart
+//   on or off: data-bands="on" on the chart element, which its builder reads. The choice is kept in the browser for
+//   every chart with the same switch.
 (() => {
   "use strict";
 
@@ -148,9 +151,13 @@
     },
   };
 
-  function register(kind, build, { engine = "echarts" } = {}) {
-    builders[kind] = { build, engine };
+  // `widths`: the element widths (px) at which the builder changes layout (a Sankey turns vertical, labels wrap).
+  // Resizing across one redraws the chart; within them the engine only resizes it.
+  function register(kind, build, { engine = "echarts", widths = [] } = {}) {
+    builders[kind] = { build, engine, widths };
   }
+
+  const layoutOf = (kind, element) => kind.widths.filter((width) => element.clientWidth < width).length;
 
   function draw(element) {
     const kind = builders[element.dataset.chart];
@@ -162,10 +169,14 @@
     let entry = drawn.get(element);
     if (!entry) {
       entry = { engine };
-      entry.observer = new ResizeObserver(() => engine.resize(entry));
+      entry.observer = new ResizeObserver(() => {
+        engine.resize(entry); // the canvas follows the box ...
+        if (layoutOf(kind, element) !== entry.layout) draw(element); // ... and a new layout needs a new option
+      });
       entry.observer.observe(element);
       drawn.set(element, entry);
     }
+    entry.layout = layoutOf(kind, element);
     const t = tokens();
     try {
       engine.draw(element, entry, kind.build(payload, t, element, kind.engine === "echarts" ? base(t) : {}));
@@ -201,7 +212,56 @@
         )
       : null;
 
+  // --- Switches -----------------------------------------------------------------------------------------------------
+
+  function remember(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (error) {
+      // Storage unavailable (private mode): the switch still works on this page.
+    }
+  }
+
+  function recalled(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  // Set the switch's option on its chart (and show the key that goes with it); return the chart element.
+  function applySwitch(input) {
+    const figure = input.closest("figure");
+    const element = figure && figure.querySelector("[data-chart]");
+    if (!element) return null;
+    const on = input.checked && !input.disabled;
+    element.dataset[input.dataset.chartSwitch] = on ? "on" : "off";
+    figure.querySelectorAll(`[data-chart-switch-key="${input.dataset.chartSwitch}"]`).forEach((key) => {
+      key.hidden = !on;
+    });
+    return element;
+  }
+
+  function restoreSwitches(root) {
+    const inputs = root.querySelectorAll ? [...root.querySelectorAll("input[data-chart-switch]")] : [];
+    for (const input of inputs) {
+      const saved = recalled(`chart-switch-${input.dataset.chartSwitch}`);
+      if (saved !== null && !input.disabled) input.checked = saved === "on";
+      applySwitch(input);
+    }
+  }
+
+  document.addEventListener("change", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || !input.matches("[data-chart-switch]")) return;
+    remember(`chart-switch-${input.dataset.chartSwitch}`, input.checked ? "on" : "off");
+    const element = applySwitch(input);
+    if (element && drawn.has(element)) draw(element);
+  });
+
   function renderAll(root = document) {
+    restoreSwitches(root);
     const elements = root instanceof Element && root.matches("[data-chart]") ? [root] : [];
     if (root.querySelectorAll) elements.push(...root.querySelectorAll("[data-chart]"));
     for (const element of elements) {
@@ -417,11 +477,13 @@
     };
     const links = [];
     for (let k = 0; k < drops.length; k += 1) {
-      links.push({ source: main[k], target: main[k + 1], value: counts[main[k + 1]] });
-      links.push({ source: main[k], target: drops[k], value: counts[drops[k]] });
+      // Empty flows are left out (ECharts draws a zero link as a 1 px line, which looks like a few).
+      if (counts[main[k + 1]] > 0) links.push({ source: main[k], target: main[k + 1], value: counts[main[k + 1]] });
+      if (counts[drops[k]] > 0) links.push({ source: main[k], target: drops[k], value: counts[drops[k]] });
     }
-    const node = (name, color) => ({
+    const node = (name, color, depth) => ({
       name,
+      depth, // pinned, so a stage or drop-off with no flow keeps its column
       itemStyle: { color, borderColor: color },
       label: { color: t.ink, formatter: () => `${name}\n${format.count(counts[name])}` },
     });
@@ -452,13 +514,124 @@
           nodeAlign: "left",
           draggable: false,
           emphasis: { focus: "adjacency" },
-          data: [...main.map((name, k) => node(name, t.stages[k])), ...drops.map((name) => node(name, t.neutral))],
+          data: [
+            ...main.map((name, k) => node(name, t.stages[k], k)),
+            ...drops.map((name, k) => node(name, t.neutral, k + 1)),
+          ],
           links,
           lineStyle: { color: "gradient", opacity: 0.3, curveness: 0.5 },
         },
       ],
     };
-  });
+  }, { widths: [560] });
+
+  // Every applicant once through the stages {stages, drops, counts, bands, notes}: drops[k] leaves stages[k]. With the
+  // "bands" switch on, each stage splits into strength fifths in the blue ramp (the weakest first in the ramp, drawn
+  // strongest on top) with links coloured by fifth; the drop-offs stay single grey nodes.
+  register("flow", (p, t, element, option) => {
+    const banded = element.dataset.bands === "on" && Array.isArray(p.bands) && p.bands.length > 1;
+    const groups = banded ? p.bands : [{ label: "All applicants", counts: p.counts }];
+    const ramp = (k, of) => t.stages[Math.round((k * (t.stages.length - 1)) / Math.max(1, of - 1))];
+    const name = (stage, b) => (banded ? `${stage}|${b}` : stage);
+    const stageOf = (node) => String(node).split("|")[0];
+    const bandOf = (node) => (banded && String(node).includes("|") ? Number(String(node).split("|")[1]) : null);
+    const narrow = element.clientWidth < 480;
+    const everyone = p.counts[p.stages[0]];
+    const nodes = [];
+    p.stages.forEach((stage, k) => {
+      for (let b = groups.length - 1; b >= 0; b -= 1) {
+        nodes.push({
+          name: name(stage, b),
+          depth: k,
+          itemStyle: { color: banded ? ramp(b, groups.length) : ramp(k, p.stages.length), borderWidth: 0 },
+          label: banded
+            ? {
+                show: b === groups.length - 1,
+                // Above the column, from its left edge (never cut off at the chart's edge); two lines when narrow.
+                position: [0, narrow ? -32 : -16],
+                align: "left",
+                color: t.ink,
+                formatter: () => `${stage}${narrow ? "\n" : "  "}${format.count(p.counts[stage])}`,
+              }
+            : { color: t.ink, formatter: () => `${stage}\n${format.count(p.counts[stage])}` },
+        });
+      }
+      if (k >= 1) {
+        const drop = p.drops[k - 1];
+        const words = narrow ? drop.replace(", ", ",\n") : drop;
+        nodes.push({
+          name: drop,
+          depth: k,
+          itemStyle: { color: t.neutral, borderWidth: 0 },
+          label: { color: t.muted, formatter: () => `${words}\n${format.count(p.counts[drop])}` },
+        });
+      }
+    });
+    const links = [];
+    p.drops.forEach((drop, k) => {
+      groups.forEach((group, b) => {
+        // Empty flows are left out: ECharts would draw them as 1 px lines, which look like a few applicants.
+        const next = group.counts[p.stages[k + 1]];
+        const lost = group.counts[drop];
+        if (next > 0) links.push({ source: name(p.stages[k], b), target: name(p.stages[k + 1], b), value: next });
+        if (lost > 0) links.push({ source: name(p.stages[k], b), target: drop, value: lost });
+      });
+    });
+    const share = (part, whole) => format.share(part / Math.max(1, whole));
+    const bandTitle = (group) => `${group.label} (strength ${format.fixed(group.low, 2)} to ${format.fixed(group.high, 2)})`;
+    function describe(item) {
+      if (item.dataType === "edge") {
+        const b = bandOf(item.data.source);
+        const counts = b === null ? p.counts : groups[b].counts;
+        const from = stageOf(item.data.source);
+        const base = b === null ? "of all applicants" : "of the fifth";
+        const rows = [
+          [`${from} → ${stageOf(item.data.target)}`, `${format.count(item.value)} (${share(item.value, counts[p.stages[0]])} ${base})`],
+        ];
+        if (from !== p.stages[0]) rows.push([`Share of ${from.toLowerCase()}`, share(item.value, counts[from])]);
+        return tip(b === null ? "All applicants" : bandTitle(groups[b]), rows);
+      }
+      const b = bandOf(item.name);
+      const stage = stageOf(item.name);
+      if (b !== null) {
+        const group = groups[b];
+        const count = group.counts[stage];
+        return tip(bandTitle(group), [[stage, `${format.count(count)} (${share(count, group.counts[p.stages[0]])} of the fifth)`]]);
+      }
+      const rows = [[stage, `${format.count(p.counts[stage])} (${share(p.counts[stage], everyone)} of all applicants)`]];
+      // The total's own breakdown first (No interview: never invited, invited without one), then each fifth.
+      ((p.notes || {})[stage] || []).forEach(([label, count]) => rows.push([label, format.count(count)]));
+      if (banded && p.drops.includes(stage)) {
+        groups.forEach((group) =>
+          rows.push([group.label, `${format.count(group.counts[stage])} (${share(group.counts[stage], group.counts[p.stages[0]])} of the fifth)`]),
+        );
+      }
+      return tip(stage, rows);
+    }
+    return {
+      ...option,
+      legend: { show: false },
+      tooltip: { ...option.tooltip, trigger: "item", formatter: describe },
+      series: [
+        {
+          type: "sankey",
+          left: 8,
+          right: narrow ? 96 : 160,
+          top: banded ? (narrow ? 44 : 28) : 16,
+          bottom: 16,
+          nodeWidth: 16,
+          nodeGap: banded ? 3 : 14,
+          nodeAlign: "left", // a drop-off stays in the column after its stage ("justify" pushes it to the end)
+          layoutIterations: 0,
+          draggable: false,
+          emphasis: { focus: "adjacency" },
+          data: nodes,
+          links,
+          lineStyle: { color: banded ? "source" : "gradient", opacity: banded ? 0.35 : 0.3, curveness: 0.5 },
+        },
+      ],
+    };
+  }, { widths: [480] });
 
   // --- Network kinds (sigma.js) -----------------------------------------------------------------------------------
 

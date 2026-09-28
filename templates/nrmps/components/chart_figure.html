@@ -4,16 +4,33 @@
   static/js/nrmp-charts.js from a json_script payload. The caption and the "?" help come from the chart catalog
   (help_registry.CHARTS). The summary sentence describes the chart for screen readers and shows below it; a key lists
   a network's colours with their counts, and "The numbers" gives the data as a table, so nothing depends on the
-  drawing. Context: chart (payload, summary, rows, digits, legend), key, kind, entry, element_id, table, height,
-  x_label, y_label, payload.
+  drawing. A catalog entry with a switch gets a toggle that turns that option of the chart on (nrmp-charts.js), with a
+  key shown while it is on (chart.switch_key); chart.switchable false disables it, with chart.switch_note saying why.
+  Context: chart (payload, summary, rows, digits, legend, switchable, switch_note, switch_key), key, kind, entry,
+  element_id, table, height, x_label, y_label, payload.
 {% endcomment %}
 <figure class="block w-full min-w-0">
-  <figcaption class="font-medium">{{ entry.title }} {% help_icon "chart" key %}</figcaption>
+  <figcaption class="font-medium flex flex-wrap items-center gap-x-4 gap-y-1">
+    <span>{{ entry.title }} {% help_icon "chart" key %}</span>
+    {% if entry.switch %}
+      <label class="flex items-center gap-2 text-sm font-normal cursor-pointer" for="{{ element_id }}-{{ entry.switch }}">
+        <input type="checkbox" role="switch" id="{{ element_id }}-{{ entry.switch }}" class="toggle toggle-sm" data-chart-switch="{{ entry.switch }}"{% if not chart.switchable %} disabled{% endif %}>
+        {{ entry.switch_label }}{% if chart.switch_note %} <span class="text-base-content/70">({{ chart.switch_note }})</span>{% endif %}
+      </label>
+    {% endif %}
+  </figcaption>
   {% if not payload %}{{ chart.payload|json_script:element_id }}{% endif %}
   <div class="{{ height }} w-full" data-chart="{{ kind }}" data-payload="{{ payload|default:element_id }}" data-series="{{ entry.side }}"
        {% if x_label %}data-x-label="{{ x_label }}"{% endif %} {% if y_label %}data-y-label="{{ y_label }}"{% endif %}
        role="img" aria-label="{{ entry.title }}" aria-describedby="{{ element_id }}-summary"></div>
   <p id="{{ element_id }}-summary" class="text-sm text-base-content/70">{{ chart.summary }}</p>
+  {% if entry.switch and chart.switch_key %}
+    <ul class="flex flex-wrap gap-x-4 gap-y-1 text-sm mt-1" aria-label="Key" data-chart-switch-key="{{ entry.switch }}" hidden>
+      {% for item in chart.switch_key %}
+        <li><span class="viz-dot {{ item.dot }}" aria-hidden="true"></span> {{ item.label }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
   {% if chart.legend %}
     <ul class="flex flex-wrap gap-x-4 gap-y-1 text-sm mt-1" aria-label="Key">
       {% for item in chart.legend %}
@@ -44,6 +61,30 @@
             <tbody>
               {% for row in chart.rows %}
                 <tr><th scope="row" class="font-normal">{{ row.name }}</th><td class="text-right tabular-nums">{{ row.demand|intcomma }}</td><td class="text-right tabular-nums">{{ row.positions|intcomma }}</td></tr>
+              {% endfor %}
+            </tbody>
+          {% elif table == "flow" %}
+            <thead>
+              <tr>
+                <th scope="col">Who</th><th scope="col" class="text-right">Strength (z)</th><th scope="col" class="text-right">Applicants</th>
+                <th scope="col" class="text-right">Never invited</th><th scope="col" class="text-right">Invited, no interview</th>
+                <th scope="col" class="text-right">Interviewed</th><th scope="col" class="text-right">Interviewed, not matched</th>
+                <th scope="col" class="text-right">Matched</th><th scope="col" class="text-right">Share matched</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in chart.rows %}
+                <tr>
+                  <th scope="row" class="font-normal whitespace-nowrap">{{ row.label }}</th>
+                  <td class="text-right tabular-nums whitespace-nowrap">{% if row.low is not None %}{{ row.low|floatformat:2 }} to {{ row.high|floatformat:2 }}{% endif %}</td>
+                  <td class="text-right tabular-nums">{{ row.applicants|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.never_invited|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.invited_no_interview|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.interviewed|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.not_matched|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.matched|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.match_share|percent }}</td>
+                </tr>
               {% endfor %}
             </tbody>
           {% elif table == "funnel" %}

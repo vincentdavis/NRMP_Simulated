@@ -7,6 +7,9 @@
     {% if charts.funnel %}
       {% chart_figure charts.funnel "funnel" "funnel" table="funnel" height="h-80" %}
     {% endif %}
+    {% if charts.applicant_flow %}
+      <div class="mt-4">{% chart_figure charts.applicant_flow "applicant_flow" "flow" table="flow" height="h-96" %}</div>
+    {% endif %}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="overflow-x-auto">
         <table class="table table-sm">

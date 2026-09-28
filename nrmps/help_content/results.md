@@ -44,7 +44,9 @@ them; the dashed line is observed = true.
 ## Applications and interviews
 
 The funnel from applications through invitations, interviews and rank order lists to matches, with how many
-applications drop out at each step; applications, signals, invitations, interviews and list entries per applicant;
+applications drop out at each step; the same flow for applicants, each counted once (who gets an interview and who
+matches), which **Colour by strength** splits into fifths of applicant strength to follow the quality of the
+applicants through the stages; applications, signals, invitations, interviews and list entries per applicant;
 the signals' effect on interview rates; and, over matched applicants:
 
 Regret
@@ -94,8 +96,10 @@ pages are the same from the program's side.
 
 Every chart answers one question, written as its caption, and its "?" button explains how to read it. Each has a
 summary sentence underneath, and most have a table of their numbers ("The numbers"), so nothing depends on seeing
-the drawing. The colours are the same everywhere: blue is applicants, orange is programs, green is a match and grey
-is everything else; shades of blue order the stages, darker (lighter in the dark theme) the further a stage.
+the drawing. The colours mean the same thing on every chart unless its key says otherwise: blue is applicants,
+orange is programs, green is a match and grey is everything else; shades of blue order the stages, darker (lighter
+in the dark theme) the further a stage. With **Colour by strength** on, the applicants' flow uses the same shades for
+fifths of applicant strength instead, darker (lighter in the dark theme) the stronger, as the key under it shows.
 **Patterns as well as colours** in the display settings (the button beside the account menu) adds patterns to the
 bars and areas, for colour-blind readers and printing.
 

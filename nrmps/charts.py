@@ -13,6 +13,9 @@ observed utilities scatter around the identity line, and the funnel's counts add
 - RAT-3 `first_choice_demand`: how many applicants rank each program first before interviews, against its positions,
   with the Lorenz curve and the Gini coefficient.
 - INT-1 `funnel`: applications through invitations, interviews and rank order lists to matches, with the drop-offs.
+- `applicant_flow`: every applicant counted once, from applying to an interview and a match, optionally split into
+  fifths of applicant strength (the "Colour by strength" switch), so the quality of the applicants can be followed
+  through the stages.
 - MAT-7 (ego) `ego_network`: one applicant's or program's applications by how far each got, drawn as a network with
   sigma.js on the agent's page (plan step 5.1), next to `agent_funnel`, the same funnel for that agent alone.
 """
@@ -32,6 +35,10 @@ from .runs import RunData, StageRows
 SAMPLE = 1500  # points per series in the true-against-observed scatter plots
 DEMAND_TABLE_ROWS = 10
 EGO_MAX_NODES = 2000  # an agent's network draws at most this many applications, those that got furthest first
+# The applicants' flow: its stages, the drop-off after each, and the names of the strength fifths.
+FLOW_STAGES = ("Applicants", "Interviewed", "Matched")
+FLOW_DROPS = ("No interview", "Interviewed, not matched")
+STRENGTH_BANDS = ("Weakest fifth", "Second fifth", "Middle fifth", "Fourth fifth", "Strongest fifth")
 # How far an application got, in order; each is exclusive (an interview that led nowhere is "Interviewed").
 EGO_STAGES = ("Applied", "Invited", "Interviewed", "Ranked", "Matched")
 EGO_KEY = (
@@ -236,6 +243,153 @@ def agent_funnel(stages: StageRows, name: str, *, applicant: bool) -> dict[str, 
     return funnel_chart(counts, of=f"the {total} applications to {name}", whose="program's")
 
 
+def strength_bands(strength: NDArray[np.float64]) -> NDArray[np.int64] | None:
+    """Return each applicant's strength fifth (0 = the weakest fifth ... 4 = the strongest), or None.
+
+    Fifths are by rank, each rank taken at its centre (rank + 1/2), so the applicants left over when n is not a
+    multiple of five are spread across the fifths rather than given to the weakest. Applicants with the same strength
+    stay together, in the fifth their middle rank falls in, so a tie at the top is treated like one at the bottom
+    (except a tie whose middle falls exactly on the border of two fifths). None when there are fewer than five
+    applicants, or when ties
+    (an upload with a few distinct values) would leave a "fifth" with under 10% or over 30% of the applicants (beyond
+    the rounding of n / 5): such bands would not be fifths.
+    """
+    n = strength.size
+    k = len(STRENGTH_BANDS)
+    if n < k:
+        return None
+    order = np.sort(strength)
+    first = np.searchsorted(order, strength, side="left")  # the lowest rank of the applicant's tie group
+    last = np.searchsorted(order, strength, side="right") - 1  # and its highest
+    bands = ((first + last + 1) * k) // (2 * n)  # the fifth of the middle rank's centre, (first + last + 1) / 2
+    sizes = np.bincount(bands, minlength=k)
+    if sizes.max() > max(-(-n // k), 0.3 * n) or sizes.min() < min(n // k, 0.1 * n):
+        return None
+    return bands.astype(np.int64)
+
+
+Mask = NDArray[np.bool_]
+
+
+def _flow_counts(interviewed: Mask, matched: Mask, invited: Mask) -> dict[str, int]:
+    applicants = int(interviewed.size)
+    got_interview = int(interviewed.sum())
+    return {
+        "Applicants": applicants,
+        "Interviewed": got_interview,
+        "Matched": int((interviewed & matched).sum()),
+        "No interview": applicants - got_interview,
+        "Interviewed, not matched": int((interviewed & ~matched).sum()),
+        # Not drawn: the two kinds of "No interview", for the table and the tooltips.
+        "never_invited": int((~invited).sum()),
+        "invited_no_interview": int((invited & ~interviewed).sum()),
+    }
+
+
+def applicant_flow(data: RunData) -> dict[str, Any] | None:
+    """Return the applicants' flow: each applicant once, from applying to an interview and a match.
+
+    The counts are given in total and per strength fifth (None for runs from before the match). An applicant counts
+    as interviewed with at least one interview; one can be invited and still have none (every program that invited
+    them filled its slots first). A match needs an interview, so the flow adds up.
+    """
+    record = data.stages
+    if record is None:
+        return None
+    population = data.population
+    n = population.n_applicants
+    invited = np.bincount(record.i[record.invite_wave > 0], minlength=n) > 0
+    interviewed = np.bincount(record.i[record.accepted.astype(bool)], minlength=n) > 0
+    matched = np.asarray(record.match_program) >= 0
+    strength = np.asarray(population.applicants.strength, dtype=np.float64)
+    bands = strength_bands(strength)
+    counts = _flow_counts(interviewed, matched, invited)
+    payload: dict[str, Any] = {
+        "stages": list(FLOW_STAGES),
+        "drops": list(FLOW_DROPS),
+        "counts": counts,
+        "bands": None,
+        # The two kinds of "No interview", shown in its tooltip.
+        "notes": {
+            "No interview": [
+                ["Never invited", counts["never_invited"]],
+                ["Invited, no interview", counts["invited_no_interview"]],
+            ]
+        },
+    }
+    if bands is not None:
+        payload["bands"] = [
+            {
+                "label": label,
+                "low": round(float(strength[bands == b].min()), 2),
+                "high": round(float(strength[bands == b].max()), 2),
+                "counts": _flow_counts(interviewed[bands == b], matched[bands == b], invited[bands == b]),
+            }
+            for b, label in enumerate(STRENGTH_BANDS)
+        ]
+    return payload
+
+
+def _bands_note(payload: dict[str, Any]) -> str:
+    """Say why the flow cannot be split into strength fifths ("" when it can)."""
+    if payload["bands"]:
+        return ""
+    if payload["counts"]["Applicants"] < len(STRENGTH_BANDS):
+        return f"fewer than {len(STRENGTH_BANDS)} applicants"
+    return "too many applicants share a strength to split them into fifths"
+
+
+def _share(part: int, whole: int) -> str:
+    return "-" if whole == 0 else f"{100 * part / whole:.1f}%"
+
+
+def _applicant_flow_chart(data: RunData) -> dict[str, Any] | None:
+    payload = applicant_flow(data)
+    if payload is None:
+        return None
+    counts = payload["counts"]
+    summary = (
+        f"Of {counts['Applicants']:,} applicants, {counts['Interviewed']:,} had at least one interview and "
+        f"{counts['Matched']:,} matched ({_share(counts['Matched'], counts['Applicants'])}); "
+        f"{counts['No interview']:,} had no interview, {counts['never_invited']:,} of them never invited."
+    )
+    groups = [("All applicants", None, None, counts)]
+    if payload["bands"]:
+        weakest, strongest = payload["bands"][0]["counts"], payload["bands"][-1]["counts"]
+        summary += (
+            f" By strength, {_share(weakest['Matched'], weakest['Applicants'])} of the weakest fifth matched, "
+            f"against {_share(strongest['Matched'], strongest['Applicants'])} of the strongest."
+        )
+        groups = [(band["label"], band["low"], band["high"], band["counts"]) for band in payload["bands"]] + groups
+    rows = [
+        {
+            "label": label,
+            "low": low,
+            "high": high,
+            "applicants": group["Applicants"],
+            "never_invited": group["never_invited"],
+            "invited_no_interview": group["invited_no_interview"],
+            "interviewed": group["Interviewed"],
+            "not_matched": group["Interviewed, not matched"],
+            "matched": group["Matched"],
+            "match_share": group["Matched"] / group["Applicants"] if group["Applicants"] else None,
+        }
+        for label, low, high, group in groups
+    ]
+    switch_key = [
+        *({"label": label, "dot": f"viz-dot-seq-{b + 1}"} for b, label in enumerate(STRENGTH_BANDS)),
+        {"label": "Left out", "dot": "viz-dot-neutral"},
+    ]
+    return {
+        "payload": payload,
+        "summary": summary,
+        "rows": rows,
+        "switchable": bool(payload["bands"]),
+        "switch_note": _bands_note(payload),
+        "switch_key": switch_key if payload["bands"] else [],
+    }
+
+
 def ego_network(stages: StageRows, names: list[str], name: str, *, applicant: bool) -> dict[str, Any] | None:
     """Return MAT-7 for one agent: its applications by how far each got, with a summary and the key's counts.
 
@@ -356,7 +510,7 @@ def _perception_chart(payload: dict[str, Any], side: str) -> dict[str, Any]:
 TAB_CHARTS = {
     "population": ("strength", "quality", "capacity"),
     "pre_interview": ("applicant_fidelity", "program_fidelity", "perception", "demand"),
-    "applications": ("funnel",),
+    "applications": ("funnel", "applicant_flow"),
 }
 
 
@@ -441,4 +595,6 @@ def run_charts(data: RunData, names: tuple[str, ...] | None = None) -> dict[str,
         charts |= _demand_charts(data)
     if "funnel" in wanted:
         charts |= _funnel_chart(data.stages)
+    if "applicant_flow" in wanted:
+        charts["applicant_flow"] = _applicant_flow_chart(data)
     return charts

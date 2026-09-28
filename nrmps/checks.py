@@ -3,8 +3,8 @@
 - nrmps.H001: a parameter of the schema (or a column of a list parameter) has no title or description.
 - nrmps.H002: a page's Help panel names an action or column the registry does not describe.
 - nrmps.H003: a help entry links to a guide page (or a section of one) that does not exist.
-- nrmps.H004: a chart of the catalog lacks its question, what it shows or how to read it, or names an unknown place
-  or colour.
+- nrmps.H004: a chart of the catalog lacks its question, what it shows or how to read it, names an unknown place or
+  colour, or has a switch without a label (or a label without a switch).
 """
 
 from typing import Any
@@ -53,6 +53,8 @@ def _chart_problems() -> list[CheckMessage]:
             problems.append(Error(f"Chart {key!r} names the unknown place {chart.tab!r}.", id="nrmps.H004"))
         if chart.side not in {"applicant", "program"}:
             problems.append(Error(f"Chart {key!r} names the unknown colour {chart.side!r}.", id="nrmps.H004"))
+        if bool(chart.switch) != bool(chart.switch_label) or (chart.switch and not chart.switch.isidentifier()):
+            problems.append(Error(f"Chart {key!r} needs both a switch (an identifier) and its label.", id="nrmps.H004"))
     return problems
 
 

@@ -10,7 +10,10 @@ from django.utils.html import escape
 from nrmps import help_registry
 from nrmps.charts import (
     EGO_MAX_NODES,
+    STRENGTH_BANDS,
+    _bands_note,
     agent_funnel,
+    applicant_flow,
     digits,
     ego_network,
     fit_check,
@@ -19,6 +22,7 @@ from nrmps.charts import (
     perception_samples,
     requested_histogram,
     run_charts,
+    strength_bands,
 )
 from nrmps.engine.metrics import histogram
 from nrmps.engine.population import generate_population
@@ -44,6 +48,7 @@ def test_every_chart_of_a_run(finished_run):
         "demand",
         "lorenz",
         "funnel",
+        "applicant_flow",
     }
     for chart in charts.values():
         assert chart["summary"]
@@ -285,3 +290,128 @@ def test_the_agent_pages_show_the_funnel_with_its_numbers(auth_client, finished_
         assert 'data-chart="funnel"' in body
         assert escape(str(help_registry.CHARTS[key].title)) in body
         assert "The numbers" in body
+
+
+# --- The applicants' flow and its strength fifths ----------------------------------------------------------------
+
+
+def test_strength_fifths_are_by_rank_and_keep_ties_together():
+    strength = np.array([5.0, 1.0, 3.0, 2.0, 4.0, 9.0, 8.0, 7.0, 6.0, 0.0])
+    assert strength_bands(strength).tolist() == [2, 0, 1, 1, 2, 4, 4, 3, 3, 0]  # two per fifth, weakest first
+    tied = np.array([1.0, 1.0, 1.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
+    assert strength_bands(tied) is None  # a tie is never split, and 40% in one "fifth" is not a fifth
+    assert strength_bands(np.zeros(20)) is None
+    assert strength_bands(np.arange(4.0)) is None
+    bands = strength_bands(np.random.default_rng(1).normal(size=1001))
+    assert np.bincount(bands).tolist() == [200, 200, 201, 200, 200]  # the leftover applicant is not the weakest's
+    assert [np.bincount(strength_bands(np.arange(float(n)))).tolist() for n in (5, 6)] == [[1] * 5, [1, 1, 2, 1, 1]]
+
+
+def test_ties_at_the_top_and_bottom_are_treated_alike():
+    """A tie group goes to the fifth of its middle rank, so ties at either end give mirror-image fifths."""
+    top = strength_bands(np.r_[np.arange(79.0), np.full(21, 100.0)])
+    bottom = strength_bands(np.r_[np.full(21, -1.0), np.arange(79.0)])
+    assert np.bincount(top).tolist() == [20, 20, 20, 19, 21]
+    assert np.bincount(bottom).tolist() == [21, 19, 20, 20, 20]
+    assert len(set(top[79:].tolist())) == 1  # the tie stays together
+    # Tiered strengths (35% at one value, 5% at the next) would give very unequal "fifths": refused.
+    tiered = np.r_[np.zeros(140), np.full(20, 0.5), np.full(80, 1.0), np.full(80, 1.5), np.full(80, 2.0)]
+    assert strength_bands(tiered) is None
+    assert strength_bands(np.r_[np.full(39, -1.0), np.arange(61.0)]) is None
+
+
+def test_a_tie_is_refused_or_accepted_the_same_at_either_end():
+    """For every market size up to 120 and every size of one tie, a tie at the top and the same tie at the bottom are
+    both split into fifths or both refused (mirror images)."""
+    for n in range(5, 121):
+        for size in range(2, n):
+            bottom = np.r_[np.zeros(size), np.arange(1.0, n - size + 1)]
+            low, high = strength_bands(bottom), strength_bands(-bottom)
+            assert (low is None) == (high is None), (n, size)
+            if low is not None:
+                sizes = np.bincount(low, minlength=5).tolist()
+                assert sizes == np.bincount(high, minlength=5).tolist()[::-1], (n, size)
+
+
+def test_the_disabled_switch_says_why():
+    few = {"bands": None, "counts": {"Applicants": 4}}
+    tied = {"bands": None, "counts": {"Applicants": 400}}
+    assert _bands_note(few) == "fewer than 5 applicants"
+    assert _bands_note(tied) == "too many applicants share a strength to split them into fifths"
+    assert _bands_note({"bands": [{}], "counts": {"Applicants": 400}}) == ""
+
+
+def test_the_applicants_flow_adds_up_in_total_and_per_fifth(finished_run):
+    data = RunData(finished_run)
+    flow = applicant_flow(data)
+    assert flow["stages"] == ["Applicants", "Interviewed", "Matched"]
+    assert flow["drops"] == ["No interview", "Interviewed, not matched"]
+    for counts in [flow["counts"], *(band["counts"] for band in flow["bands"])]:
+        assert counts["Applicants"] == counts["Interviewed"] + counts["No interview"]
+        assert counts["Interviewed"] == counts["Matched"] + counts["Interviewed, not matched"]
+        assert counts["No interview"] == counts["never_invited"] + counts["invited_no_interview"]
+    assert [band["label"] for band in flow["bands"]] == list(STRENGTH_BANDS)
+    for key in ("Applicants", "Interviewed", "Matched", "No interview", "never_invited"):
+        assert sum(band["counts"][key] for band in flow["bands"]) == flow["counts"][key], key
+    # Against independent sources: the engine's arrays and the run's own diagnostics.
+    record, n = data.stages, data.population.n_applicants
+    assert flow["counts"]["Applicants"] == n
+    assert flow["counts"]["Matched"] == int((record.match_program >= 0).sum())
+    assert flow["counts"]["Interviewed"] == np.unique(record.i[record.accepted.astype(bool)]).size
+    assert flow["counts"]["never_invited"] == n - np.unique(record.i[record.invite_wave > 0]).size
+    funnel_metrics = finished_run.metrics["outcomes"]["funnel"]
+    assert flow["counts"]["No interview"] == funnel_metrics["applicants_without_interview"]
+    assert flow["counts"]["invited_no_interview"] >= 1  # this run has one: invited and interviewed differ
+    strength = np.asarray(data.population.applicants.strength)
+    weakest = strength <= flow["bands"][0]["high"]
+    assert flow["bands"][0]["counts"]["Applicants"] == int(weakest.sum())
+    assert flow["bands"][0]["counts"]["Matched"] == int((record.match_program[weakest] >= 0).sum())
+    lows = [band["low"] for band in flow["bands"]]
+    assert lows == sorted(lows)
+    assert all(band["low"] <= band["high"] for band in flow["bands"])
+
+
+def test_the_applicants_flow_chart_has_a_summary_table_and_a_switch(finished_run):
+    chart = run_charts(RunData(finished_run), ("applicant_flow",))["applicant_flow"]
+    assert chart["summary"].startswith("Of 60 applicants,")
+    assert "of the weakest fifth matched, against" in chart["summary"]
+    assert [row["label"] for row in chart["rows"]] == [*STRENGTH_BANDS, "All applicants"]
+    counts = chart["payload"]["counts"]
+    assert chart["rows"][-1] == {
+        "label": "All applicants",
+        "low": None,
+        "high": None,
+        "applicants": counts["Applicants"],
+        "never_invited": counts["never_invited"],
+        "invited_no_interview": counts["invited_no_interview"],
+        "interviewed": counts["Interviewed"],
+        "not_matched": counts["Interviewed, not matched"],
+        "matched": counts["Matched"],
+        "match_share": counts["Matched"] / counts["Applicants"],
+    }
+    assert chart["payload"]["notes"]["No interview"] == [
+        ["Never invited", counts["never_invited"]],
+        ["Invited, no interview", counts["invited_no_interview"]],
+    ]
+    assert chart["switchable"] is True
+    assert [item["dot"] for item in chart["switch_key"]][-1] == "viz-dot-neutral"
+
+
+def test_strengths_too_alike_disable_the_switch(finished_run, monkeypatch):
+    monkeypatch.setattr("nrmps.charts.strength_bands", lambda strength: None)
+    chart = run_charts(RunData(finished_run), ("applicant_flow",))["applicant_flow"]
+    assert chart["payload"]["bands"] is None
+    assert chart["switchable"] is False
+    assert chart["switch_note"] == "too many applicants share a strength to split them into fifths"
+    assert [row["label"] for row in chart["rows"]] == ["All applicants"]
+
+
+def test_the_applications_tab_shows_the_flow_with_its_switch(auth_client, finished_run):
+    kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number}
+    body = auth_client.get(reverse("nrmps:run_applications", kwargs=kwargs)).content.decode()
+    assert 'data-chart="flow"' in body
+    assert 'role="switch"' in body
+    assert 'data-chart-switch="bands"' in body
+    assert 'data-chart-switch-key="bands" hidden' in body
+    assert "Colour by strength" in body
+    assert escape(str(help_registry.CHARTS["applicant_flow"].title)) in body

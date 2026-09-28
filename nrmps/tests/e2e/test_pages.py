@@ -102,7 +102,7 @@ def _draw_every_chart(page, count: int) -> None:
     assert page.locator("[data-chart-failed]").count() == 0
 
 
-@pytest.mark.parametrize(("tab", "count"), [("population", 3), ("before-interviews", 6), ("applications", 1)])
+@pytest.mark.parametrize(("tab", "count"), [("population", 3), ("before-interviews", 6), ("applications", 2)])
 def test_the_run_tabs_draw_every_chart_without_script_errors(logged_in_page, live, worked_simulation, tab, count):
     """ECharts draws each chart as it comes into view (plan steps 3.8, 5.1), and again after the theme changes."""
     page = logged_in_page
@@ -166,4 +166,43 @@ def test_an_agents_page_draws_its_applications_as_a_network(logged_in_page, live
     page.wait_for_timeout(200)
     expect(network.locator("canvas").first).to_be_attached()
     assert page.locator("[data-chart-failed]").count() == 0
+    assert errors == []
+
+
+FLOW_NODES = """() => {
+  const chart = window.echarts.getInstanceByDom(document.querySelector('[data-chart="flow"]'));
+  return chart.getOption().series[0].data.length;
+}"""
+
+
+def test_colour_by_strength_splits_the_applicants_flow_and_is_remembered(logged_in_page, live, worked_simulation):
+    """The switch splits each stage of the applicants' flow into strength fifths, shows their key, and stays on."""
+    page = logged_in_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    url = f"{live}/simulations/{worked_simulation.pk}/runs/1/applications/"
+    page.goto(url)
+    flow = page.locator('[data-chart="flow"]')
+    flow.scroll_into_view_if_needed()
+    expect(flow.locator("canvas").first).to_be_attached()
+    assert page.evaluate(FLOW_NODES) == 5  # three stages and two drop-offs
+    switch = page.get_by_role("switch", name="Colour by strength")
+    key = page.locator('[data-chart-switch-key="bands"]')
+    expect(key).to_be_hidden()
+    switch.check()
+    expect(key).to_be_visible()
+    assert page.evaluate(FLOW_NODES) == 17  # each of the three stages in five fifths, and the two drop-offs
+    page.reload()
+    page.locator('[data-chart="flow"]').scroll_into_view_if_needed()
+    expect(page.locator('[data-chart="flow"] canvas').first).to_be_attached()
+    expect(page.get_by_role("switch", name="Colour by strength")).to_be_checked()
+    assert page.evaluate(FLOW_NODES) == 17
+    page.set_viewport_size(PHONE)  # narrowing redraws it in its phone layout: labels on two lines, more room on top
+    page.wait_for_timeout(300)
+    assert page.evaluate(FLOW_NODES) == 17
+    assert page.evaluate(FLOW_NODES.replace("data.length", "top")) == 44
+    assert _overflow(page) <= 0
+    page.get_by_role("switch", name="Colour by strength").uncheck()
+    assert page.evaluate(FLOW_NODES) == 5
+    expect(page.locator('[data-chart-switch-key="bands"]')).to_be_hidden()
     assert errors == []

@@ -70,9 +70,11 @@
 .viz-dot-series-2 { background: var(--viz-series-2); }
 .viz-dot-series-3 { background: var(--viz-series-3); }
 .viz-dot-neutral { background: var(--viz-neutral); }
+.viz-dot-seq-1 { background: var(--viz-seq-1); }
 .viz-dot-seq-2 { background: var(--viz-seq-2); }
 .viz-dot-seq-3 { background: var(--viz-seq-3); }
 .viz-dot-seq-4 { background: var(--viz-seq-4); }
+.viz-dot-seq-5 { background: var(--viz-seq-5); }
 
 /* Help popovers (plan step 4.3) and the display settings open below their button where the browser supports anchor
    positioning, and flip when there is no room; elsewhere they keep the browser's default place, the middle of the
