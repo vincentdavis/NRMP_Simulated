@@ -222,6 +222,15 @@ program that invites everyone). Such a label can then sit on the links below it,
 in the background colour. The browser test measures every label as drawn (ECharts' own geometry) at phone width,
 with the switch on and off, and fails on a label outside the chart or overlapping another.
 
+**After 5.1: "database is locked" on SQLite with the worker.** With the web server and the worker
+(`TASK_BACKEND=database`) on one SQLite file, starting a run sometimes failed with a 500, "database is locked". The
+simulation was saved but no run was created. Django opens SQLite transactions DEFERRED: `start_run` reads first, and
+its write then fails at once, without waiting, while the worker is writing. SQLite databases (a `sqlite:///` URL or
+development's `db.sqlite3`) now use `transaction_mode` IMMEDIATE with a 20 s timeout, so a transaction takes the write
+lock at BEGIN and waits for it. A reproduction (the real `nrmp_worker` polling every 0.05 s while runs are started as
+the demo view starts them) refused 10 of 40 before, and none of 200 after (40, 40 and 120). PostgreSQL, used in
+production, is unaffected. Tested: the settings for both SQLite configurations, and PostgreSQL's unchanged.
+
 ## Phases 6–8
 
 Not started.

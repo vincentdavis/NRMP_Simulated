@@ -50,3 +50,22 @@ def test_production_serves_compressed_hashed_static_files():
 
 def test_production_reuses_database_connections():
     assert _settings_value("settings.DATABASES['default']['CONN_MAX_AGE']") == "600"
+
+
+@pytest.mark.parametrize(
+    "env",
+    [{}, {"DEBUG": "True", "DATABASE_URL": ""}],  # a sqlite:/// DATABASE_URL, and development's db.sqlite3
+)
+def test_sqlite_transactions_wait_for_the_write_lock(env):
+    """With SQLite, the web server and the worker share the file: transactions start IMMEDIATE and wait up to 20 s for
+    the write lock instead of failing with "database is locked" (a DEFERRED one fails at once when it needs to write
+    while the other process is writing: a quarter of the runs started beside a busy worker did)."""
+    options = _settings_value("settings.DATABASES['default']['OPTIONS']", **env)
+    assert options == "{'transaction_mode': 'IMMEDIATE', 'timeout': 20}"
+
+
+def test_postgresql_keeps_its_own_transactions():
+    url = "postgres://user:password@localhost:5432/nrmp"
+    assert (
+        _settings_value("settings.DATABASES['default']['OPTIONS'].get('transaction_mode')", DATABASE_URL=url) == "None"
+    )

@@ -211,7 +211,9 @@ docs/                     # review, plan, status, deployment, model spec
   database.
 - Runs execute inside the request with `TASK_BACKEND=immediate` (default; limit `NRMP_MAX_PAIRS`) or in a worker
   with `TASK_BACKEND=database` (`manage.py nrmp_worker`; limit `NRMP_MAX_PAIRS_WORKER`). Start runs with
-  `runs.start_run` + `runs.dispatch_run` so both work; `run_now` always executes in-process (commands, tests).
+  `runs.start_run` + `runs.dispatch_run` so both work; `run_now` always executes in-process (commands, tests). On
+  SQLite the server and the worker share the file: settings make every SQLite transaction IMMEDIATE (waiting up to
+  20 s for the write lock) so they queue instead of failing with "database is locked".
 - Changing a formula, stream ID or draw recipe changes results: it needs a new `MODEL_VERSION` (model_spec.md §12).
 
 **Security**:

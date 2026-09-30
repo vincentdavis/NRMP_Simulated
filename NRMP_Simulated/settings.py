@@ -187,6 +187,11 @@ else:
     raise ImproperlyConfigured(
         "DATABASE_URL must be set when DEBUG is off (use sqlite:///path/to/file.sqlite3 for a local SQLite database)."
     )
+# SQLite: the web server and the worker (TASK_BACKEND=database) can share the file. Transactions start IMMEDIATE,
+# taking the write lock at BEGIN and waiting up to `timeout` seconds for it. The default, DEFERRED, reads first and
+# then fails at once with "database is locked" when it needs to write while the other process is writing.
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    DATABASES["default"].setdefault("OPTIONS", {}).update({"transaction_mode": "IMMEDIATE", "timeout": 20})
 
 
 # Authentication. django-axes comes first so it can refuse sign-ins from a locked-out client.
