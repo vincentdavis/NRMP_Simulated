@@ -37,12 +37,13 @@ jobs:
         run: uv run codespell .
       - name: mypy
         run: uv run mypy .
-      - name: Migrations are up to date
-        run: uv run python manage.py makemigrations --check --dry-run
       # As in the Docker build: the manifest storage hashes every static file (and fails on a missing source map),
-      # and the help checks render guide pages whose links need the manifest.
+      # and the help checks, which every management command below runs, render guide pages whose links need the
+      # manifest. So static files are collected first.
       - name: Collect static files
         run: uv run python manage.py collectstatic --noinput
+      - name: Migrations are up to date
+        run: uv run python manage.py makemigrations --check --dry-run
       - name: Deploy checks
         run: uv run python manage.py check --deploy --fail-level WARNING
       - name: ty (informational)
