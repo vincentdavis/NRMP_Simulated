@@ -459,23 +459,205 @@
     ],
   }));
 
+  // --- Colour by strength -------------------------------------------------------------------------------------------
+
+  // The step of a scale for item k of `of` items, spread over the whole scale.
+  const scaleStep = (scale, k, of) => scale[Math.round((k * (scale.length - 1)) / Math.max(1, of - 1))];
+
+  // A Sankey diagram split by strength fifth (the "bands" switch), for the applicants' flow and a program's funnel:
+  // {main: stage names, drops: drop-off names (drops[k] leaves main[k]), total and each group's counts: {name: count},
+  // groups: [{label, low, high, counts}], unit ("applicants" or "applications"), notes: {name: [[label, count]]}}.
+  // Each stage splits into the fifths in the diverging scale (red the bottom 20%, grey the middle, blue the top 20%;
+  // strongest first, at the top, or at the left when vertical), links take their fifth's colour, and each drop-off is
+  // one bar in the fifths' colours in proportion, set apart from its stage by a transparent spacer, with a small bar of
+  // the same mix (`barWidth` px) in its label. Stage labels go above their column (in the left margin when vertical),
+  // drop-off labels to the right of it (below it when vertical). Returns the series' {nodes, links} and its tooltip.
+  function strengthSankey(t, spec) {
+    const { main, drops, total, groups, unit, notes = {}, narrow = false, vertical = false, barWidth } = spec;
+    const colourOf = (b) => scaleStep(t.diverging, b, groups.length);
+    const SPACER = "spacer:";
+    const stageOf = (node) => String(node).split("|")[0];
+    const bandOf = (node) => (String(node).includes("|") ? Number(String(node).split("|")[1]) : null);
+    const everyone = total[main[0]];
+    // The space between a stage and its drop-off: a node with a value (3% of the whole) but no links.
+    const spacer = (k) => ({
+      name: `${SPACER}${k}`,
+      depth: k,
+      value: Math.max(1, Math.round(0.03 * everyone)),
+      // A transparent pattern too: with patterns on, ECharts would hatch the gap (decal "none" throws in ECharts 6.1).
+      itemStyle: { color: "transparent", borderWidth: 0, decal: { color: "transparent" } },
+      label: { show: false },
+      tooltip: { show: false },
+      emphasis: { disabled: true },
+    });
+    // A drop-off: one bar in the fifths' colours, strongest first, which is the order in which ECharts stacks the
+    // links arriving from the stage before (by their source's position), so each fifth's link lands on its colour.
+    // The label's small bar shows the same mix, weakest on the left like the key.
+    function dropNode(drop, k) {
+      const count = total[drop];
+      const words = narrow ? drop.replace(", ", ",\n") : drop;
+      const rich = { t: { color: t.muted, lineHeight: 16 }, n: { color: t.muted, lineHeight: 16 } };
+      const text = words.split("\n").map((line) => `{t|${line}}`).join("\n");
+      const below = { position: ["0%", "100%"], align: "left", verticalAlign: "top", padding: [4, 0, 0, 0] };
+      const place = vertical ? below : {};
+      const node = { name: drop, depth: k, itemStyle: { color: t.neutral, borderWidth: 0 } };
+      if (!count) return { ...node, label: { ...place, rich, formatter: () => `${text}\n{n|${format.count(0)}}` } };
+      const colorStops = [];
+      let done = 0;
+      for (let b = groups.length - 1; b >= 0; b -= 1) {
+        const part = groups[b].counts[drop];
+        if (!part) continue;
+        colorStops.push({ offset: done / count, color: colourOf(b) });
+        done += part;
+        colorStops.push({ offset: done / count, color: colourOf(b) });
+      }
+      let bar = "";
+      let edge = 0;
+      let sum = 0;
+      groups.forEach((group, b) => {
+        sum += group.counts[drop];
+        const right = Math.round((barWidth * sum) / count);
+        if (right > edge) {
+          rich[`s${b}`] = { backgroundColor: colourOf(b), width: right - edge, height: 8 };
+          bar += `{s${b}|}`;
+        }
+        edge = right;
+      });
+      const [x2, y2] = vertical ? [1, 0] : [0, 1];
+      return {
+        ...node,
+        itemStyle: { color: { type: "linear", x: 0, y: 0, x2, y2, colorStops }, borderWidth: 0 },
+        label: { ...place, rich, formatter: () => `${text}\n${bar}{n|  ${format.count(count)}}` },
+      };
+    }
+    const stageLabel = (stage) =>
+      vertical
+        ? { position: "left", color: t.ink, formatter: () => `${stage}\n${format.count(total[stage])}` }
+        : {
+            // Above the column, from its left edge (never cut off at the chart's edge); two lines when narrow.
+            position: [0, narrow ? -32 : -16],
+            align: "left",
+            color: t.ink,
+            formatter: () => `${stage}${narrow ? "\n" : "  "}${format.count(total[stage])}`,
+          };
+    const nodes = [];
+    main.forEach((stage, k) => {
+      for (let b = groups.length - 1; b >= 0; b -= 1) {
+        nodes.push({
+          name: `${stage}|${b}`,
+          depth: k,
+          itemStyle: { color: colourOf(b), borderWidth: 0 },
+          label: b === groups.length - 1 ? stageLabel(stage) : { show: false },
+        });
+      }
+      if (k >= 1) nodes.push(spacer(k), dropNode(drops[k - 1], k));
+    });
+    const links = [];
+    drops.forEach((drop, k) => {
+      groups.forEach((group, b) => {
+        // Empty flows are left out: ECharts would draw them as 1 px lines, which look like a few.
+        const next = group.counts[main[k + 1]];
+        const lost = group.counts[drop];
+        if (next > 0) links.push({ source: `${main[k]}|${b}`, target: `${main[k + 1]}|${b}`, value: next });
+        if (lost > 0) links.push({ source: `${main[k]}|${b}`, target: drop, value: lost });
+      });
+    });
+    const share = (part, whole) => format.share(part / Math.max(1, whole));
+    const ofGroup = (count, group) => `${share(count, group.counts[main[0]])} of the group`;
+    const range = (group) => `${format.fixed(group.low, 2)} to ${format.fixed(group.high, 2)}`;
+    const bandTitle = (group) => `${group.label} (strength ${range(group)})`;
+    function describe(item) {
+      if (String(item.name).startsWith(SPACER)) return "";
+      if (item.dataType === "edge") {
+        const group = groups[bandOf(item.data.source)];
+        const from = stageOf(item.data.source);
+        const count = `${format.count(item.value)} (${ofGroup(item.value, group)})`;
+        const rows = [[`${from} → ${stageOf(item.data.target)}`, count]];
+        if (from !== main[0]) rows.push([`Share of ${from.toLowerCase()}`, share(item.value, group.counts[from])]);
+        return tip(bandTitle(group), rows);
+      }
+      const b = bandOf(item.name);
+      const stage = stageOf(item.name);
+      if (b !== null) {
+        const group = groups[b];
+        const count = group.counts[stage];
+        return tip(bandTitle(group), [[stage, `${format.count(count)} (${ofGroup(count, group)})`]]);
+      }
+      // A drop-off: its total and its own breakdown (No interview: never invited, invited without one), then each
+      // fifth: how many of the drop-off it makes up, and how much of the fifth that is.
+      const rows = [[stage, `${format.count(total[stage])} (${share(total[stage], everyone)} of all ${unit})`]];
+      (notes[stage] || []).forEach(([label, count]) => rows.push([label, format.count(count)]));
+      groups.forEach((group) => {
+        const count = group.counts[stage];
+        const of = `${share(count, total[stage])} of the ${format.count(total[stage])}; ${ofGroup(count, group)}`;
+        rows.push([group.label, `${format.count(count)} (${of})`]);
+      });
+      return tip(stage, rows);
+    }
+    return { nodes, links, describe };
+  }
+
+  // Whether a chart's "bands" switch is on and its payload has the fifths to split by.
+  const bandsOn = (p, element) => element.dataset.bands === "on" && Array.isArray(p.bands) && p.bands.length > 1;
+
+  // The series options of a Sankey split by strength fifth (strengthSankey).
+  const strengthSeries = ({ nodes, links }) => ({
+    type: "sankey",
+    nodeGap: 3,
+    nodeAlign: "left", // a drop-off stays in the column after its stage ("justify" pushes it to the end)
+    layoutIterations: 0,
+    draggable: false,
+    emphasis: { focus: "trajectory" },
+    data: nodes,
+    links,
+    lineStyle: { color: "source", opacity: 0.7, curveness: 0.5 },
+  });
+
+  // --- Chart kinds: flows (ECharts Sankey diagrams) -----------------------------------------------------------------
+
   // The funnel from applications to matches {applied, invited, not_invited, ...} as a Sankey diagram: the stages in
-  // the blue ramp, the drop-offs in neutral grey. Below 560 px it runs top to bottom, so the labels fit.
+  // the blue ramp, the drop-offs in neutral grey. Below 560 px it runs top to bottom, so the labels fit. A program's
+  // funnel has the applications of each strength fifth too (bands: [{label, low, high, counts}]), drawn with the
+  // "bands" switch on by strengthSankey.
   register("funnel", (p, t, element, option) => {
     const vertical = element.clientWidth < 560;
     const main = ["Applied", "Invited", "Interviewed", "Ranked", "Matched"];
     const drops = ["Not invited", "Declined", "Not ranked", "Not matched"];
-    const counts = {
-      Applied: p.applied,
-      Invited: p.invited,
-      "Not invited": p.not_invited,
-      Interviewed: p.interviewed,
-      Declined: p.declined,
-      Ranked: p.ranked,
-      "Not ranked": p.not_ranked,
-      Matched: p.matched,
-      "Not matched": p.not_matched,
-    };
+    const countsOf = (c) => ({
+      Applied: c.applied,
+      Invited: c.invited,
+      "Not invited": c.not_invited,
+      Interviewed: c.interviewed,
+      Declined: c.declined,
+      Ranked: c.ranked,
+      "Not ranked": c.not_ranked,
+      Matched: c.matched,
+      "Not matched": c.not_matched,
+    });
+    const counts = countsOf(p);
+    const orient = vertical ? "vertical" : "horizontal";
+    if (bandsOn(p, element)) {
+      const groups = p.bands.map((band) => ({ ...band, counts: countsOf(band.counts) }));
+      const spec = { main, drops, total: counts, groups, unit: "applications", vertical, barWidth: 56 };
+      const { nodes, links, describe } = strengthSankey(t, spec);
+      return {
+        ...option,
+        legend: { show: false },
+        tooltip: { ...option.tooltip, trigger: "item", formatter: describe },
+        series: [
+          {
+            ...strengthSeries({ nodes, links }),
+            orient,
+            nodeWidth: 14,
+            // Vertical: stage labels in the left margin, drop-off labels under their bar (the last one's at the foot).
+            left: vertical ? 84 : 8,
+            right: vertical ? 8 : 104,
+            top: vertical ? 8 : 28,
+            bottom: vertical ? 40 : 16,
+          },
+        ],
+      };
+    }
     const links = [];
     for (let k = 0; k < drops.length; k += 1) {
       // Empty flows are left out (ECharts draws a zero link as a 1 px line, which looks like a few).
@@ -505,7 +687,7 @@
       series: [
         {
           type: "sankey",
-          orient: vertical ? "vertical" : "horizontal",
+          orient,
           left: 8,
           right: vertical ? 8 : 96,
           top: vertical ? 8 : 16,
@@ -526,170 +708,83 @@
     };
   }, { widths: [560] });
 
-  // Every applicant once through the stages {stages, drops, counts, bands, notes}: drops[k] leaves stages[k]. With the
-  // "bands" switch on, each stage splits into strength fifths in the diverging scale (red the bottom 20%, grey the
-  // middle, blue the top 20%; drawn strongest on top) with links coloured by fifth, and each drop-off becomes one bar
-  // in the fifths' colours, set apart from its stage by a transparent spacer, with a small bar of the same mix beside
-  // its label. Hovering a stage, a fifth or a drop-off highlights its path through the stages.
+  // Every applicant once through the stages {stages, drops, counts, bands, notes}: drops[k] leaves stages[k]. The
+  // stages in the blue ramp, the drop-offs in neutral grey; with the "bands" switch on, split by strength fifth
+  // (strengthSankey). Hovering a stage or a band highlights its path through the stages.
   register("flow", (p, t, element, option) => {
-    const banded = element.dataset.bands === "on" && Array.isArray(p.bands) && p.bands.length > 1;
-    const groups = banded ? p.bands : [{ label: "All applicants", counts: p.counts }];
-    const pick = (scale, k, of) => scale[Math.round((k * (scale.length - 1)) / Math.max(1, of - 1))];
-    const colourOf = (b) => pick(t.diverging, b, groups.length);
-    const name = (stage, b) => (banded ? `${stage}|${b}` : stage);
-    const stageOf = (node) => String(node).split("|")[0];
-    const bandOf = (node) => (banded && String(node).includes("|") ? Number(String(node).split("|")[1]) : null);
-    const SPACER = "spacer:";
     const narrow = element.clientWidth < 480;
-    const everyone = p.counts[p.stages[0]];
-    // The space between a stage and its drop-off, as a node with a value (3% of the applicants) but no links.
-    const spacer = (k) => ({
-      name: `${SPACER}${k}`,
-      depth: k,
-      value: Math.max(1, Math.round(0.03 * everyone)),
-      // A transparent pattern too: with patterns on, ECharts would hatch the gap (decal "none" throws in ECharts 6.1).
-      itemStyle: { color: "transparent", borderWidth: 0, decal: { color: "transparent" } },
-      label: { show: false },
-      tooltip: { show: false },
-      emphasis: { disabled: true },
-    });
-    // A drop-off with the switch on: one bar in the fifths' colours, strongest at the top, which is the order in which
-    // ECharts stacks the links arriving from the stage before (by their source's position), so each fifth's link
-    // lands on its own colour. The label's small bar shows the same mix, weakest on the left like the key.
-    function dropNode(drop, k, words) {
-      const total = p.counts[drop];
-      const rich = { t: { color: t.muted, lineHeight: 16 }, n: { color: t.muted, lineHeight: 16 } };
-      const text = words.split("\n").map((line) => `{t|${line}}`).join("\n");
-      const node = { name: drop, depth: k, itemStyle: { color: t.neutral, borderWidth: 0 } };
-      if (!total) return { ...node, label: { rich, formatter: () => `${text}\n{n|${format.count(0)}}` } };
-      const stops = [];
-      let done = 0;
-      for (let b = groups.length - 1; b >= 0; b -= 1) {
-        const count = groups[b].counts[drop];
-        if (!count) continue;
-        stops.push({ offset: done / total, color: colourOf(b) });
-        done += count;
-        stops.push({ offset: done / total, color: colourOf(b) });
-      }
-      const width = narrow ? 48 : 80;
-      let bar = "";
-      let edge = 0;
-      let sum = 0;
-      groups.forEach((group, b) => {
-        sum += group.counts[drop];
-        const right = Math.round((width * sum) / total);
-        if (right > edge) {
-          rich[`s${b}`] = { backgroundColor: colourOf(b), width: right - edge, height: 8 };
-          bar += `{s${b}|}`;
-        }
-        edge = right;
-      });
+    const frame = { left: 8, right: narrow ? 96 : 160, bottom: 16, nodeWidth: 16 };
+    const tooltip = (formatter) => ({ ...option.tooltip, trigger: "item", formatter });
+    if (bandsOn(p, element)) {
+      const spec = { main: p.stages, drops: p.drops, total: p.counts, groups: p.bands, unit: "applicants" };
+      const split = strengthSankey(t, { ...spec, notes: p.notes, narrow, barWidth: narrow ? 48 : 80 });
       return {
-        ...node,
-        itemStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: stops }, borderWidth: 0 },
-        label: { rich, formatter: () => `${text}\n${bar}{n|  ${format.count(total)}}` },
+        ...option,
+        legend: { show: false },
+        tooltip: tooltip(split.describe),
+        series: [{ ...strengthSeries(split), ...frame, top: narrow ? 44 : 28 }],
       };
     }
+    const everyone = p.counts[p.stages[0]];
     const nodes = [];
     p.stages.forEach((stage, k) => {
-      for (let b = groups.length - 1; b >= 0; b -= 1) {
-        nodes.push({
-          name: name(stage, b),
-          depth: k,
-          itemStyle: { color: banded ? colourOf(b) : pick(t.stages, k, p.stages.length), borderWidth: 0 },
-          label: banded
-            ? {
-                show: b === groups.length - 1,
-                // Above the column, from its left edge (never cut off at the chart's edge); two lines when narrow.
-                position: [0, narrow ? -32 : -16],
-                align: "left",
-                color: t.ink,
-                formatter: () => `${stage}${narrow ? "\n" : "  "}${format.count(p.counts[stage])}`,
-              }
-            : { color: t.ink, formatter: () => `${stage}\n${format.count(p.counts[stage])}` },
-        });
-      }
+      nodes.push({
+        name: stage,
+        depth: k,
+        itemStyle: { color: scaleStep(t.stages, k, p.stages.length), borderWidth: 0 },
+        label: { color: t.ink, formatter: () => `${stage}\n${format.count(p.counts[stage])}` },
+      });
       if (k >= 1) {
         const drop = p.drops[k - 1];
         const words = narrow ? drop.replace(", ", ",\n") : drop;
-        if (banded) {
-          nodes.push(spacer(k), dropNode(drop, k, words));
-        } else {
-          nodes.push({
-            name: drop,
-            depth: k,
-            itemStyle: { color: t.neutral, borderWidth: 0 },
-            label: { color: t.muted, formatter: () => `${words}\n${format.count(p.counts[drop])}` },
-          });
-        }
+        nodes.push({
+          name: drop,
+          depth: k,
+          itemStyle: { color: t.neutral, borderWidth: 0 },
+          label: { color: t.muted, formatter: () => `${words}\n${format.count(p.counts[drop])}` },
+        });
       }
     });
     const links = [];
     p.drops.forEach((drop, k) => {
-      groups.forEach((group, b) => {
-        // Empty flows are left out: ECharts would draw them as 1 px lines, which look like a few applicants.
-        const next = group.counts[p.stages[k + 1]];
-        const lost = group.counts[drop];
-        if (next > 0) links.push({ source: name(p.stages[k], b), target: name(p.stages[k + 1], b), value: next });
-        if (lost > 0) links.push({ source: name(p.stages[k], b), target: drop, value: lost });
-      });
+      // Empty flows are left out: ECharts would draw them as 1 px lines, which look like a few applicants.
+      const next = p.counts[p.stages[k + 1]];
+      const lost = p.counts[drop];
+      if (next > 0) links.push({ source: p.stages[k], target: p.stages[k + 1], value: next });
+      if (lost > 0) links.push({ source: p.stages[k], target: drop, value: lost });
     });
     const share = (part, whole) => format.share(part / Math.max(1, whole));
-    const ofGroup = (count, group) => `${share(count, group.counts[p.stages[0]])} of the group`;
-    const bandTitle = (group) => `${group.label} (strength ${format.fixed(group.low, 2)} to ${format.fixed(group.high, 2)})`;
     function describe(item) {
-      if (String(item.name).startsWith(SPACER)) return "";
       if (item.dataType === "edge") {
-        const b = bandOf(item.data.source);
-        const counts = b === null ? p.counts : groups[b].counts;
-        const from = stageOf(item.data.source);
-        const base = b === null ? "of all applicants" : "of the group";
-        const count = `${format.count(item.value)} (${share(item.value, counts[p.stages[0]])} ${base})`;
-        const rows = [[`${from} → ${stageOf(item.data.target)}`, count]];
-        if (from !== p.stages[0]) rows.push([`Share of ${from.toLowerCase()}`, share(item.value, counts[from])]);
-        return tip(b === null ? "All applicants" : bandTitle(groups[b]), rows);
+        const from = item.data.source;
+        const count = `${format.count(item.value)} (${share(item.value, everyone)} of all applicants)`;
+        const rows = [[`${from} → ${item.data.target}`, count]];
+        if (from !== p.stages[0]) rows.push([`Share of ${from.toLowerCase()}`, share(item.value, p.counts[from])]);
+        return tip("All applicants", rows);
       }
-      const b = bandOf(item.name);
-      const stage = stageOf(item.name);
-      if (b !== null) {
-        const group = groups[b];
-        const count = group.counts[stage];
-        return tip(bandTitle(group), [[stage, `${format.count(count)} (${ofGroup(count, group)})`]]);
-      }
-      const total = p.counts[stage];
-      const rows = [[stage, `${format.count(total)} (${share(total, everyone)} of all applicants)`]];
-      // The total's own breakdown first (No interview: never invited, invited without one), then each fifth: how many
-      // of the drop-off it makes up, and how much of the fifth that is.
-      ((p.notes || {})[stage] || []).forEach(([label, count]) => rows.push([label, format.count(count)]));
-      if (banded && p.drops.includes(stage)) {
-        groups.forEach((group) => {
-          const count = group.counts[stage];
-          const of = `${share(count, total)} of the ${format.count(total)}; ${ofGroup(count, group)}`;
-          rows.push([group.label, `${format.count(count)} (${of})`]);
-        });
-      }
-      return tip(stage, rows);
+      const count = p.counts[item.name];
+      const rows = [[item.name, `${format.count(count)} (${share(count, everyone)} of all applicants)`]];
+      // The total's own breakdown (No interview: never invited, invited without one).
+      ((p.notes || {})[item.name] || []).forEach(([label, count]) => rows.push([label, format.count(count)]));
+      return tip(item.name, rows);
     }
     return {
       ...option,
       legend: { show: false },
-      tooltip: { ...option.tooltip, trigger: "item", formatter: describe },
+      tooltip: tooltip(describe),
       series: [
         {
           type: "sankey",
-          left: 8,
-          right: narrow ? 96 : 160,
-          top: banded ? (narrow ? 44 : 28) : 16,
-          bottom: 16,
-          nodeWidth: 16,
-          nodeGap: banded ? 3 : 14,
+          ...frame,
+          top: 16,
+          nodeGap: 14,
           nodeAlign: "left", // a drop-off stays in the column after its stage ("justify" pushes it to the end)
           layoutIterations: 0,
           draggable: false,
           emphasis: { focus: "trajectory" },
           data: nodes,
           links,
-          lineStyle: { color: banded ? "source" : "gradient", opacity: banded ? 0.7 : 0.3, curveness: 0.5 },
+          lineStyle: { color: "gradient", opacity: 0.3, curveness: 0.5 },
         },
       ],
     };

@@ -717,7 +717,9 @@ def _agent_page(request: HttpRequest, pk: int, number: int, index: int, *, appli
             "positions": None if applicant else int(population.programs.capacity[agent]),
         }
         context["ego"] = ego_network(stages, names, me_side.name(agent), applicant=applicant)
-        context["funnel"] = agent_funnel(stages, me_side.name(agent), applicant=applicant)
+        # A program's funnel can be split by the strength fifth of its applicants (among all applicants).
+        strength = None if applicant else np.asarray(population.applicants.strength, dtype=np.float64)
+        context["funnel"] = agent_funnel(stages, me_side.name(agent), applicant=applicant, strength=strength)
     if view == "stages" and stages is not None:
         context |= _stage_table(request, data, rows, stages, names)
     else:

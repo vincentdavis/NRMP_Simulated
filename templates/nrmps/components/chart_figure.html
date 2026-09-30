@@ -94,10 +94,20 @@
               {% endfor %}
             </tbody>
           {% elif table == "funnel" %}
-            <thead><tr><th scope="col">Stage</th><th scope="col" class="text-right">Applications</th><th scope="col" class="text-right">Share of all</th></tr></thead>
+            {# A program's funnel also counts each stage by the applicant's strength fifth (chart.band_ranges). #}
+            {% if chart.band_ranges %}<colgroup span="3"></colgroup><colgroup span="{{ chart.band_ranges|length }}"></colgroup>{% endif %}
+            <thead>
+              <tr>
+                <th scope="col"{% if chart.band_ranges %} rowspan="2"{% endif %}>Stage</th>
+                <th scope="col" class="text-right"{% if chart.band_ranges %} rowspan="2"{% endif %}>Applications</th>
+                <th scope="col" class="text-right"{% if chart.band_ranges %} rowspan="2"{% endif %}>Share of all</th>
+                {% if chart.band_ranges %}<th scope="colgroup" colspan="{{ chart.band_ranges|length }}" class="text-center">By strength percentile</th>{% endif %}
+              </tr>
+              {% if chart.band_ranges %}<tr>{% for range in chart.band_ranges %}<th scope="col" class="text-right tabular-nums">{{ range }}</th>{% endfor %}</tr>{% endif %}
+            </thead>
             <tbody>
               {% for row in chart.rows %}
-                <tr><th scope="row" class="font-normal">{{ row.stage }}</th><td class="text-right tabular-nums">{{ row.count|intcomma }}</td><td class="text-right tabular-nums">{{ row.share|percent }}</td></tr>
+                <tr><th scope="row" class="font-normal">{{ row.stage }}</th><td class="text-right tabular-nums">{{ row.count|intcomma }}</td><td class="text-right tabular-nums">{{ row.share|percent }}</td>{% for count in row.bands %}<td class="text-right tabular-nums">{{ count|intcomma }}</td>{% endfor %}</tr>
               {% endfor %}
             </tbody>
           {% endif %}

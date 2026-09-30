@@ -91,7 +91,9 @@ program) and as a funnel like the one on the Applications and interviews tab, th
 in a table: every program they applied to, the signal they sent, the invitation and its wave, whether they
 interviewed, both sides' views after the interview, where each side put the other on its list, and the match. Its
 second tab shows how the applicant sees every program before interviews and how every program sees them. Program
-pages are the same from the program's side.
+pages are the same from the program's side, and a program's funnel has **Colour by strength** too: it splits the
+applications by the applicant's strength percentile among all applicants, so you can see whom the program invites,
+ranks and matches.
 
 ## Charts
 

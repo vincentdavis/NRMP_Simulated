@@ -21,6 +21,7 @@ observed utilities scatter around the identity line, and the funnel's counts add
 """
 
 import math
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -203,6 +204,9 @@ def funnel(record: StageRecord | None) -> dict[str, Any] | None:
     )
 
 
+FUNNEL_ROWS = ("applied", "invited", "interviewed", "ranked", "matched")  # the funnel's stages, in its table
+
+
 def funnel_chart(counts: dict[str, int], *, of: str, whose: str) -> dict[str, Any]:
     """Return a funnel chart: the payload, a summary sentence and the rows of its table.
 
@@ -210,6 +214,7 @@ def funnel_chart(counts: dict[str, int], *, of: str, whose: str) -> dict[str, An
     ("applicant's" or "program's").
     """
     applied = counts["applied"] or 1
+    labels = ("Applied", "Invited", "Interviewed", f"On the {whose} list", "Matched")
     return {
         "payload": counts,
         "summary": (
@@ -219,37 +224,65 @@ def funnel_chart(counts: dict[str, int], *, of: str, whose: str) -> dict[str, An
         ),
         "rows": [
             {"stage": label, "count": counts[key], "share": counts[key] / applied}
-            for key, label in (
-                ("applied", "Applied"),
-                ("invited", "Invited"),
-                ("interviewed", "Interviewed"),
-                ("ranked", f"On the {whose} list"),
-                ("matched", "Matched"),
-            )
+            for key, label in zip(FUNNEL_ROWS, labels, strict=True)
         ],
     }
 
 
-def agent_funnel(stages: StageRows, name: str, *, applicant: bool) -> dict[str, Any] | None:
+def agent_funnel(
+    stages: StageRows, name: str, *, applicant: bool, strength: NDArray[np.float64] | None = None
+) -> dict[str, Any] | None:
     """Return INT-1 for one applicant or program: its applications through the stages, or None without any.
 
     "Ranked" is the agent's own rank order list: the applicant's on an applicant's page, the program's on a program's
-    (an applicant it ranked may still have matched elsewhere).
+    (an applicant it ranked may still have matched elsewhere). On a program's page, `strength` (every applicant's)
+    splits the applications by the applicant's strength fifth among all applicants, for the Colour by strength switch
+    (payload "bands", as in the applicants' flow), the table and the summary.
     """
     applied = stages.applied
     if not applied.any():
         return None
-    counts = funnel_counts(
-        int(applied.sum()),
-        int((applied & (stages.wave > 0)).sum()),
-        int((applied & stages.interviewed).sum()),
-        int((applied & (stages.list_rank > 0)).sum()),
-        int((applied & stages.matched).sum()),
-    )
+
+    def counts_of(mask: NDArray[np.bool_]) -> dict[str, int]:
+        return funnel_counts(
+            int(mask.sum()),
+            int((mask & (stages.wave > 0)).sum()),
+            int((mask & stages.interviewed).sum()),
+            int((mask & (stages.list_rank > 0)).sum()),
+            int((mask & stages.matched).sum()),
+        )
+
+    counts = counts_of(applied)
     total = f"{counts['applied']:,}"
     if applicant:
         return funnel_chart(counts, of=f"{name}'s {total} applications", whose="applicant's")
-    return funnel_chart(counts, of=f"the {total} applications to {name}", whose="program's")
+    chart = funnel_chart(counts, of=f"the {total} applications to {name}", whose="program's")
+    if strength is None:
+        return chart
+    bands = strength_bands(strength)
+    groups = None if bands is None else _strength_groups(strength, bands, lambda fifth: counts_of(applied & fifth))
+    chart |= {
+        "payload": counts | {"bands": groups},
+        "switchable": groups is not None,
+        "switch_note": _strength_note(strength.size, groups is not None),
+        "switch_key": None if groups is None else strength_key(),
+    }
+    if groups is not None:
+        chart["band_ranges"] = STRENGTH_RANGES
+        for row, key in zip(chart["rows"], FUNNEL_ROWS, strict=True):
+            row["bands"] = [group["counts"][key] for group in groups]
+        top = groups[-1]["counts"]
+        held = [
+            f"{_share(top[key], counts[key])} of the {what}"
+            for key, what in (("interviewed", "interviews"), ("matched", "matches"))
+            if counts[key]
+        ]
+        chart["summary"] += (
+            f" The {STRENGTH_BANDS[-1].lower()} of applicants by strength sent "
+            f"{_share(top['applied'], counts['applied'])} of these applications"
+            + (f" and had {' and '.join(held)}." if held else ".")
+        )
+    return chart
 
 
 def strength_bands(strength: NDArray[np.float64]) -> NDArray[np.int64] | None:
@@ -327,25 +360,55 @@ def applicant_flow(data: RunData) -> dict[str, Any] | None:
         },
     }
     if bands is not None:
-        payload["bands"] = [
-            {
-                "label": label,
-                "low": round(float(strength[bands == b].min()), 2),
-                "high": round(float(strength[bands == b].max()), 2),
-                "counts": _flow_counts(interviewed[bands == b], matched[bands == b], invited[bands == b]),
-            }
-            for b, label in enumerate(STRENGTH_BANDS)
-        ]
+        payload["bands"] = _strength_groups(
+            strength, bands, lambda fifth: _flow_counts(interviewed[fifth], matched[fifth], invited[fifth])
+        )
     return payload
+
+
+def _strength_groups(
+    strength: NDArray[np.float64], bands: NDArray[np.int64], counts_of: Callable[[NDArray[np.bool_]], dict[str, int]]
+) -> list[dict[str, Any]]:
+    """Return each strength fifth's label, strength range (over all its applicants) and counts.
+
+    `counts_of` gets the fifth as a mask over all applicants.
+    """
+    return [
+        {
+            "label": label,
+            "low": round(float(strength[bands == b].min()), 2),
+            "high": round(float(strength[bands == b].max()), 2),
+            "counts": counts_of(bands == b),
+        }
+        for b, label in enumerate(STRENGTH_BANDS)
+    ]
+
+
+def strength_key() -> dict[str, Any]:
+    """Return the key of the Colour by strength switch: the scale from the bottom 20% to the top 20%."""
+    return {
+        "caption": "Strength percentile",
+        "low": "weaker",
+        "high": "stronger",
+        "steps": [
+            {"label": label, "range": STRENGTH_RANGES[b], "dot": f"viz-dot-div-{b + 1}"}
+            for b, label in enumerate(STRENGTH_BANDS)
+        ],
+    }
+
+
+def _strength_note(applicants: int, split: bool) -> str:
+    """Say why the applicants cannot be split into strength fifths ("" when they can)."""
+    if split:
+        return ""
+    if applicants < len(STRENGTH_BANDS):
+        return f"fewer than {len(STRENGTH_BANDS)} applicants"
+    return "too many applicants share a strength to split them into fifths"
 
 
 def _bands_note(payload: dict[str, Any]) -> str:
     """Say why the flow cannot be split into strength fifths ("" when it can)."""
-    if payload["bands"]:
-        return ""
-    if payload["counts"]["Applicants"] < len(STRENGTH_BANDS):
-        return f"fewer than {len(STRENGTH_BANDS)} applicants"
-    return "too many applicants share a strength to split them into fifths"
+    return _strength_note(payload["counts"]["Applicants"], bool(payload["bands"]))
 
 
 def _share(part: int, whole: int) -> str:
@@ -391,23 +454,13 @@ def _applicant_flow_chart(data: RunData) -> dict[str, Any] | None:
         }
         for label, low, high, group in groups
     ]
-    # The switch's key: the scale from the bottom 20% to the top 20% (the drop-offs take the same colours).
-    switch_key = {
-        "caption": "Strength percentile",
-        "low": "weaker",
-        "high": "stronger",
-        "steps": [
-            {"label": label, "range": STRENGTH_RANGES[b], "dot": f"viz-dot-div-{b + 1}"}
-            for b, label in enumerate(STRENGTH_BANDS)
-        ],
-    }
     return {
         "payload": payload,
         "summary": summary,
         "rows": rows,
         "switchable": bool(payload["bands"]),
         "switch_note": _bands_note(payload),
-        "switch_key": switch_key if payload["bands"] else None,
+        "switch_key": strength_key() if payload["bands"] else None,
     }
 
 

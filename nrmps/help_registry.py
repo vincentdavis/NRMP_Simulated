@@ -596,12 +596,24 @@ CHARTS: dict[str, ChartHelp] = {
         _(
             "The applications the program received, through the stages: invited to interview or not, interviewed or "
             "not (the applicant declined, or was over their interview cap), on the program's rank order list or not, "
-            "matched or not."
+            "matched or not. With Colour by strength on, each stage splits into five groups by the applicant's "
+            "strength percentile among all applicants, in the colours of the applicants' flow (the bottom 20% in red, "
+            "the middle in grey, the top 20% in blue), so you can see whom the program invites, ranks and matches."
         ),
-        _("Each band's width is a number of applications; hover a band for its count and share. Grey marks drop-offs."),
-        _("Ranked means the program ranked the applicant; an applicant it ranked may have matched elsewhere."),
+        _(
+            "Each band's width is a number of applications; hover a band for its count and share, and to highlight "
+            "its path. Grey marks drop-offs; with the switch on, each drop-off's bar is split into the groups' colours "
+            "in proportion, with the same mix in the small bar beside its label. The table gives every stage by group."
+        ),
+        _(
+            "Ranked means the program ranked the applicant; an applicant it ranked may have matched elsewhere. The "
+            "groups are fifths of all applicants, so a program that attracts strong applicants has more of its "
+            "applications in the top groups."
+        ),
         tab="agent",
         side="program",
+        switch="bands",
+        switch_label=_("Colour by strength"),
     ),
 }
 

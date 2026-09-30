@@ -10,7 +10,9 @@ from django.utils.html import escape
 from nrmps import help_registry
 from nrmps.charts import (
     EGO_MAX_NODES,
+    FUNNEL_ROWS,
     STRENGTH_BANDS,
+    STRENGTH_RANGES,
     _bands_note,
     agent_funnel,
     applicant_flow,
@@ -283,6 +285,66 @@ def test_an_agent_without_applications_has_no_funnel():
     assert agent_funnel(StageRows.empty(5), "Nobody", applicant=True) is None
 
 
+FUNNEL_KEYS = ("applied", "invited", "not_invited", "interviewed", "declined", "ranked", "not_ranked", "matched")
+
+
+def test_a_programs_funnel_splits_by_the_strength_fifth_of_its_applicants(finished_run):
+    """On a program's page each stage of the funnel is also counted per strength fifth of all applicants, the fifths
+    of the applicants' flow (same labels and strength ranges), for the Colour by strength switch and the table."""
+    data = RunData(finished_run)
+    population = data.population
+    strength = np.asarray(population.applicants.strength, dtype=np.float64)
+    fifth = strength_bands(strength)
+    flow_fifths = applicant_flow(data)["bands"]
+    checked = 0
+    for program in range(population.programs.size):
+        stages = data.stage_rows(program, applicant=False)
+        chart = agent_funnel(stages, "Program", applicant=False, strength=strength)
+        if chart is None:
+            continue
+        counts, groups = chart["payload"], chart["payload"]["bands"]
+        assert [(g["label"], g["low"], g["high"]) for g in groups] == [
+            (f["label"], f["low"], f["high"]) for f in flow_fifths
+        ]
+        for key in (*FUNNEL_KEYS, "not_matched"):
+            assert sum(group["counts"][key] for group in groups) == counts[key], key
+        for b, group in enumerate(groups):  # against the stage rows directly
+            mine = stages.applied & (fifth == b)
+            assert group["counts"]["applied"] == int(mine.sum())
+            assert group["counts"]["interviewed"] == int((mine & stages.interviewed).sum())
+            assert group["counts"]["matched"] == int((mine & stages.matched).sum())
+        for row, key in zip(chart["rows"], FUNNEL_ROWS, strict=True):
+            assert row["bands"] == [group["counts"][key] for group in groups]
+        assert chart["band_ranges"] == STRENGTH_RANGES
+        assert chart["switchable"] is True
+        assert chart["switch_note"] == ""
+        assert [step["dot"] for step in chart["switch_key"]["steps"]] == [f"viz-dot-div-{k}" for k in range(1, 6)]
+        top = groups[-1]["counts"]
+        sent = f"{100 * top['applied'] / counts['applied']:.1f}%"
+        assert f" The top 20% of applicants by strength sent {sent} of these applications" in chart["summary"]
+        if counts["matched"]:
+            assert f"{100 * top['matched'] / counts['matched']:.1f}% of the matches." in chart["summary"]
+        checked += 1
+    assert checked >= 2
+    # An applicant's funnel is not split: all its applications come from one applicant.
+    applicant_chart = agent_funnel(data.stage_rows(0, applicant=True), "Applicant", applicant=True)
+    assert "switchable" not in applicant_chart
+    assert "bands" not in applicant_chart["payload"]
+
+
+def test_a_programs_funnel_without_fifths_says_why(finished_run, monkeypatch):
+    monkeypatch.setattr("nrmps.charts.strength_bands", lambda strength: None)
+    data = RunData(finished_run)
+    strength = np.asarray(data.population.applicants.strength, dtype=np.float64)
+    chart = agent_funnel(data.stage_rows(0, applicant=False), "Program", applicant=False, strength=strength)
+    assert chart["payload"]["bands"] is None
+    assert chart["switchable"] is False
+    assert chart["switch_note"] == "too many applicants share a strength to split them into fifths"
+    assert chart["switch_key"] is None
+    assert "band_ranges" not in chart
+    assert "top 20%" not in chart["summary"]
+
+
 def test_the_agent_pages_show_the_funnel_with_its_numbers(auth_client, finished_run):
     kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number, "index": 1}
     for view, key in (("nrmps:run_applicant", "funnel_applicant"), ("nrmps:run_program", "funnel_program")):
@@ -290,6 +352,11 @@ def test_the_agent_pages_show_the_funnel_with_its_numbers(auth_client, finished_
         assert 'data-chart="funnel"' in body
         assert escape(str(help_registry.CHARTS[key].title)) in body
         assert "The numbers" in body
+        # Only a program's funnel has the Colour by strength switch, its key and the table's columns per fifth.
+        program = key == "funnel_program"
+        assert ('data-chart-switch="bands"' in body) is program
+        assert ('aria-label="Key: strength percentile, from weaker to stronger"' in body) is program
+        assert ('<th scope="colgroup" colspan="5" class="text-center">By strength percentile</th>' in body) is program
 
 
 # --- The applicants' flow and its strength fifths ----------------------------------------------------------------

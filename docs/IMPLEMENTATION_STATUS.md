@@ -203,6 +203,16 @@ while testing: `decal: "none"` on a data item throws in ECharts 6.1 when the cha
 (toggling hid it, since a failed redraw keeps the old canvas). The spacer uses a transparent decal instead, and the
 browser test now checks the chart after a reload and with patterns on.
 
+**After 5.1 (owner request): Colour by strength on a program's funnel.** The funnel on a program's page has the same
+switch (the same choice, remembered with the flow's). It splits the program's applications by the applicant's
+strength fifth among all applicants, the fifths and strength ranges of the applicants' flow (`charts.agent_funnel`
+with `strength`), in the same colours and with the same drop-off bars. The table adds a column per fifth, and the
+summary says what share of the applications, interviews and matches came from the top 20%. The splitting is shared:
+`strengthSankey` in `nrmp-charts.js` draws both charts' fifths, horizontal or, for the funnel below 560 px, top to
+bottom, with the stage labels in the left margin and the drop-off labels under their bars. The funnel without the
+switch is unchanged. Its phone layout still lets ECharts place the drop-offs, whose labels overlap; the split one does
+not. An applicant's funnel has no switch, since all its applications come from one applicant.
+
 ## Phases 6–8
 
 Not started.

@@ -161,11 +161,48 @@ def test_an_agents_page_draws_its_applications_as_a_network(logged_in_page, live
     _draw_every_chart(page, 2)
     network = page.locator('[data-chart="ego"]')
     assert network.get_attribute("aria-label", timeout=1000).endswith("?")
-    assert page.get_by_role("list", name="Key").get_by_role("listitem").count() == 6
+    assert page.get_by_role("list", name="Key", exact=True).get_by_role("listitem").count() == 6
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     page.wait_for_timeout(200)
     expect(network.locator("canvas").first).to_be_attached()
     assert page.locator("[data-chart-failed]").count() == 0
+    assert errors == []
+
+
+# A program's funnel: its nodes, which way it runs, and how its drop-offs with applications are filled (a plain colour,
+# or the fifths' colours as a linear gradient).
+FUNNEL = """() => {
+  const series = window.echarts.getInstanceByDom(document.querySelector('[data-chart="funnel"]')).getOption().series[0];
+  const drops = series.data.filter((node) => !node.name.includes("|") && !node.name.startsWith("spacer:"));
+  const fills = drops.filter((node) => node.label.formatter().match(/[1-9]/)).map((node) => (
+    typeof node.itemStyle.color === "string" ? "plain" : node.itemStyle.color.type));
+  return {nodes: series.data.length, orient: series.orient, fills: [...new Set(fills)]};
+}"""
+
+
+def test_colour_by_strength_splits_a_programs_funnel(logged_in_page, live, worked_simulation):
+    """The switch on a program's page splits its funnel by the strength fifth of its applicants, wide and at phone
+    width (where it runs top to bottom), and the choice is shared with the applicants' flow."""
+    page = logged_in_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/programs/1/")
+    funnel = page.locator('[data-chart="funnel"]')
+    funnel.scroll_into_view_if_needed()
+    expect(funnel.locator("canvas").first).to_be_attached()
+    assert page.evaluate(FUNNEL)["nodes"] == 9  # five stages and four drop-offs
+    page.get_by_role("switch", name="Colour by strength").check()
+    expect(page.locator('[data-chart-switch-key="bands"]')).to_be_visible()
+    # Each of the five stages in five fifths, and the four drop-offs, each after a transparent spacer.
+    assert page.evaluate(FUNNEL) == {"nodes": 33, "orient": "horizontal", "fills": ["linear"]}
+    assert funnel.get_attribute("data-chart-failed") is None
+    page.set_viewport_size(PHONE)
+    page.wait_for_timeout(300)
+    assert page.evaluate(FUNNEL) == {"nodes": 33, "orient": "vertical", "fills": ["linear"]}
+    assert funnel.get_attribute("data-chart-failed") is None
+    assert _overflow(page) <= 0
+    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/applications/")  # the same switch, remembered
+    expect(page.get_by_role("switch", name="Colour by strength")).to_be_checked()
     assert errors == []
 
 
