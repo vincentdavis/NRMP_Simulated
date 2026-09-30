@@ -10,9 +10,12 @@ if [ "${MIGRATE_ON_START:-0}" = "1" ]; then
     python manage.py migrate --noinput
 fi
 
-# exec makes gunicorn PID 1 so it receives the platform's stop signal.
+# exec makes gunicorn PID 1 so it receives the platform's stop signal. No control socket: gunicorn 26 creates one in
+# the user's home directory, which the image's unprivileged user does not have (it logged "Control server error:
+# Permission denied: '/home/app'" at every start), and nothing here uses gunicornc.
 echo "Starting gunicorn..."
 exec gunicorn NRMP_Simulated.wsgi:application \
     --bind "0.0.0.0:${PORT:-8000}" \
     --workers "${WEB_CONCURRENCY:-2}" \
-    --timeout "${GUNICORN_TIMEOUT:-30}"
+    --timeout "${GUNICORN_TIMEOUT:-30}" \
+    --no-control-socket

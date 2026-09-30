@@ -14,7 +14,7 @@ the owner has to do. Step numbers refer to that section.
 
 | # | Decision | Needed before | Status |
 |---|---|---|---|
-| D0 | Check the production environment | Deploying step 0.1 | **Owner action.** Set a new `SECRET_KEY`, confirm `DATABASE_URL` points at Postgres, remove `DEBUG`. See [DEPLOY.md](DEPLOY.md). |
+| D0 | Check the production environment | Deploying step 0.1 | **Done (2026-09-30)** with the first deploy of this branch: a new `SECRET_KEY`, `DATABASE_URL` on a new Railway PostgreSQL database, `DEBUG` removed. See [DEPLOY.md](DEPLOY.md). |
 | D1 | Adopt the Appendix A model | Phase 2 | **Adopted (2026-09-25):** model 2.0 as written in [model_spec.md](model_spec.md), with percentile or 0–1 displays. |
 | D2 | Applicant / Program vocabulary | Step 1.6 | **Adopted (2026-09-25):** Applicant / Program in all user-facing text; existing model and table names stay. |
 | D3 | Legacy data | Phase 2 | **Decided (2026-09-25): nothing in production needs keeping.** Phase 2 may replace the legacy tables outright; no read-only legacy view. |
@@ -230,6 +230,15 @@ development's `db.sqlite3`) now use `transaction_mode` IMMEDIATE with a 20 s tim
 lock at BEGIN and waits for it. A reproduction (the real `nrmp_worker` polling every 0.05 s while runs are started as
 the demo view starts them) refused 10 of 40 before, and none of 200 after (40, 40 and 120). PostgreSQL, used in
 production, is unaffected. Tested: the settings for both SQLite configurations, and PostgreSQL's unchanged.
+
+**2026-09-30: first production deploy of this branch.** `main` and `production` were fast-forwarded to it (from
+`64ba63c`). Its first CI run failed only because the migrations check ran before static files were collected, so
+the help checks could not resolve their static links; the steps are now in the right order. Railway deploys the
+`production` branch. The first deploy failed at the pre-deploy migration because `DATABASE_URL` was not set. With
+it on a new PostgreSQL database, the next deploy applied every migration to the fresh database and passed its health
+check, which counts runs and so needs the tables. gunicorn 26 then logged "Control server error: Permission denied:
+'/home/app'" at every start: it creates a control socket in the home directory, which the image's unprivileged user
+does not have. `entrypoint.sh` now starts it with `--no-control-socket`.
 
 ## Phases 6–8
 

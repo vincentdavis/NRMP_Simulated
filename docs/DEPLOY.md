@@ -36,7 +36,8 @@ The multi-stage `Dockerfile`:
    year-long cache headers;
 4. runs as an unprivileged user.
 
-`entrypoint.sh` starts gunicorn. Variables: `WEB_CONCURRENCY` (workers, default 2; each takes roughly 150 MB),
+`entrypoint.sh` starts gunicorn, without gunicorn 26's control socket (it belongs in a home directory, which the
+image's unprivileged user does not have, and nothing uses it). Variables: `WEB_CONCURRENCY` (workers, default 2; each takes roughly 150 MB),
 `GUNICORN_TIMEOUT` (seconds, default 30) and `MIGRATE_ON_START=1` to run migrations at start-up instead of in the
 pre-deploy command (docker-compose does this).
 
