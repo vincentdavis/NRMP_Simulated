@@ -464,6 +464,26 @@
   // The step of a scale for item k of `of` items, spread over the whole scale.
   const scaleStep = (scale, k, of) => scale[Math.round((k * (scale.length - 1)) / Math.max(1, of - 1))];
 
+  // A Sankey node's label under its bar, from the bar's left edge: a drop-off's, when the diagram runs top to bottom
+  // (below it there are no links, which only leave the stages). Moved back inside the chart (insideWidth), it can sit
+  // on links, so it has a halo in the chart's background colour.
+  const labelBelow = (t) => ({
+    position: ["0%", "100%"],
+    align: "left",
+    verticalAlign: "top",
+    padding: [4, 0, 0, 0],
+    textBorderColor: t.surface,
+    textBorderWidth: 3,
+  });
+
+  // ECharts labelLayout that moves a label back inside the chart's width (4 px from each side): a drop-off's label
+  // under a small bar at the end of a full row would otherwise run off the right edge.
+  const insideWidth = (element) => ({ labelRect }) => {
+    const width = element.clientWidth;
+    if (labelRect.x + labelRect.width > width - 4) return { dx: width - 4 - labelRect.x - labelRect.width };
+    return labelRect.x < 4 ? { dx: 4 - labelRect.x } : {};
+  };
+
   // A Sankey diagram split by strength fifth (the "bands" switch), for the applicants' flow and a program's funnel:
   // {main: stage names, drops: drop-off names (drops[k] leaves main[k]), total and each group's counts: {name: count},
   // groups: [{label, low, high, counts}], unit ("applicants" or "applications"), notes: {name: [[label, count]]}}.
@@ -496,10 +516,10 @@
     function dropNode(drop, k) {
       const count = total[drop];
       const words = narrow ? drop.replace(", ", ",\n") : drop;
-      const rich = { t: { color: t.muted, lineHeight: 16 }, n: { color: t.muted, lineHeight: 16 } };
+      const halo = vertical ? { textBorderColor: t.surface, textBorderWidth: 3 } : {};
+      const rich = { t: { color: t.muted, lineHeight: 16, ...halo }, n: { color: t.muted, lineHeight: 16, ...halo } };
       const text = words.split("\n").map((line) => `{t|${line}}`).join("\n");
-      const below = { position: ["0%", "100%"], align: "left", verticalAlign: "top", padding: [4, 0, 0, 0] };
-      const place = vertical ? below : {};
+      const place = vertical ? labelBelow(t) : {};
       const node = { name: drop, depth: k, itemStyle: { color: t.neutral, borderWidth: 0 } };
       if (!count) return { ...node, label: { ...place, rich, formatter: () => `${text}\n{n|${format.count(0)}}` } };
       const colorStops = [];
@@ -616,9 +636,10 @@
   // --- Chart kinds: flows (ECharts Sankey diagrams) -----------------------------------------------------------------
 
   // The funnel from applications to matches {applied, invited, not_invited, ...} as a Sankey diagram: the stages in
-  // the blue ramp, the drop-offs in neutral grey. Below 560 px it runs top to bottom, so the labels fit. A program's
-  // funnel has the applications of each strength fifth too (bands: [{label, low, high, counts}]), drawn with the
-  // "bands" switch on by strengthSankey.
+  // the blue ramp, the drop-offs in neutral grey. Below 560 px it runs top to bottom, each row a stage and the drop-off
+  // beside it, with the stage names in the left margin and each drop-off's label under its bar (ECharts' labels to the
+  // right of each bar would overlap there). A program's funnel has the applications of each strength fifth too (bands:
+  // [{label, low, high, counts}]), drawn with the "bands" switch on by strengthSankey.
   register("funnel", (p, t, element, option) => {
     const vertical = element.clientWidth < 560;
     const main = ["Applied", "Invited", "Interviewed", "Ranked", "Matched"];
@@ -654,6 +675,7 @@
             right: vertical ? 8 : 104,
             top: vertical ? 8 : 28,
             bottom: vertical ? 40 : 16,
+            ...(vertical ? { labelLayout: insideWidth(element) } : {}),
           },
         ],
       };
@@ -664,11 +686,12 @@
       if (counts[main[k + 1]] > 0) links.push({ source: main[k], target: main[k + 1], value: counts[main[k + 1]] });
       if (counts[drops[k]] > 0) links.push({ source: main[k], target: drops[k], value: counts[drops[k]] });
     }
-    const node = (name, color, depth) => ({
+    const place = (drop) => (vertical ? (drop ? labelBelow(t) : { position: "left" }) : {});
+    const node = (name, color, depth, drop = false) => ({
       name,
       depth, // pinned, so a stage or drop-off with no flow keeps its column
       itemStyle: { color, borderColor: color },
-      label: { color: t.ink, formatter: () => `${name}\n${format.count(counts[name])}` },
+      label: { ...place(drop), color: t.ink, formatter: () => `${name}\n${format.count(counts[name])}` },
     });
     return {
       ...option,
@@ -688,18 +711,20 @@
         {
           type: "sankey",
           orient,
-          left: 8,
+          left: vertical ? 84 : 8,
           right: vertical ? 8 : 96,
           top: vertical ? 8 : 16,
-          bottom: vertical ? 48 : 16,
+          bottom: vertical ? 40 : 16,
           nodeGap: 14,
           nodeWidth: 14,
           nodeAlign: "left",
+          // Top to bottom, every row keeps its order (the stage, then its drop-off), which the labels rely on.
+          ...(vertical ? { layoutIterations: 0, labelLayout: insideWidth(element) } : {}),
           draggable: false,
           emphasis: { focus: "adjacency" },
           data: [
             ...main.map((name, k) => node(name, t.stages[k], k)),
-            ...drops.map((name, k) => node(name, t.neutral, k + 1)),
+            ...drops.map((name, k) => node(name, t.neutral, k + 1, true)),
           ],
           links,
           lineStyle: { color: "gradient", opacity: 0.3, curveness: 0.5 },

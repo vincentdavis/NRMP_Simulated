@@ -209,9 +209,18 @@ strength fifth among all applicants, the fifths and strength ranges of the appli
 with `strength`), in the same colours and with the same drop-off bars. The table adds a column per fifth, and the
 summary says what share of the applications, interviews and matches came from the top 20%. The splitting is shared:
 `strengthSankey` in `nrmp-charts.js` draws both charts' fifths, horizontal or, for the funnel below 560 px, top to
-bottom, with the stage labels in the left margin and the drop-off labels under their bars. The funnel without the
-switch is unchanged. Its phone layout still lets ECharts place the drop-offs, whose labels overlap; the split one does
-not. An applicant's funnel has no switch, since all its applications come from one applicant.
+bottom, with the stage labels in the left margin and the drop-off labels under their bars. An applicant's funnel has
+no switch, since all its applications come from one applicant.
+
+**After 5.1 (owner request): the funnels' phone labels.** Below 560 px every funnel (the Applications and interviews
+tab's, and an applicant's or a program's, with the switch off) used to let ECharts place its nodes and put each label
+to the right of its bar, so labels ran off the right edge and printed over each other ("Ranked" on "Not ranked",
+"Matched" on "Not matched"). They now use the switch's layout: each row keeps its order (the stage, then its
+drop-off), the stage names sit in the left margin and each drop-off's label under its bar. An ECharts `labelLayout`
+moves a label back inside the chart when a small drop-off at the end of a full row would push it past the edge (a
+program that invites everyone). Such a label can then sit on the links below it, so drop-off labels there have a halo
+in the background colour. The browser test measures every label as drawn (ECharts' own geometry) at phone width,
+with the switch on and off, and fails on a label outside the chart or overlapping another.
 
 ## Phases 6–8
 

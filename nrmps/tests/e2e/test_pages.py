@@ -180,9 +180,33 @@ FUNNEL = """() => {
 }"""
 
 
+# A chart's node labels as drawn (ECharts' own geometry): how many, which fall outside the chart, which overlap another.
+CHART_LABELS = """(selector) => {
+  const chart = window.echarts.getInstanceByDom(document.querySelector(selector));
+  const data = chart.getModel().getSeriesByIndex(0).getData();
+  const rects = [];
+  for (let i = 0; i < data.count(); i += 1) {
+    const label = data.getItemGraphicEl(i)?.getTextContent();
+    if (!label || label.ignore || label.invisible) continue;
+    const r = label.getBoundingRect().clone();
+    r.applyTransform(label.getComputedTransform());
+    if (r.width >= 1) rects.push({name: data.getName(i), x: r.x, y: r.y, w: r.width, h: r.height});
+  }
+  const [W, H] = [chart.getWidth(), chart.getHeight()];
+  const out = rects.filter((r) => r.x < -0.5 || r.y < -0.5 || r.x + r.w > W + 0.5 || r.y + r.h > H + 0.5);
+  const overlaps = [];
+  rects.forEach((a, i) => rects.slice(i + 1).forEach((b) => {
+    if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) overlaps.push([a.name, b.name]);
+  }));
+  return {labels: rects.length, out: out.map((r) => r.name), overlaps};
+}"""
+CLEAN_FUNNEL_LABELS = {"labels": 9, "out": [], "overlaps": []}  # a label for each stage and each drop-off
+
+
 def test_colour_by_strength_splits_a_programs_funnel(logged_in_page, live, worked_simulation):
     """The switch on a program's page splits its funnel by the strength fifth of its applicants, wide and at phone
-    width (where it runs top to bottom), and the choice is shared with the applicants' flow."""
+    width (where it runs top to bottom), and the choice is shared with the applicants' flow. At phone width the labels,
+    with the switch on or off, stay inside the chart and apart."""
     page = logged_in_page
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -200,9 +224,18 @@ def test_colour_by_strength_splits_a_programs_funnel(logged_in_page, live, worke
     page.wait_for_timeout(300)
     assert page.evaluate(FUNNEL) == {"nodes": 33, "orient": "vertical", "fills": ["linear"]}
     assert funnel.get_attribute("data-chart-failed") is None
+    assert page.evaluate(CHART_LABELS, '[data-chart="funnel"]') == CLEAN_FUNNEL_LABELS
     assert _overflow(page) <= 0
     page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/applications/")  # the same switch, remembered
     expect(page.get_by_role("switch", name="Colour by strength")).to_be_checked()
+    page.go_back()
+    funnel = page.locator('[data-chart="funnel"]')
+    funnel.scroll_into_view_if_needed()
+    expect(funnel.locator("canvas").first).to_be_attached()
+    page.get_by_role("switch", name="Colour by strength").uncheck()  # off, at phone width: the same label layout
+    assert page.evaluate(FUNNEL)["orient"] == "vertical"
+    assert page.evaluate(FUNNEL)["nodes"] == 9
+    assert page.evaluate(CHART_LABELS, '[data-chart="funnel"]') == CLEAN_FUNNEL_LABELS
     assert errors == []
 
 
