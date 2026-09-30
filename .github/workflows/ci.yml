@@ -26,7 +26,7 @@ jobs:
       # reset and confirmation links. Nothing is sent from CI.
       EMAIL_HOST: smtp.invalid
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
       - name: ruff
@@ -65,7 +65,7 @@ jobs:
         options: >-
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --locked
       - name: pytest
@@ -82,7 +82,7 @@ jobs:
     name: Docker image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Build
         run: docker build -t nrmp-simulated:ci .
       - name: The image migrates, starts and passes its health check
@@ -105,7 +105,7 @@ jobs:
     name: Browser tests (Playwright + axe) and CSS classes
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
       - uses: actions/setup-node@v5
         with:
