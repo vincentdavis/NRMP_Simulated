@@ -186,6 +186,23 @@ the phone layout was chosen only when a chart was first drawn (a chart drawn wid
 labels: charts now declare the widths at which their layout changes, `register(kind, build, {widths})`, and are
 redrawn when resized across one), and a drop-off's per-fifth tooltip rows did not name their base.
 
+**After 5.1 (owner request): Colour by strength by percentile, drop-offs included.** The switch now colours the
+fifths with a diverging scale (tokens `--viz-div-1` to `--viz-div-5`: red for the bottom 20%, grey for the middle, blue
+for the top 20%) instead of five shades of the blue ramp, which the flow drew at 35% opacity: neighbouring fifths
+differed by an OKLab delta E of 2 to 4, where about 8 is needed to tell two colours apart. As drawn (70% opacity),
+neighbours now differ by at least 12.6, and by 10.1 under simulated protanopia and deuteranopia, in both themes
+(checked with the dataviz palette validator); the scale's middle steps are lighter than 3:1 by design, and every number
+is in the tooltips and the table. The fifths are named by percentile (Bottom 20%, 20th–40th percentile, ..., Top 20%)
+and the key is a scale from weaker to stronger. Each drop-off is one bar filled with the fifths' colours in proportion,
+in the order ECharts stacks the arriving links, so each fifth's link lands on its own colour. A transparent spacer node
+sets it apart from its stage, and a small bar of the same mix sits beside its label. Its tooltip gives each fifth's
+count, its share of the drop-off and the share of the fifth it holds, and the summary sentence says how many of each
+drop-off the bottom 20% make up. Hovering highlights a band's whole path (`focus: "trajectory"`). A separate piece per
+fifth for the drop-offs was tried first and dropped: at these sizes it drew 1–2 px slivers with wider gaps. Found
+while testing: `decal: "none"` on a data item throws in ECharts 6.1 when the chart is first drawn with the switch on
+(toggling hid it, since a failed redraw keeps the old canvas). The spacer uses a transparent decal instead, and the
+browser test now checks the chart after a reload and with patterns on.
+
 ## Phases 6–8
 
 Not started.

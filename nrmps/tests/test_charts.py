@@ -374,9 +374,21 @@ def test_the_applicants_flow_adds_up_in_total_and_per_fifth(finished_run):
 def test_the_applicants_flow_chart_has_a_summary_table_and_a_switch(finished_run):
     chart = run_charts(RunData(finished_run), ("applicant_flow",))["applicant_flow"]
     assert chart["summary"].startswith("Of 60 applicants,")
-    assert "of the weakest fifth matched, against" in chart["summary"]
+    assert "of the bottom 20% matched, against" in chart["summary"]
     assert [row["label"] for row in chart["rows"]] == [*STRENGTH_BANDS, "All applicants"]
     counts = chart["payload"]["counts"]
+    # Who makes up each (non-empty) drop-off: the bottom fifth's share of it, as the drop-off bars show.
+    weakest = chart["payload"]["bands"][0]["counts"]
+    held = [
+        f"{weakest[drop]:,} of the {counts[drop]:,} {who}"
+        for drop, who in (
+            ("No interview", "with no interview"),
+            ("Interviewed, not matched", "interviewed but not matched"),
+        )
+        if counts[drop]
+    ]
+    assert held
+    assert chart["summary"].endswith(f" The bottom 20% make up {' and '.join(held)}.")
     assert chart["rows"][-1] == {
         "label": "All applicants",
         "low": None,
@@ -394,7 +406,17 @@ def test_the_applicants_flow_chart_has_a_summary_table_and_a_switch(finished_run
         ["Invited, no interview", counts["invited_no_interview"]],
     ]
     assert chart["switchable"] is True
-    assert [item["dot"] for item in chart["switch_key"]][-1] == "viz-dot-neutral"
+    key = chart["switch_key"]  # a scale from the bottom 20% (red) to the top 20% (blue), in the diverging tokens
+    assert [step["label"] for step in key["steps"]] == list(STRENGTH_BANDS)
+    assert [step["range"] for step in key["steps"]] == [
+        "0\u201320",
+        "20\u201340",
+        "40\u201360",
+        "60\u201380",
+        "80\u2013100",
+    ]
+    assert [step["dot"] for step in key["steps"]] == [f"viz-dot-div-{k}" for k in range(1, 6)]
+    assert (key["caption"], key["low"], key["high"]) == ("Strength percentile", "weaker", "stronger")
 
 
 def test_strengths_too_alike_disable_the_switch(finished_run, monkeypatch):
@@ -403,6 +425,7 @@ def test_strengths_too_alike_disable_the_switch(finished_run, monkeypatch):
     assert chart["payload"]["bands"] is None
     assert chart["switchable"] is False
     assert chart["switch_note"] == "too many applicants share a strength to split them into fifths"
+    assert chart["switch_key"] is None
     assert [row["label"] for row in chart["rows"]] == ["All applicants"]
 
 
@@ -414,4 +437,7 @@ def test_the_applications_tab_shows_the_flow_with_its_switch(auth_client, finish
     assert 'data-chart-switch="bands"' in body
     assert 'data-chart-switch-key="bands" hidden' in body
     assert "Colour by strength" in body
+    assert 'aria-label="Key: strength percentile, from weaker to stronger"' in body
+    assert "viz-dot-div-1" in body
+    assert "viz-dot-div-5" in body
     assert escape(str(help_registry.CHARTS["applicant_flow"].title)) in body

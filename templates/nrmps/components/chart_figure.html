@@ -5,7 +5,8 @@
   (help_registry.CHARTS). The summary sentence describes the chart for screen readers and shows below it; a key lists
   a network's colours with their counts, and "The numbers" gives the data as a table, so nothing depends on the
   drawing. A catalog entry with a switch gets a toggle that turns that option of the chart on (nrmp-charts.js), with a
-  key shown while it is on (chart.switch_key); chart.switchable false disables it, with chart.switch_note saying why.
+  key shown while it is on (chart.switch_key: a scale of five steps, each with its colour, label and range, under a
+  caption with its two ends); chart.switchable false disables it, with chart.switch_note saying why.
   Context: chart (payload, summary, rows, digits, legend, switchable, switch_note, switch_key), key, kind, entry,
   element_id, table, height, x_label, y_label, payload.
 {% endcomment %}
@@ -25,11 +26,16 @@
        role="img" aria-label="{{ entry.title }}" aria-describedby="{{ element_id }}-summary"></div>
   <p id="{{ element_id }}-summary" class="text-sm text-base-content/70">{{ chart.summary }}</p>
   {% if entry.switch and chart.switch_key %}
-    <ul class="flex flex-wrap gap-x-4 gap-y-1 text-sm mt-1" aria-label="Key" data-chart-switch-key="{{ entry.switch }}" hidden>
-      {% for item in chart.switch_key %}
-        <li><span class="viz-dot {{ item.dot }}" aria-hidden="true"></span> {{ item.label }}</li>
-      {% endfor %}
-    </ul>
+    {% with scale=chart.switch_key %}
+      <div class="mt-1 w-full max-w-xs text-xs text-base-content/70" data-chart-switch-key="{{ entry.switch }}" hidden>
+        <ul class="grid grid-cols-5 gap-px" aria-label="Key: {{ scale.caption|lower }}, from {{ scale.low }} to {{ scale.high }}">
+          {% for step in scale.steps %}
+            <li class="text-center tabular-nums"><span class="block h-2.5 {{ step.dot }}" aria-hidden="true"></span><span class="sr-only">{{ step.label }}: </span>{{ step.range }}</li>
+          {% endfor %}
+        </ul>
+        <p class="flex justify-between gap-2" aria-hidden="true"><span>{{ scale.low }}</span><span>{{ scale.caption }}</span><span>{{ scale.high }}</span></p>
+      </div>
+    {% endwith %}
   {% endif %}
   {% if chart.legend %}
     <ul class="flex flex-wrap gap-x-4 gap-y-1 text-sm mt-1" aria-label="Key">

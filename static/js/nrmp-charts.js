@@ -55,6 +55,7 @@
       neutral: colour("--viz-neutral", "#8a8880"),
       series: [1, 2, 3].map((k) => colour(`--viz-series-${k}`, "#2a78d6")),
       stages: [1, 2, 3, 4, 5].map((k) => colour(`--viz-seq-${k}`, "#2a78d6")),
+      diverging: [1, 2, 3, 4, 5].map((k) => colour(`--viz-div-${k}`, "#8a8880")),
       font: getComputedStyle(document.body).fontFamily,
       patterns: patterns(),
       alpha: rgba,
@@ -526,24 +527,76 @@
   }, { widths: [560] });
 
   // Every applicant once through the stages {stages, drops, counts, bands, notes}: drops[k] leaves stages[k]. With the
-  // "bands" switch on, each stage splits into strength fifths in the blue ramp (the weakest first in the ramp, drawn
-  // strongest on top) with links coloured by fifth; the drop-offs stay single grey nodes.
+  // "bands" switch on, each stage splits into strength fifths in the diverging scale (red the bottom 20%, grey the
+  // middle, blue the top 20%; drawn strongest on top) with links coloured by fifth, and each drop-off becomes one bar
+  // in the fifths' colours, set apart from its stage by a transparent spacer, with a small bar of the same mix beside
+  // its label. Hovering a stage, a fifth or a drop-off highlights its path through the stages.
   register("flow", (p, t, element, option) => {
     const banded = element.dataset.bands === "on" && Array.isArray(p.bands) && p.bands.length > 1;
     const groups = banded ? p.bands : [{ label: "All applicants", counts: p.counts }];
-    const ramp = (k, of) => t.stages[Math.round((k * (t.stages.length - 1)) / Math.max(1, of - 1))];
+    const pick = (scale, k, of) => scale[Math.round((k * (scale.length - 1)) / Math.max(1, of - 1))];
+    const colourOf = (b) => pick(t.diverging, b, groups.length);
     const name = (stage, b) => (banded ? `${stage}|${b}` : stage);
     const stageOf = (node) => String(node).split("|")[0];
     const bandOf = (node) => (banded && String(node).includes("|") ? Number(String(node).split("|")[1]) : null);
+    const SPACER = "spacer:";
     const narrow = element.clientWidth < 480;
     const everyone = p.counts[p.stages[0]];
+    // The space between a stage and its drop-off, as a node with a value (3% of the applicants) but no links.
+    const spacer = (k) => ({
+      name: `${SPACER}${k}`,
+      depth: k,
+      value: Math.max(1, Math.round(0.03 * everyone)),
+      // A transparent pattern too: with patterns on, ECharts would hatch the gap (decal "none" throws in ECharts 6.1).
+      itemStyle: { color: "transparent", borderWidth: 0, decal: { color: "transparent" } },
+      label: { show: false },
+      tooltip: { show: false },
+      emphasis: { disabled: true },
+    });
+    // A drop-off with the switch on: one bar in the fifths' colours, strongest at the top, which is the order in which
+    // ECharts stacks the links arriving from the stage before (by their source's position), so each fifth's link
+    // lands on its own colour. The label's small bar shows the same mix, weakest on the left like the key.
+    function dropNode(drop, k, words) {
+      const total = p.counts[drop];
+      const rich = { t: { color: t.muted, lineHeight: 16 }, n: { color: t.muted, lineHeight: 16 } };
+      const text = words.split("\n").map((line) => `{t|${line}}`).join("\n");
+      const node = { name: drop, depth: k, itemStyle: { color: t.neutral, borderWidth: 0 } };
+      if (!total) return { ...node, label: { rich, formatter: () => `${text}\n{n|${format.count(0)}}` } };
+      const stops = [];
+      let done = 0;
+      for (let b = groups.length - 1; b >= 0; b -= 1) {
+        const count = groups[b].counts[drop];
+        if (!count) continue;
+        stops.push({ offset: done / total, color: colourOf(b) });
+        done += count;
+        stops.push({ offset: done / total, color: colourOf(b) });
+      }
+      const width = narrow ? 48 : 80;
+      let bar = "";
+      let edge = 0;
+      let sum = 0;
+      groups.forEach((group, b) => {
+        sum += group.counts[drop];
+        const right = Math.round((width * sum) / total);
+        if (right > edge) {
+          rich[`s${b}`] = { backgroundColor: colourOf(b), width: right - edge, height: 8 };
+          bar += `{s${b}|}`;
+        }
+        edge = right;
+      });
+      return {
+        ...node,
+        itemStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: stops }, borderWidth: 0 },
+        label: { rich, formatter: () => `${text}\n${bar}{n|  ${format.count(total)}}` },
+      };
+    }
     const nodes = [];
     p.stages.forEach((stage, k) => {
       for (let b = groups.length - 1; b >= 0; b -= 1) {
         nodes.push({
           name: name(stage, b),
           depth: k,
-          itemStyle: { color: banded ? ramp(b, groups.length) : ramp(k, p.stages.length), borderWidth: 0 },
+          itemStyle: { color: banded ? colourOf(b) : pick(t.stages, k, p.stages.length), borderWidth: 0 },
           label: banded
             ? {
                 show: b === groups.length - 1,
@@ -559,12 +612,16 @@
       if (k >= 1) {
         const drop = p.drops[k - 1];
         const words = narrow ? drop.replace(", ", ",\n") : drop;
-        nodes.push({
-          name: drop,
-          depth: k,
-          itemStyle: { color: t.neutral, borderWidth: 0 },
-          label: { color: t.muted, formatter: () => `${words}\n${format.count(p.counts[drop])}` },
-        });
+        if (banded) {
+          nodes.push(spacer(k), dropNode(drop, k, words));
+        } else {
+          nodes.push({
+            name: drop,
+            depth: k,
+            itemStyle: { color: t.neutral, borderWidth: 0 },
+            label: { color: t.muted, formatter: () => `${words}\n${format.count(p.counts[drop])}` },
+          });
+        }
       }
     });
     const links = [];
@@ -578,16 +635,17 @@
       });
     });
     const share = (part, whole) => format.share(part / Math.max(1, whole));
+    const ofGroup = (count, group) => `${share(count, group.counts[p.stages[0]])} of the group`;
     const bandTitle = (group) => `${group.label} (strength ${format.fixed(group.low, 2)} to ${format.fixed(group.high, 2)})`;
     function describe(item) {
+      if (String(item.name).startsWith(SPACER)) return "";
       if (item.dataType === "edge") {
         const b = bandOf(item.data.source);
         const counts = b === null ? p.counts : groups[b].counts;
         const from = stageOf(item.data.source);
-        const base = b === null ? "of all applicants" : "of the fifth";
-        const rows = [
-          [`${from} → ${stageOf(item.data.target)}`, `${format.count(item.value)} (${share(item.value, counts[p.stages[0]])} ${base})`],
-        ];
+        const base = b === null ? "of all applicants" : "of the group";
+        const count = `${format.count(item.value)} (${share(item.value, counts[p.stages[0]])} ${base})`;
+        const rows = [[`${from} → ${stageOf(item.data.target)}`, count]];
         if (from !== p.stages[0]) rows.push([`Share of ${from.toLowerCase()}`, share(item.value, counts[from])]);
         return tip(b === null ? "All applicants" : bandTitle(groups[b]), rows);
       }
@@ -596,15 +654,19 @@
       if (b !== null) {
         const group = groups[b];
         const count = group.counts[stage];
-        return tip(bandTitle(group), [[stage, `${format.count(count)} (${share(count, group.counts[p.stages[0]])} of the fifth)`]]);
+        return tip(bandTitle(group), [[stage, `${format.count(count)} (${ofGroup(count, group)})`]]);
       }
-      const rows = [[stage, `${format.count(p.counts[stage])} (${share(p.counts[stage], everyone)} of all applicants)`]];
-      // The total's own breakdown first (No interview: never invited, invited without one), then each fifth.
+      const total = p.counts[stage];
+      const rows = [[stage, `${format.count(total)} (${share(total, everyone)} of all applicants)`]];
+      // The total's own breakdown first (No interview: never invited, invited without one), then each fifth: how many
+      // of the drop-off it makes up, and how much of the fifth that is.
       ((p.notes || {})[stage] || []).forEach(([label, count]) => rows.push([label, format.count(count)]));
       if (banded && p.drops.includes(stage)) {
-        groups.forEach((group) =>
-          rows.push([group.label, `${format.count(group.counts[stage])} (${share(group.counts[stage], group.counts[p.stages[0]])} of the fifth)`]),
-        );
+        groups.forEach((group) => {
+          const count = group.counts[stage];
+          const of = `${share(count, total)} of the ${format.count(total)}; ${ofGroup(count, group)}`;
+          rows.push([group.label, `${format.count(count)} (${of})`]);
+        });
       }
       return tip(stage, rows);
     }
@@ -624,10 +686,10 @@
           nodeAlign: "left", // a drop-off stays in the column after its stage ("justify" pushes it to the end)
           layoutIterations: 0,
           draggable: false,
-          emphasis: { focus: "adjacency" },
+          emphasis: { focus: "trajectory" },
           data: nodes,
           links,
-          lineStyle: { color: banded ? "source" : "gradient", opacity: banded ? 0.35 : 0.3, curveness: 0.5 },
+          lineStyle: { color: banded ? "source" : "gradient", opacity: banded ? 0.7 : 0.3, curveness: 0.5 },
         },
       ],
     };

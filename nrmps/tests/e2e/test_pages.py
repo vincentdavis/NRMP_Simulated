@@ -174,9 +174,19 @@ FLOW_NODES = """() => {
   return chart.getOption().series[0].data.length;
 }"""
 
+# How the "No interview" drop-off is filled (a plain colour, or the fifths' colours as a linear gradient whose stops
+# end at 1), and what hovering highlights.
+FLOW_DROP = """() => {
+  const series = window.echarts.getInstanceByDom(document.querySelector('[data-chart="flow"]')).getOption().series[0];
+  const color = series.data.find((node) => node.name === "No interview").itemStyle.color;
+  const stops = typeof color === "string" ? [] : color.colorStops;
+  return {fill: typeof color === "string" ? "plain" : color.type, end: stops.length ? stops.at(-1).offset : null,
+          focus: series.emphasis.focus};
+}"""
+
 
 def test_colour_by_strength_splits_the_applicants_flow_and_is_remembered(logged_in_page, live, worked_simulation):
-    """The switch splits each stage of the applicants' flow into strength fifths, shows their key, and stays on."""
+    """The switch splits the applicants' flow into strength fifths, drop-offs included, shows its key and stays on."""
     page = logged_in_page
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
@@ -186,20 +196,30 @@ def test_colour_by_strength_splits_the_applicants_flow_and_is_remembered(logged_
     flow.scroll_into_view_if_needed()
     expect(flow.locator("canvas").first).to_be_attached()
     assert page.evaluate(FLOW_NODES) == 5  # three stages and two drop-offs
+    assert page.evaluate(FLOW_DROP) == {"fill": "plain", "end": None, "focus": "trajectory"}
     switch = page.get_by_role("switch", name="Colour by strength")
     key = page.locator('[data-chart-switch-key="bands"]')
     expect(key).to_be_hidden()
     switch.check()
     expect(key).to_be_visible()
-    assert page.evaluate(FLOW_NODES) == 17  # each of the three stages in five fifths, and the two drop-offs
-    page.reload()
-    page.locator('[data-chart="flow"]').scroll_into_view_if_needed()
-    expect(page.locator('[data-chart="flow"] canvas').first).to_be_attached()
+    # Each of the three stages in five fifths, and the two drop-offs, each after a transparent spacer.
+    assert page.evaluate(FLOW_NODES) == 19
+    assert page.evaluate(FLOW_DROP) == {"fill": "linear", "end": 1, "focus": "trajectory"}
+    assert flow.get_attribute("data-chart-failed") is None
+    page.reload()  # drawn with the switch already on (a redraw keeps the old canvas even when the new option fails)
+    flow = page.locator('[data-chart="flow"]')
+    flow.scroll_into_view_if_needed()
+    expect(flow.locator("canvas").first).to_be_attached()
     expect(page.get_by_role("switch", name="Colour by strength")).to_be_checked()
-    assert page.evaluate(FLOW_NODES) == 17
+    assert page.evaluate(FLOW_NODES) == 19
+    assert flow.get_attribute("data-chart-failed") is None
+    page.evaluate("document.documentElement.dataset.chartPatterns = 'on'")  # patterns: the spacers get none
+    page.wait_for_timeout(200)
+    assert flow.get_attribute("data-chart-failed") is None
+    page.evaluate("document.documentElement.dataset.chartPatterns = 'off'")
     page.set_viewport_size(PHONE)  # narrowing redraws it in its phone layout: labels on two lines, more room on top
     page.wait_for_timeout(300)
-    assert page.evaluate(FLOW_NODES) == 17
+    assert page.evaluate(FLOW_NODES) == 19
     assert page.evaluate(FLOW_NODES.replace("data.length", "top")) == 44
     assert _overflow(page) <= 0
     page.get_by_role("switch", name="Colour by strength").uncheck()

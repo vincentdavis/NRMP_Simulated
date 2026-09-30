@@ -17,9 +17,15 @@
 
 /* Chart tokens (plan step 5.1, VIZ-16): every chart takes its colours from here (static/js/nrmp-charts.js), so charts
    agree with each other and follow the theme. Each colour has at least 3:1 contrast against the card background in
-   its theme; dark values are chosen separately rather than inverted. Fixed roles: series 1 is applicants (and the
-   first of two series), series 2 is programs (and the second), series 3 is a match; neutral is everything else
-   (drop-offs, reference lines); the blue ramp orders stages, from the first (seq-1) to the furthest (seq-5). */
+   its theme, except the middle of the diverging scale; dark values are chosen separately rather than inverted. Fixed
+   roles: series 1 is applicants (and the first of two series), series 2 is programs (and the second), series 3 is a
+   match; neutral is everything else (drop-offs, reference lines); the blue ramp orders stages, from the first (seq-1)
+   to the furthest (seq-5). The diverging scale orders applicants by strength percentile around the middle: red below
+   it (div-1 is the bottom 20%), grey in the middle (div-3), blue above it (div-5 is the top 20%). Its ends have 3:1;
+   its middle steps are lighter by design, so the middle recedes (2.6:1 to 3.8:1, and the grey 1.5:1 light and 1.7:1
+   dark), and the chart gives every number in its tooltips and table. Checked with the dataviz palette validator:
+   neighbouring steps differ by an OKLab delta E of at least 10 as drawn, also under simulated protanopia and
+   deuteranopia. */
 :root {
   --viz-ink: var(--color-base-content);
   --viz-surface: var(--color-base-100);
@@ -32,6 +38,11 @@
   --viz-seq-3: #1f63b8;
   --viz-seq-4: #174d8f;
   --viz-seq-5: #0d366b;
+  --viz-div-1: #b6322d;
+  --viz-div-2: #de867c;
+  --viz-div-3: #d1d1d1;
+  --viz-div-4: #76a4df;
+  --viz-div-5: #1762b6;
 }
 :root[data-theme="dark"] {
   --viz-series-1: #3f8fe8;
@@ -43,6 +54,11 @@
   --viz-seq-3: #69a9ee;
   --viz-seq-4: #97c3f3;
   --viz-seq-5: #c6def9;
+  --viz-div-1: #fc9287;
+  --viz-div-2: #c25e55;
+  --viz-div-3: #484848;
+  --viz-div-4: #467cc0;
+  --viz-div-5: #87bafd;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
@@ -55,6 +71,11 @@
     --viz-seq-3: #69a9ee;
     --viz-seq-4: #97c3f3;
     --viz-seq-5: #c6def9;
+    --viz-div-1: #fc9287;
+    --viz-div-2: #c25e55;
+    --viz-div-3: #484848;
+    --viz-div-4: #467cc0;
+    --viz-div-5: #87bafd;
   }
 }
 
@@ -75,6 +96,11 @@
 .viz-dot-seq-3 { background: var(--viz-seq-3); }
 .viz-dot-seq-4 { background: var(--viz-seq-4); }
 .viz-dot-seq-5 { background: var(--viz-seq-5); }
+.viz-dot-div-1 { background: var(--viz-div-1); }
+.viz-dot-div-2 { background: var(--viz-div-2); }
+.viz-dot-div-3 { background: var(--viz-div-3); }
+.viz-dot-div-4 { background: var(--viz-div-4); }
+.viz-dot-div-5 { background: var(--viz-div-5); }
 
 /* Help popovers (plan step 4.3) and the display settings open below their button where the browser supports anchor
    positioning, and flip when there is no room; elsewhere they keep the browser's default place, the middle of the

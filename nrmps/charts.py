@@ -35,10 +35,19 @@ from .runs import RunData, StageRows
 SAMPLE = 1500  # points per series in the true-against-observed scatter plots
 DEMAND_TABLE_ROWS = 10
 EGO_MAX_NODES = 2000  # an agent's network draws at most this many applications, those that got furthest first
-# The applicants' flow: its stages, the drop-off after each, and the names of the strength fifths.
+# The applicants' flow: its stages, the drop-off after each (and who it holds), and the strength fifths, named by
+# percentile and coloured by the diverging scale (--viz-div-1 to 5: red below the middle, grey, blue above it).
 FLOW_STAGES = ("Applicants", "Interviewed", "Matched")
 FLOW_DROPS = ("No interview", "Interviewed, not matched")
-STRENGTH_BANDS = ("Weakest fifth", "Second fifth", "Middle fifth", "Fourth fifth", "Strongest fifth")
+FLOW_DROP_WHO = {"No interview": "with no interview", "Interviewed, not matched": "interviewed but not matched"}
+STRENGTH_BANDS = (
+    "Bottom 20%",
+    "20th\u201340th percentile",
+    "40th\u201360th percentile",
+    "60th\u201380th percentile",
+    "Top 20%",
+)
+STRENGTH_RANGES = ("0\u201320", "20\u201340", "40\u201360", "60\u201380", "80\u2013100")
 # How far an application got, in order; each is exclusive (an interview that led nowhere is "Interviewed").
 EGO_STAGES = ("Applied", "Invited", "Interviewed", "Ranked", "Matched")
 EGO_KEY = (
@@ -356,10 +365,16 @@ def _applicant_flow_chart(data: RunData) -> dict[str, Any] | None:
     groups = [("All applicants", None, None, counts)]
     if payload["bands"]:
         weakest, strongest = payload["bands"][0]["counts"], payload["bands"][-1]["counts"]
+        bottom, top = STRENGTH_BANDS[0].lower(), STRENGTH_BANDS[-1].lower()
         summary += (
-            f" By strength, {_share(weakest['Matched'], weakest['Applicants'])} of the weakest fifth matched, "
-            f"against {_share(strongest['Matched'], strongest['Applicants'])} of the strongest."
+            f" By strength, {_share(weakest['Matched'], weakest['Applicants'])} of the {bottom} matched, "
+            f"against {_share(strongest['Matched'], strongest['Applicants'])} of the {top}."
         )
+        held = [
+            f"{weakest[drop]:,} of the {counts[drop]:,} {FLOW_DROP_WHO[drop]}" for drop in FLOW_DROPS if counts[drop]
+        ]
+        if held:
+            summary += f" The {bottom} make up {' and '.join(held)}."
         groups = [(band["label"], band["low"], band["high"], band["counts"]) for band in payload["bands"]] + groups
     rows = [
         {
@@ -376,17 +391,23 @@ def _applicant_flow_chart(data: RunData) -> dict[str, Any] | None:
         }
         for label, low, high, group in groups
     ]
-    switch_key = [
-        *({"label": label, "dot": f"viz-dot-seq-{b + 1}"} for b, label in enumerate(STRENGTH_BANDS)),
-        {"label": "Left out", "dot": "viz-dot-neutral"},
-    ]
+    # The switch's key: the scale from the bottom 20% to the top 20% (the drop-offs take the same colours).
+    switch_key = {
+        "caption": "Strength percentile",
+        "low": "weaker",
+        "high": "stronger",
+        "steps": [
+            {"label": label, "range": STRENGTH_RANGES[b], "dot": f"viz-dot-div-{b + 1}"}
+            for b, label in enumerate(STRENGTH_BANDS)
+        ],
+    }
     return {
         "payload": payload,
         "summary": summary,
         "rows": rows,
         "switchable": bool(payload["bands"]),
         "switch_note": _bands_note(payload),
-        "switch_key": switch_key if payload["bands"] else [],
+        "switch_key": switch_key if payload["bands"] else None,
     }
 
 

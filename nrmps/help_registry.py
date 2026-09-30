@@ -536,16 +536,19 @@ CHARTS: dict[str, ChartHelp] = {
         _("Which applicants get an interview and a match?"),
         _(
             "Every applicant counted once: whether they had at least one interview, and whether they matched. With "
-            "Colour by strength on, each stage splits into fifths of applicant strength (applicants of equal strength "
-            "stay in the same fifth), in shades of blue from the weakest fifth to the strongest, so the quality of the "
-            "applicants can be followed through the stages."
+            "Colour by strength on, each stage splits into five groups by strength percentile (fifths; applicants of "
+            "equal strength stay in the same group), from the bottom 20% in red through the middle in grey to the top "
+            "20% in blue, and each drop-off shows which groups it holds, so the quality of the applicants can be "
+            "followed through the stages."
         ),
         _(
             "Each band's width is a number of applicants. Hover a stage or a band for its count and its share of all "
-            "applicants (with the switch on, of its fifth); a band after the first stage also gives its share of the "
-            "stage it leaves. No interview splits into never invited and invited without an interview. With the "
-            "switch on, a grey drop-off lists each fifth's count and the share of that fifth it holds: a fifth that "
-            "loses a larger share of its applicants to the drop-offs does worse."
+            "applicants (with the switch on, of its group) and to highlight its path; a band after the first stage "
+            "also gives its share of the stage it leaves. No interview splits into never invited and invited without "
+            "an interview. With the switch on, each drop-off's bar is split into the groups' colours in proportion, "
+            "and the small bar beside its label shows the same mix from weaker to stronger; hover the drop-off for "
+            "each group's count, its share of the drop-off and the share of the group it holds: a group that loses a "
+            "larger share of its applicants does worse."
         ),
         _(
             "Strength is the applicant's latent strength. The view all programs share is mostly strength, mixed with "
