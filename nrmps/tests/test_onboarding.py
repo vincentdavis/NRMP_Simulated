@@ -1,5 +1,7 @@
 """Onboarding (plan step 4.5): the landing page, Try a demo, the getting-started checklist and the empty list."""
 
+import re
+
 import pytest
 from django.urls import reverse
 
@@ -15,9 +17,9 @@ def _signup_data(name: str, **extra) -> dict:
     return {"username": name, "email": f"{name}@example.com", "password1": PASSWORD, "password2": PASSWORD} | extra
 
 
-def test_visitors_are_invited_to_sign_up_and_try_the_demo(client):
+def test_visitors_are_invited_to_try_the_demo(client):
     body = client.get(reverse("nrmps:index")).content.decode()
-    assert f'href="{reverse("nrmps:signup")}?next={reverse("nrmps:demo")}"' in body
+    assert f'href="{reverse("nrmps:demo")}">Try a demo</a>' in body
     for text in ("What a run does", "Deferred acceptance", "Questions you can explore", "Read the guide"):
         assert text.lower() in body.lower(), text
 
@@ -55,6 +57,10 @@ def test_the_demo_page_offers_markets(auth_client):
         "Preference signals",
     ):
         assert title in body
+    assert "Run the demo" in body
+    assert "Log in to run the demo" not in body
+    assert _checked(body) == ["nrmp_like"]
+    assert _checked(auth_client.get(reverse("nrmps:demo"), {"preset": "signals"}).content.decode()) == ["signals"]
 
 
 def test_the_demo_creates_runs_and_opens_a_simulation(auth_client, user):
@@ -87,10 +93,52 @@ def test_the_demo_respects_quotas(auth_client, user, settings):
     assert "simulations" in response.content.decode().lower()
 
 
-def test_visitors_must_log_in_for_the_demo(client):
-    response = client.get(reverse("nrmps:demo"))
-    assert response.status_code == 302
-    assert reverse("nrmps:login") in response["Location"]
+def _checked(body: str) -> list[str]:
+    """Return the demo markets checked on the demo page."""
+    return re.findall(r'name="preset" value="(\w+)"[^>]* checked', body)
+
+
+def test_visitors_see_the_demo_markets_and_log_in_to_run_one(client):
+    body = client.get(reverse("nrmps:demo")).content.decode()
+    assert "Noisy market" in body
+    assert "Log in to run the demo" in body
+    assert "Run the demo" not in body
+    assert _checked(body) == ["nrmp_like"]
+    response = client.post(reverse("nrmps:demo"), {"preset": "noisy"})
+    assert response["Location"] == "/login/?next=%2Fdemo%2F%3Fpreset%3Dnoisy"
+    assert not Simulation.objects.exists()
+
+
+def test_a_visitor_comes_back_from_logging_in_to_the_market_they_picked(client, user):
+    login = client.post(reverse("nrmps:demo"), {"preset": "noisy"})["Location"]
+    response = client.post(login, {"username": user.username, "password": PASSWORD})
+    assert response["Location"] == "/demo/?preset=noisy"
+    body = client.get(response["Location"]).content.decode()
+    assert _checked(body) == ["noisy"]
+    assert "Run the demo" in body
+    assert not Simulation.objects.exists()
+
+
+def test_a_visitor_can_sign_up_instead_and_come_back_to_their_market(client):
+    response = client.post(reverse("nrmps:demo"), {"preset": "idealized", "account": "new"})
+    assert response["Location"] == "/signup/?next=%2Fdemo%2F%3Fpreset%3Didealized"
+    assert 'name="next" value="/demo/?preset=idealized"' in client.get(response["Location"]).content.decode()
+    response = client.post(reverse("nrmps:signup"), _signup_data("fay", next="/demo/?preset=idealized"))
+    assert response["Location"] == "/demo/?preset=idealized"
+
+
+def test_an_unknown_market_from_a_visitor_falls_back_to_the_default(client):
+    response = client.post(reverse("nrmps:demo"), {"preset": "nonsense"})
+    assert response["Location"] == "/login/?next=%2Fdemo%2F%3Fpreset%3Dnrmp_like"
+    assert _checked(client.get(reverse("nrmps:demo"), {"preset": "nonsense"}).content.decode()) == ["nrmp_like"]
+
+
+def test_the_login_page_passes_where_to_go_next_on_to_sign_up(client):
+    body = client.get(reverse("nrmps:login"), {"next": "/demo/?preset=noisy"}).content.decode()
+    assert f'href="{reverse("nrmps:signup")}?next=/demo/%3Fpreset%3Dnoisy"' in body
+    body = client.get(reverse("nrmps:login"), {"next": "https://evil.example/"}).content.decode()
+    assert f'href="{reverse("nrmps:signup")}"' in body
+    assert "evil.example" not in body
 
 
 def test_the_checklist_guides_a_new_simulation_until_two_runs(auth_client, simulation, user):

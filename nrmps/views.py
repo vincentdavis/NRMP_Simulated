@@ -3,6 +3,7 @@
 import json
 import logging
 from typing import Any, cast
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -348,13 +349,22 @@ DEMO_PRESETS = (
 )
 
 
+@login_not_required
 @require_http_methods(["GET", "POST"])
 def demo(request):
-    """Try a demo: create a simulation from a preset, run it, and open its results (GET explains and asks)."""
+    """Try a demo: create a simulation from a preset, run it, and open its results (GET explains and asks).
+
+    Anyone can see the markets (`?preset=` picks one); running one needs an account. A visitor who asks to run one is
+    sent to log in, or with `account=new` to sign up, and then back to this page with the same market picked.
+    """
     if request.method == "GET":
-        return render(request, "nrmps/demo.html", {"presets": [(key, PRESETS[key]) for key in DEMO_PRESETS]})
-    key = request.POST.get("preset", DEMO_PRESETS[0])
-    key = key if key in DEMO_PRESETS else DEMO_PRESETS[0]
+        presets = [(key, PRESETS[key]) for key in DEMO_PRESETS]
+        return render(request, "nrmps/demo.html", {"presets": presets, "chosen": _demo_preset(request.GET)})
+    key = _demo_preset(request.POST)
+    if not request.user.is_authenticated:
+        back = f"{reverse('nrmps:demo')}?{urlencode({'preset': key})}"
+        account = "nrmps:signup" if request.POST.get("account") == "new" else "nrmps:login"
+        return redirect(f"{reverse(account)}?{urlencode({'next': back})}")
     try:
         check_simulation_quota(request.user)
     except QuotaError as exc:
@@ -368,6 +378,12 @@ def demo(request):
     sim.set_params(preset_params(key, seed=new_seed()))
     sim.save()
     return _run_and_redirect(request, sim)
+
+
+def _demo_preset(data: Any) -> str:
+    """Return the demo market that `data` (the request's GET or POST) names, or the default one."""
+    key = data.get("preset")
+    return key if key in DEMO_PRESETS else DEMO_PRESETS[0]
 
 
 def getting_started(sim: Simulation, results_run: Any) -> list[dict[str, Any]] | None:

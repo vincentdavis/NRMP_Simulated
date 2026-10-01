@@ -8,6 +8,7 @@ from django.conf import settings
 from playwright.sync_api import expect
 
 from nrmps.models import PopulationUpload, Simulation
+from nrmps.tests.conftest import PASSWORD
 
 pytestmark = [pytest.mark.e2e, pytest.mark.django_db(transaction=True)]
 
@@ -196,6 +197,23 @@ def test_the_demo_runs_and_opens_its_results(logged_in_page, live):
     page.wait_for_url(re.compile(r"/simulations/\d+/runs/1/$"))
     expect(page.get_by_role("heading", level=1)).to_contain_text("Run 1")
     expect(page.locator("main")).to_contain_text("Checks passed")
+    assert Simulation.objects.get(name="Demo: Small classroom market").runs.get().status == "succeeded"
+
+
+def test_a_visitor_picks_a_demo_logs_in_and_runs_it(page, live, user):
+    """Visitors see the demo markets; "Log in to run the demo" keeps the market they picked through logging in."""
+    page.goto(f"{live}/")
+    page.get_by_role("link", name="Try a demo").click()
+    page.get_by_label("Small classroom market").check()
+    expect(page.get_by_role("button", name="Run the demo", exact=True)).to_have_count(0)
+    page.get_by_role("button", name="Log in to run the demo").click()
+    page.fill("#id_username", user.username)
+    page.fill("#id_password", PASSWORD)
+    page.get_by_role("button", name="Log in", exact=True).click()
+    page.wait_for_url(f"{live}/demo/?preset=classroom")
+    expect(page.get_by_label("Small classroom market")).to_be_checked()
+    page.get_by_role("button", name="Run the demo", exact=True).click()
+    page.wait_for_url(re.compile(r"/simulations/\d+/runs/1/$"))
     assert Simulation.objects.get(name="Demo: Small classroom market").runs.get().status == "succeeded"
 
 

@@ -7,7 +7,8 @@
     Pick a market. The demo creates a simulation from it, runs every stage from the population to the match, and opens
     the results. You can then change its parameters and run it again.
   </p>
-  <form method="post" class="card bg-base-100 shadow-xl" data-busy>
+  {# Visitors can look at the markets; their buttons go to log in or sign up and back here with the market kept. #}
+  <form method="post" class="card bg-base-100 shadow-xl"{% if request.user.is_authenticated %} data-busy{% endif %}>
     {% csrf_token %}
     <div class="card-body">
       <fieldset class="fieldset">
@@ -17,7 +18,7 @@
             <label class="card card-border bg-base-100 cursor-pointer has-checked:border-primary has-checked:bg-base-200">
               <span class="card-body p-4 gap-1">
                 <span class="flex items-center gap-2">
-                  <input type="radio" name="preset" value="{{ key }}" class="radio radio-sm radio-primary"{% if forloop.first %} checked{% endif %}>
+                  <input type="radio" name="preset" value="{{ key }}" class="radio radio-sm radio-primary"{% if key == chosen %} checked{% endif %}>
                   <span class="font-medium">{{ preset.title }}</span>
                 </span>
                 <span class="text-sm text-base-content/70">{{ preset.description }}</span>
@@ -26,12 +27,20 @@
           {% endfor %}
         </div>
       </fieldset>
-      <div class="card-actions justify-end mt-2">
-        <button type="submit" class="btn btn-primary">
-          <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
-          Run the demo
-        </button>
-      </div>
+      {% if request.user.is_authenticated %}
+        <div class="card-actions justify-end mt-2">
+          <button type="submit" class="btn btn-primary">
+            <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
+            Run the demo
+          </button>
+        </div>
+      {% else %}
+        <div class="card-actions items-center justify-end mt-2">
+          <p class="text-sm text-base-content/70 basis-full sm:basis-0 sm:grow">Running a demo needs a free account, which keeps the simulation it creates.</p>
+          <button type="submit" class="btn btn-primary">Log in to run the demo</button>
+          <button type="submit" name="account" value="new" class="btn btn-outline">Sign up</button>
+        </div>
+      {% endif %}
     </div>
   </form>
 </div>

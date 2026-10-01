@@ -15,6 +15,7 @@ PUBLIC = [
     "/terms/",
     "/login/",
     "/signup/",
+    "/demo/",
     # Every page of the guide (plan step 4.7: a new page is checked without editing this list).
     *(f"/help/{page.slug}/" if page.slug != "index" else "/help/" for page in guide_pages()),
     "/help/search/?q=interview",

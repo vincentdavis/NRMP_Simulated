@@ -21,7 +21,7 @@
         <p class="text-center text-sm mt-2"><a href="{% url 'nrmps:password_reset' %}" class="link">Forgot your password?</a></p>
         <div class="divider"></div>
         <p class="text-center text-sm">
-          New to NRMP Simulations? <a href="{% url 'nrmps:signup' %}" class="link">Create an account</a>.
+          New to NRMP Simulations? <a href="{% url 'nrmps:signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="link">Create an account</a>.
         </p>
       </div>
     </div>
