@@ -301,6 +301,21 @@ The same 8,000 signals sent at the applicant's level change 3,074 invitations.
 now take no room until their request runs (`styles.css`), which also closes the same gap on the run panel's Run button.
 Plain forms opt in with `data-busy` to show theirs while they submit and to ignore a second submission (`site.js`).
 
+**After 5.1 (owner request): noise on one side only, two demos.** Both are the idealized market with the noisy
+market's noise (3, kept through interviews) on one side, and applicants knowing where they stand. A test checks that
+nothing else changes, and that the blind side's rankings agree with the truth as theory predicts (0.30) while the other
+side's are exact:
+- **Noisy applicants, perfect programs** (`noisy_applicants`): programs cannot judge applicants. Strength stops paying
+  off. Over seeds 2026, 7 and 11 the top fifth matches 75% and the bottom fifth 96% (idealized: 96% and 32%). Applicants
+  still apply where they belong, and the most sought-after programs draw 70.6 applications per position against 22–25
+  for the others. Picking almost at random there, those programs leave the strongest applicants unmatched most often.
+  Interviews even out: 7.6 per applicant in the bottom fifth instead of 3.8, 7.9 in the top fifth instead of 9.6.
+  Over seeds 100–119 the top fifth matches less often than the bottom fifth on 19 of 20 seeds, and least of all five on
+  14, so the demo's description says "usually".
+- **Noisy programs, perfect applicants** (`noisy_programs`): applicants cannot judge programs. Programs still take the
+  strongest (the top fifth all match, the bottom fifth 5%), but where applicants match follows strength much less
+  (sorting 0.61 against 0.94), and 78% match against 82%.
+
 ## Phases 6–8
 
 Not started.

@@ -335,7 +335,17 @@ def simulation_manage(request, pk: int):
 
 
 # The presets offered by "Try a demo", first the default.
-DEMO_PRESETS = ("nrmp_like", "idealized", "idealized_signals", "signals_first", "noisy", "classroom", "signals")
+DEMO_PRESETS = (
+    "nrmp_like",
+    "idealized",
+    "idealized_signals",
+    "signals_first",
+    "noisy",
+    "noisy_applicants",
+    "noisy_programs",
+    "classroom",
+    "signals",
+)
 
 
 @require_http_methods(["GET", "POST"])

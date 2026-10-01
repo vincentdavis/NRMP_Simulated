@@ -131,6 +131,28 @@ PRESETS: dict[str, Preset] = {
             self_assessment_noise_sd=2.0,
         ),
     ),
+    "noisy_applicants": Preset(
+        "Noisy applicants, perfect programs",
+        "The idealized market, but programs cannot judge applicants: every program sees each applicant's strength "
+        "through a random error three times its spread, before and after interviews. Applicants see every program's "
+        "quality exactly and know where they stand. Strength stops paying off: the strongest applicants, who apply "
+        "only to the most sought-after programs, usually match less often than the weakest.",
+        _one_measure(
+            {"applicant_pre_noise_sd": 0.0, "program_pre_noise_sd": 3.0, "interview_informativeness": 0.0},
+            self_assessment_noise_sd=0.0,
+        ),
+    ),
+    "noisy_programs": Preset(
+        "Noisy programs, perfect applicants",
+        "The idealized market, but applicants cannot judge programs: every applicant sees each program's quality "
+        "through a random error three times its spread, before and after interviews. Programs see every applicant's "
+        "strength exactly, and applicants know where they stand. Who matches follows strength; where they match, "
+        "much less so.",
+        _one_measure(
+            {"applicant_pre_noise_sd": 3.0, "program_pre_noise_sd": 0.0, "interview_informativeness": 0.0},
+            self_assessment_noise_sd=0.0,
+        ),
+    ),
     "same_favourites": Preset(
         "Everyone wants the same programs",
         "High agreement on both sides (0.9): applicants want the same programs and programs the same applicants, "

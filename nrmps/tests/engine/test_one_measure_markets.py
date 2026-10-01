@@ -1,6 +1,6 @@
-"""The markets with one measure on each side: the idealized one, seen exactly, with signals (two ways) and the noisy
-one, seen through the largest noise the parameters allow (presets "idealized", "idealized_signals", "signals_first"
-and "noisy")."""
+"""The markets with one measure on each side: the idealized one, seen exactly; with signals (two ways); the noisy one,
+seen through the largest noise the parameters allow; and with that noise on one side only (presets "idealized",
+"idealized_signals", "signals_first", "noisy", "noisy_applicants" and "noisy_programs")."""
 
 import math
 
@@ -182,3 +182,41 @@ def test_inviting_signallers_first_crowds_out_strong_applicants():
     first, levelled = _outcomes("signals_first"), _outcomes("idealized_signals")
     assert first["top"] < levelled["top"] - 0.05
     assert first["bottom"] > levelled["bottom"]
+
+
+@pytest.mark.parametrize(
+    ("key", "noisy_side"),
+    [("noisy_applicants", "program_pre_noise_sd"), ("noisy_programs", "applicant_pre_noise_sd")],
+)
+def test_one_sided_noise_differs_from_the_idealized_market_only_on_that_side(key, noisy_side):
+    idealized = _flat(preset_params("idealized", seed=1).to_json_data())
+    demo = _flat(preset_params(key, seed=1).to_json_data())
+    changed = {name: (idealized[name], demo[name]) for name in idealized if idealized[name] != demo[name]}
+    assert changed == {f"info.{noisy_side}": (0.0, 3.0), "info.interview_informativeness": (1.0, 0.0)}
+
+
+@pytest.mark.parametrize(("key", "blind"), [("noisy_applicants", "programs"), ("noisy_programs", "applicants")])
+def test_one_sided_noise_blinds_only_one_side(key, blind):
+    """The side that cannot judge ranks the other about as well as noise three times the spread allows (0.30); the
+    other side ranks exactly."""
+    result = run_pipeline(preset_params(key, seed=2026), 2026)
+    expected = 6 / math.pi * math.asin(1 / math.sqrt(10) / 2)
+    for side in ("applicants", "programs"):
+        fidelity = float(np.nanmean(getattr(result.pre, side).fidelity))
+        assert abs(fidelity - expected) < 0.03 if side == blind else fidelity == pytest.approx(1.0)
+
+
+def test_when_programs_cannot_judge_applicants_strength_stops_paying_off():
+    """Programs pick almost at random among their applicants, and the strongest apply only to the most sought-after
+    programs: at this seed the top fifth matches less often than the bottom fifth (75% against 96%)."""
+    outcomes = _outcomes("noisy_applicants")
+    assert outcomes["top"] < outcomes["bottom"]
+
+
+def test_when_applicants_cannot_judge_programs_who_matches_still_follows_strength():
+    """Programs still take the strongest applicants (the top fifth all match, the bottom fifth rarely), but applicants
+    rank programs almost at random, so where they match follows strength much less (sorting 0.6 against 0.94)."""
+    outcomes, idealized = _outcomes("noisy_programs"), _outcomes("idealized")
+    assert outcomes["top"] > 0.95
+    assert outcomes["bottom"] < 0.2
+    assert outcomes["sorting"] < idealized["sorting"] - 0.2

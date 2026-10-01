@@ -49,6 +49,8 @@ def test_the_demo_page_offers_markets(auth_client):
         "Idealized market with signals",
         "Idealized market, signals first",
         "Noisy market",
+        "Noisy applicants, perfect programs",
+        "Noisy programs, perfect applicants",
         "Small classroom market",
         "Preference signals",
     ):
