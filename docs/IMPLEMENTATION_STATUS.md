@@ -240,6 +240,14 @@ check, which counts runs and so needs the tables. gunicorn 26 then logged "Contr
 '/home/app'" at every start: it creates a control socket in the home directory, which the image's unprivileged user
 does not have. `entrypoint.sh` now starts it with `--no-control-socket`.
 
+**After 5.1 (owner request): the flow on the summary, clearer run tabs.** The Summary tab's card now ends with the
+applicants' flow, its Colour by strength switch on from the start (`{% chart_figure ... switch_on=True %}`; a choice the
+reader made is still remembered and wins). The run's tabs, an easily missed underline before, are a daisyUI
+`tabs-box` bar with the current page in the primary colour. The primary is darkened a fifth for it: the axe check
+found the dark theme's own primary under 4.5:1 with its text. A three-line `{# #}` comment printed as text above the
+tabs during the change (Django only knows one-line `{# #}` comments). A new test fails on any template comment that
+spans lines.
+
 ## Phases 6–8
 
 Not started.

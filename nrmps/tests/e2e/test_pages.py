@@ -102,13 +102,15 @@ def _draw_every_chart(page, count: int) -> None:
     assert page.locator("[data-chart-failed]").count() == 0
 
 
-@pytest.mark.parametrize(("tab", "count"), [("population", 3), ("before-interviews", 6), ("applications", 2)])
+@pytest.mark.parametrize(
+    ("tab", "count"), [("", 1), ("population/", 3), ("before-interviews/", 6), ("applications/", 2)]
+)
 def test_the_run_tabs_draw_every_chart_without_script_errors(logged_in_page, live, worked_simulation, tab, count):
     """ECharts draws each chart as it comes into view (plan steps 3.8, 5.1), and again after the theme changes."""
     page = logged_in_page
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/{tab}/")
+    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/{tab}")
     _draw_every_chart(page, count)
     page.evaluate("document.documentElement.dataset.theme = 'dark'")
     page.wait_for_timeout(200)
@@ -253,6 +255,26 @@ FLOW_DROP = """() => {
   return {fill: typeof color === "string" ? "plain" : color.type, end: stops.length ? stops.at(-1).offset : null,
           focus: series.emphasis.focus};
 }"""
+
+
+def test_the_summary_shows_the_flow_split_by_strength_until_turned_off(logged_in_page, live, worked_simulation):
+    """The summary's applicants' flow starts split by strength; turning the switch off is remembered, there and on the
+    Applications and interviews tab."""
+    page = logged_in_page
+    summary = f"{live}/simulations/{worked_simulation.pk}/runs/1/"
+    page.goto(summary)
+    flow = page.locator('[data-chart="flow"]')
+    flow.scroll_into_view_if_needed()
+    expect(flow.locator("canvas").first).to_be_attached()
+    assert page.evaluate(FLOW_NODES) == 19  # five fifths per stage, two drop-offs and their spacers
+    expect(page.locator('[data-chart-switch-key="bands"]')).to_be_visible()
+    page.get_by_role("switch", name="Colour by strength").uncheck()
+    assert page.evaluate(FLOW_NODES) == 5
+    page.goto(summary)
+    page.locator('[data-chart="flow"]').scroll_into_view_if_needed()
+    expect(page.locator('[data-chart="flow"] canvas').first).to_be_attached()
+    expect(page.get_by_role("switch", name="Colour by strength")).not_to_be_checked()
+    assert page.evaluate(FLOW_NODES) == 5
 
 
 def test_colour_by_strength_splits_the_applicants_flow_and_is_remembered(logged_in_page, live, worked_simulation):

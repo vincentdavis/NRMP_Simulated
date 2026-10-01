@@ -307,8 +307,9 @@ PAGES: dict[str, PageHelp] = {
     "run_summary": PageHelp(
         _("A run's summary"),
         _(
-            "The key numbers of the run, its checks, downloads, stages, version stamps and parameters. While the run "
-            "is queued or running, the stages show which have finished and which are still waiting."
+            "The key numbers of the run, who got an interview and a match by applicant strength, its checks, "
+            "downloads, stages, version stamps and parameters. While the run is queued or running, the stages show "
+            "which have finished and which are still waiting."
         ),
         (_RUN_TABS,),
         actions=("delete_run",),

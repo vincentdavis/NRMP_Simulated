@@ -1,5 +1,5 @@
 {% extends "nrmps/runs/_layout.html" %}
-{% load humanize help_tags %}
+{% load humanize help_tags chart_tags %}
 {% block run_actions %}
   {% if not run.is_active %}
     <form method="post" action="{% url 'nrmps:run_delete' pk=simulation.pk number=run.number %}"
@@ -34,6 +34,10 @@
             {% endif %}
             <a class="link" href="{% url 'nrmps:run_match' pk=simulation.pk number=run.number %}">See the match</a>.
           </p>
+        {% endif %}
+        {% if charts.applicant_flow %}
+          {# The applicants' flow of the Applications and interviews tab, with Colour by strength on unless turned off. #}
+          <div class="mt-6">{% chart_figure charts.applicant_flow "applicant_flow" "flow" table="flow" height="h-96" switch_on=True %}</div>
         {% endif %}
       </div>
     </section>

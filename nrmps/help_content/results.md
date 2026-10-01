@@ -9,8 +9,9 @@ Programs. Each tab opens with its key numbers, and "?" buttons explain the colum
 
 ## Summary
 
-The run's key numbers, whether its checks passed, the downloads, how long each stage took, the version stamps and
-the exact parameters (with the seed) the run used, so it can be repeated.
+The run's key numbers, whether its checks passed, who got an interview and a match (the applicants' flow from the
+Applications and interviews tab, with **Colour by strength** on unless you turned it off), the downloads, how long
+each stage took, the version stamps and the exact parameters (with the seed) the run used, so it can be repeated.
 
 On sites where a background worker computes runs, a run first waits in a queue. Its population is built as soon as
 you press **Run** (so a market that is too large, or an upload that does not fit, is reported at once) and the other

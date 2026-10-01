@@ -31,10 +31,15 @@
   {% endif %}
 
   {% if tabs %}
+    {% comment %}
+      A boxed tab bar with the current page in the primary colour, so the pages read as tabs (tabs-box's active tab
+      takes its background from --tab-bg, which daisyUI sets on each tab). The primary is darkened a fifth: the dark
+      theme's own primary is too light for its text (under 4.5:1).
+    {% endcomment %}
     <nav class="mb-6 overflow-x-auto" aria-label="Pages of run {{ run.number }}">
-      <div class="tabs tabs-border flex-nowrap w-max">
+      <div class="tabs tabs-box flex-nowrap w-max">
         {% for item in tabs %}
-          <a class="tab whitespace-nowrap{% if item.key == tab %} tab-active{% else %} text-base-content{% endif %}" href="{{ item.url }}"{% if item.key == tab %} aria-current="page"{% endif %}>{{ item.label }}</a>
+          <a class="tab whitespace-nowrap{% if item.key == tab %} tab-active [--tab-bg:color-mix(in_oklab,var(--color-primary)_80%,black)] text-primary-content{% else %} text-base-content{% endif %}" href="{{ item.url }}"{% if item.key == tab %} aria-current="page"{% endif %}>{{ item.label }}</a>
         {% endfor %}
       </div>
     </nav>

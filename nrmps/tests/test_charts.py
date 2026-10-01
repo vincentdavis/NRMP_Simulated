@@ -151,9 +151,13 @@ def test_the_run_tabs_embed_their_charts_and_numbers(auth_client, finished_run, 
         assert text in body, text
 
 
-def test_the_summary_tab_loads_no_chart_code(auth_client, finished_run):
+def test_a_summary_without_the_applicants_flow_loads_no_chart_code(auth_client, finished_run):
+    """The summary's only chart is the applicants' flow; a run without stage decisions has none, and no chart code."""
+    finished_run.artifacts.filter(kind=RunArtifact.Kind.STAGES).delete()
     url = reverse("nrmps:run_detail", kwargs={"pk": finished_run.simulation_id, "number": finished_run.number})
-    assert b"echarts" not in auth_client.get(url).content
+    body = auth_client.get(url).content
+    assert b"echarts" not in body
+    assert b"data-chart" not in body
 
 
 def test_runs_without_results_load_no_chart_code(auth_client, simulation, user, monkeypatch):
@@ -494,6 +498,19 @@ def test_strengths_too_alike_disable_the_switch(finished_run, monkeypatch):
     assert chart["switch_note"] == "too many applicants share a strength to split them into fifths"
     assert chart["switch_key"] is None
     assert [row["label"] for row in chart["rows"]] == ["All applicants"]
+
+
+def test_the_summary_shows_the_applicants_flow_split_by_strength(auth_client, finished_run):
+    """The summary card ends with the applicants' flow, its Colour by strength switch on from the start (a remembered
+    choice still wins in the browser); the Applications and interviews tab's starts off."""
+    kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number}
+    summary = auth_client.get(reverse("nrmps:run_detail", kwargs=kwargs)).content.decode()
+    assert 'data-chart="flow"' in summary
+    assert 'id="chart-applicant-flow" type="application/json"' in summary
+    assert 'data-chart-switch="bands" checked>' in summary
+    assert "vendor/echarts/6.1.0/echarts.min.js" in summary
+    applications = auth_client.get(reverse("nrmps:run_applications", kwargs=kwargs)).content.decode()
+    assert 'data-chart-switch="bands">' in applications
 
 
 def test_the_applications_tab_shows_the_flow_with_its_switch(auth_client, finished_run):

@@ -241,11 +241,16 @@ def _run_context(run: SimulationRun, tab: str, **extra: Any) -> dict[str, Any]:
 
 @require_GET
 def run_detail(request, pk: int, number: int):
-    """A run's summary: status, key numbers, downloads, stages, checks, version stamps and parameters."""
+    """A run's summary: status, key numbers, the applicants' flow, downloads, stages, checks and parameters."""
     run = get_run(request, pk, number)
+    # Who gets an interview and a match (the Applications and interviews tab's flow), split by strength from the start.
+    charts = {}
+    if run.status == SimulationRun.Status.SUCCEEDED and run.artifacts.filter(kind=RunArtifact.Kind.STAGES).exists():
+        charts = run_charts(RunData(run), ("applicant_flow",))
     context = _run_context(
         run,
         "summary",
+        charts={name: chart for name, chart in charts.items() if chart},
         stage_rows=_stage_rows(run),
         outcome_views=_outcomes(run.metrics or {}),
         param_groups=_param_groups(run),

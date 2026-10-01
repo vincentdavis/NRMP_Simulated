@@ -169,7 +169,9 @@ def test_every_run_tab_links_to_the_others(auth_client, finished_run, view):
     body = response.content.decode()
     for other in RUN_TABS:
         assert f'href="{_run_url(finished_run, other)}"' in body, other
-    assert f'tab-active" href="{_run_url(finished_run, view)}" aria-current="page"' in body
+    # The current page is the active tab, in the primary colour, and says so to screen readers.
+    active = 'tab-active [--tab-bg:color-mix(in_oklab,var(--color-primary)_80%,black)] text-primary-content"'
+    assert f'{active} href="{_run_url(finished_run, view)}" aria-current="page"' in body
 
 
 def test_the_population_tab_compares_the_market_with_the_request(auth_client, finished_run):

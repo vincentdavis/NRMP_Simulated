@@ -8,14 +8,14 @@
   key shown while it is on (chart.switch_key: a scale of five steps, each with its colour, label and range, under a
   caption with its two ends); chart.switchable false disables it, with chart.switch_note saying why.
   Context: chart (payload, summary, rows, digits, legend, switchable, switch_note, switch_key), key, kind, entry,
-  element_id, table, height, x_label, y_label, payload.
+  element_id, table, height, x_label, y_label, payload, switch_on (the switch starts on; a remembered choice wins).
 {% endcomment %}
 <figure class="block w-full min-w-0">
   <figcaption class="font-medium flex flex-wrap items-center gap-x-4 gap-y-1">
     <span>{{ entry.title }} {% help_icon "chart" key %}</span>
     {% if entry.switch %}
       <label class="flex items-center gap-2 text-sm font-normal cursor-pointer" for="{{ element_id }}-{{ entry.switch }}">
-        <input type="checkbox" role="switch" id="{{ element_id }}-{{ entry.switch }}" class="toggle toggle-sm" data-chart-switch="{{ entry.switch }}"{% if not chart.switchable %} disabled{% endif %}>
+        <input type="checkbox" role="switch" id="{{ element_id }}-{{ entry.switch }}" class="toggle toggle-sm" data-chart-switch="{{ entry.switch }}"{% if switch_on and chart.switchable %} checked{% endif %}{% if not chart.switchable %} disabled{% endif %}>
         {{ entry.switch_label }}{% if chart.switch_note %} <span class="text-base-content/70">({{ chart.switch_note }})</span>{% endif %}
       </label>
     {% endif %}
