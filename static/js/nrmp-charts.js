@@ -65,6 +65,47 @@
   // The colour of a one-sided chart: data-series="applicant" (the default) or "program".
   const sideColour = (t, element) => (element.dataset.series === "program" ? t.program : t.applicant);
 
+  // Colour arithmetic for scales of magnitude (the heatmap). Tokens are "rgba(r, g, b, a)" strings.
+  const channels = (color) => color.match(/[\d.]+/g).slice(0, 3).map(Number);
+  const mix = (a, b, weight) => {
+    const [x, y] = [channels(a), channels(b)];
+    return `rgb(${x.map((value, k) => Math.round(value + (y[k] - value) * weight)).join(", ")})`;
+  };
+  const linear = (value) => (value <= 10.31475 ? value / 3294.6 : ((value / 255 + 0.055) / 1.055) ** 2.4);
+  // WCAG relative luminance and contrast ratio.
+  const luminance = (color) => {
+    const [r, g, b] = channels(color).map(linear);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a, b) => {
+    const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (high + 0.05) / (low + 0.05);
+  };
+  // Perceived lightness (OKLab L).
+  const lightness = (color) => {
+    const [r, g, b] = channels(color).map(linear);
+    return (
+      0.2104542553 * Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b) +
+      0.793617785 * Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b) -
+      0.0040720468 * Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    );
+  };
+  // A scale of magnitude through `stops` (colours of one hue, each lighter or each darker than the one before): the
+  // returned function maps 0..1 to a colour whose lightness changes evenly with the value, so twice the value looks
+  // twice as far from the start.
+  function ramp(stops) {
+    const steps = stops.map((stop, k) => (k ? Math.abs(lightness(stop) - lightness(stops[k - 1])) : 0));
+    const span = steps.reduce((sum, step) => sum + step, 0) || 1;
+    let done = 0;
+    const at = steps.map((step) => (done += step) / span);
+    return (value) => {
+      const v = Math.min(1, Math.max(0, value));
+      const found = at.findIndex((position) => position >= v);
+      const k = found < 0 ? stops.length - 1 : Math.max(1, found);
+      return mix(stops[k - 1], stops[k], Math.min(1, (v - at[k - 1]) / (at[k] - at[k - 1] || 1)));
+    };
+  }
+
   const formats = new Map();
   function numberFormat(options) {
     const key = JSON.stringify(options);
@@ -812,6 +853,190 @@
           lineStyle: { color: "gradient", opacity: 0.3, curveness: 0.5 },
         },
       ],
+    };
+  }, { widths: [480] });
+
+  // --- Chart kinds: the match (bars, stacked shares and a heatmap) --------------------------------------------------
+
+  const shareAxis = (t, name, extra = {}) =>
+    axis(t, name, {
+      type: "value",
+      nameGap: 44,
+      axisLabel: { color: t.muted, formatter: (value) => format.share(value, 0) },
+      ...extra,
+    });
+  // A few categories keep every label, however narrow the chart; with more, ECharts thins them out.
+  const categoryAxis = (t, name, labels) =>
+    axis(t, name, {
+      type: "category",
+      data: labels,
+      axisTick: { alignWithLabel: true },
+      axisLabel: { color: t.muted, interval: labels.length <= 6 ? 0 : "auto" },
+    });
+  const shadowPointer = (t) => ({ type: "shadow", shadowStyle: { color: t.grid } });
+  // A long axis name on two lines, broken at the space nearest its middle.
+  const twoLines = (name) => {
+    const spaces = [...name.matchAll(/ /g)].map((match) => match.index);
+    if (!spaces.length) return name;
+    const middle = name.length / 2;
+    const at = spaces.reduce((best, k) => (Math.abs(k - middle) < Math.abs(best - middle) ? k : best));
+    return `${name.slice(0, at)}\n${name.slice(at + 1)}`;
+  };
+
+  // Counts per ordered category as bars of their share of the total {labels, names, counts, unit, of}: `names` are the
+  // tooltips' titles ("1st choice"), `unit` what is counted and `of` the total ("of matched applicants").
+  register("bars", (p, t, element, option) => {
+    const total = Math.max(1, p.counts.reduce((sum, count) => sum + count, 0));
+    return {
+      ...option,
+      legend: { show: false },
+      tooltip: {
+        ...option.tooltip,
+        trigger: "axis",
+        axisPointer: shadowPointer(t),
+        formatter: ([item]) => {
+          const count = p.counts[item.dataIndex];
+          const share = `${format.share(count / total)} ${p.of}`;
+          return tip(p.names[item.dataIndex], [[p.unit, `${format.count(count)} (${share})`]]);
+        },
+      },
+      xAxis: categoryAxis(t, element.dataset.xLabel || "", p.labels),
+      yAxis: shareAxis(t, element.dataset.yLabel || ""),
+      series: [
+        {
+          type: "bar",
+          data: p.counts.map((count) => count / total),
+          barMaxWidth: 24,
+          itemStyle: { color: sideColour(t, element), borderRadius: [4, 4, 0, 0] },
+        },
+      ],
+    };
+  });
+
+  // Parts of a whole per ordered category as stacked bars {labels, names, unit, series: [{name, role, counts}], extra:
+  // [{label, values, format}]}: each bar is all of its category (100%), split into the series from the bottom up. A
+  // series' role picks its colour: "matched" (series 3), "neutral", or "strong" (the neutral, nearer the ink). Both
+  // greys show against the background and the parts touch, so a part of one percent at the top of a bar is still
+  // drawn (a gap between the parts would swallow it, and the bar would seem to stop short of 100%). `extra` adds rows
+  // to the tooltip (format "share" or "count"; null shows as "-"). Below 480 px a legend of three wraps onto a second
+  // line, which gets room above the bars.
+  register("shares", (p, t, element, option) => {
+    const narrow = element.clientWidth < 480;
+    const totals = p.labels.map((_label, k) => p.series.reduce((sum, series) => sum + series.counts[k], 0));
+    const colours = { matched: t.matched, neutral: t.neutral, strong: mix(t.neutral, t.ink, 0.5) };
+    const shown = (row, k) => {
+      if (row.values[k] === null) return "-";
+      return row.format === "share" ? format.share(row.values[k]) : format.count(row.values[k]);
+    };
+    return {
+      ...option,
+      legend: { ...option.legend, show: true },
+      grid: { ...option.grid, top: narrow && p.series.length > 2 ? 60 : option.grid.top },
+      tooltip: {
+        ...option.tooltip,
+        trigger: "axis",
+        axisPointer: shadowPointer(t),
+        formatter: (items) => {
+          const k = items[0].dataIndex;
+          const whole = Math.max(1, totals[k]);
+          const all = `${format.count(totals[k])} ${p.unit}`;
+          const rows = p.series.map((series) => [
+            series.name,
+            `${format.count(series.counts[k])} of ${all} (${format.share(series.counts[k] / whole)})`,
+          ]);
+          (p.extra || []).forEach((row) => rows.push([row.label, shown(row, k)]));
+          return tip(p.names[k], rows);
+        },
+      },
+      xAxis: categoryAxis(t, element.dataset.xLabel || "", p.labels),
+      yAxis: shareAxis(t, element.dataset.yLabel || "", { min: 0, max: 1 }),
+      series: p.series.map((series) => ({
+        name: series.name,
+        type: "bar",
+        stack: "whole",
+        barMaxWidth: 24,
+        data: series.counts.map((count, k) => count / Math.max(1, totals[k])),
+        itemStyle: { color: colours[series.role] || t.neutral },
+      })),
+    };
+  }, { widths: [480] });
+
+  // Who matched where {rows: [{label, range, total}], columns: [{label, short, range}], counts: [[...]], sorting}:
+  // rows are the applicants' strength fifths (the weakest first, drawn at the bottom), column 0 is "Not matched" and
+  // the others the program quality fifths, the lowest first. Each cell is its share of the row's applicants, on a
+  // scale fixed from 0% (nearly the background) to 100% so runs compare: the blue ramp for matches, the neutral one
+  // for "Not matched". A cell of half a percent or more shows its share, in the ink or the background colour,
+  // whichever contrasts more. Below 480 px the column labels are smaller, and "Not matched" (as its `short` form) and
+  // the x-axis name take two lines each.
+  register("heatmap", (p, t, element, option) => {
+    const narrow = element.clientWidth < 480;
+    const scales = [
+      ramp([mix(t.surface, t.neutral, 0.1), t.neutral, mix(t.neutral, t.ink, 0.6)]),
+      ramp([mix(t.surface, t.stages[0], 0.1), ...t.stages]),
+    ];
+    const scaleOf = (x) => scales[x === 0 ? 0 : 1];
+    const inkOn = (fill) => (contrast(fill, t.ink) >= contrast(fill, t.surface) ? t.ink : t.surface);
+    const cells = [];
+    p.counts.forEach((row, y) => {
+      row.forEach((count, x) => {
+        const share = count / Math.max(1, p.rows[y].total);
+        cells.push({ value: [x, y, share], label: { color: inkOn(scaleOf(x)(share)) } });
+      });
+    });
+    const part = (keep) => ({
+      type: "heatmap",
+      data: cells.filter((cell) => keep(cell.value[0])),
+      label: {
+        show: true,
+        fontSize: 12,
+        formatter: (item) => (item.value[2] >= 0.005 ? format.share(item.value[2], 0) : ""),
+      },
+      itemStyle: { borderColor: t.surface, borderWidth: 2, borderRadius: 3 },
+      emphasis: { itemStyle: { borderColor: t.ink, borderWidth: 1 } },
+    });
+    const colours = (scale) => Array.from({ length: 21 }, (_value, k) => scale(k / 20));
+    const quiet = { axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false } };
+    return {
+      ...option,
+      // No patterns: every cell says its share, and one pattern on them all would add nothing.
+      aria: { ...option.aria, decal: { show: false } },
+      legend: { show: false },
+      grid: { left: 64, right: 8, top: 8, bottom: narrow ? 84 : 52 },
+      tooltip: {
+        ...option.tooltip,
+        trigger: "item",
+        formatter: (item) => {
+          const [x, y] = item.value;
+          const row = p.rows[y];
+          const count = p.counts[y][x];
+          const fifth = p.columns[x].label.toLowerCase();
+          const where = x === 0 ? p.columns[0].label : `Matched to a program in the ${fifth} by quality`;
+          const share = format.share(count / Math.max(1, row.total));
+          return tip(`${row.label} of applicants by strength`, [
+            [where, `${format.count(count)} of ${format.count(row.total)} (${share})`],
+          ]);
+        },
+      },
+      xAxis: axis(t, narrow ? twoLines(element.dataset.xLabel || "") : element.dataset.xLabel || "", {
+        type: "category",
+        data: p.columns.map(
+          (column) => column.range || (narrow ? (column.short || column.label).replace(" ", "\n") : column.label),
+        ),
+        nameGap: narrow ? 40 : 32,
+        axisLabel: { color: t.muted, interval: 0, fontSize: narrow ? 10 : 12 }, // every column's label, however narrow
+        ...quiet,
+      }),
+      yAxis: axis(t, element.dataset.yLabel || "", {
+        type: "category",
+        data: p.rows.map((row) => row.range),
+        nameGap: 48,
+        ...quiet,
+      }),
+      visualMap: [
+        { show: false, seriesIndex: 0, dimension: 2, min: 0, max: 1, inRange: { color: colours(scales[0]) } },
+        { show: false, seriesIndex: 1, dimension: 2, min: 0, max: 1, inRange: { color: colours(scales[1]) } },
+      ],
+      series: [part((x) => x === 0), part((x) => x > 0)],
     };
   }, { widths: [480] });
 

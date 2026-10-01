@@ -1,8 +1,13 @@
-{% load humanize format_tags %}
-{% comment %}Match rates by applicant group and strength decile. Context: outcome_views.{% endcomment %}
+{% load humanize format_tags chart_tags %}
+{% comment %}Match rates by applicant group and strength decile. Context: outcome_views, charts.{% endcomment %}
 <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="groups-title">
   <div class="card-body">
     <h2 id="groups-title" class="card-title">Who matched</h2>
+    {% if charts.match_by_strength %}
+      <div class="max-w-3xl">
+        {% chart_figure charts.match_by_strength "match_by_strength" "shares" table="by_strength" height="h-72" x_label="Strength decile (1 = the weakest tenth)" y_label="Applicants" %}
+      </div>
+    {% endif %}
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {% for title, rows, label in outcome_views.group_tables %}
         <div class="overflow-x-auto" tabindex="0" role="region" aria-label="{{ title }}">

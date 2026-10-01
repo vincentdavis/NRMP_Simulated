@@ -64,6 +64,11 @@ def _welfare(applications: Applications, interviews: Interviews, match: MatchRes
     }
 
 
+def strength_decile(strength: F64) -> NDArray[np.int64]:
+    """Return each applicant's strength decile, 0 (the weakest tenth) to 9, by rank (ties by index)."""
+    return np.minimum((quantiles(strength) * 10).astype(np.int64), 9)
+
+
 def _by(
     labels: NDArray[np.int64],
     names: list[str],
@@ -116,7 +121,6 @@ def outcome_metrics(
     distribution["11+"] = int(np.count_nonzero(ranks > 10))
     matched_pair = interviewed & (match.program[i] == j)
     realised = ~np.isnan(interviews.applicant_realised)
-    strength_decile = np.minimum((quantiles(population.applicants.strength) * 10).astype(np.int64), 9)
     return {
         "funnel": {
             "applications_per_applicant": applications.size / n,
@@ -169,7 +173,11 @@ def outcome_metrics(
             interviews_per_applicant,
         ),
         "by_strength_decile": _by(
-            strength_decile, [str(d + 1) for d in range(10)], match, certified, interviews_per_applicant
+            strength_decile(population.applicants.strength),
+            [str(d + 1) for d in range(10)],
+            match,
+            certified,
+            interviews_per_applicant,
         ),
         "programs": {"n": m, "positions": positions},
         "checks": run_checks(applications, invitations, lists, match_lists, match),

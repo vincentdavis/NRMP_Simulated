@@ -346,8 +346,9 @@ PAGES: dict[str, PageHelp] = {
     "run_match": PageHelp(
         _("The match"),
         _(
-            "The match rate, the positions filled, where applicants matched on their lists, the checks of the "
-            "match, and who matched by group and strength."
+            "The match rate, the positions filled, which choice applicants matched to, who matched where (applicant "
+            "strength against program quality, with the sorting), which programs filled their positions, the checks "
+            "of the match, and who matched by group and strength."
         ),
         (_RUN_TABS,),
         more="results",
@@ -405,6 +406,7 @@ CHART_PLACES: dict[str, Text] = {
     "population": _("Population tab"),
     "pre_interview": _("Before interviews tab"),
     "applications": _("Applications and interviews tab"),
+    "match": _("Match tab"),
     "agent": _("One applicant's or program's page"),
 }
 
@@ -559,6 +561,78 @@ CHARTS: dict[str, ChartHelp] = {
         tab="applications",
         switch="bands",
         switch_label=_("Colour by strength"),
+    ),
+    "matched_choice": ChartHelp(
+        _("Which choice did applicants match to?"),
+        _(
+            "Matched applicants by where they had ranked their program on their own rank order list: first choice, "
+            "second, and so on, with every choice after the tenth counted together."
+        ),
+        _(
+            "Each bar is a share of the matched applicants; a tall first bar means most got their first choice. Hover "
+            "a bar for the number of applicants."
+        ),
+        _(
+            "Choices are places on the list the applicant submitted, which holds only programs they interviewed at: a "
+            "first choice here is not always the program they wanted most before interviews. Applicants who did not "
+            "match are not shown."
+        ),
+        tab="match",
+    ),
+    "sorting": ChartHelp(
+        _("Do stronger applicants match to better programs?"),
+        _(
+            "Applicants in five groups by strength percentile (the rows, the top 20% at the top) and where each group "
+            "ended up (the columns): not matched, or matched to a program in each fifth of the programs by quality, "
+            "from the bottom 20% to the top 20%. Each cell is its share of the row's applicants, darker for more: "
+            "blue for matches, grey for not matched."
+        ),
+        _(
+            "Read along a row: it adds up to 100%. In a perfectly sorted market the dark cells run along the diagonal, "
+            "from the weakest applicants, unmatched or at the lowest programs, to the strongest at the best programs; "
+            "the more a row spreads out, the less strength decides where its applicants match. Sorting, in the "
+            "summary, is the rank correlation between an applicant's strength and the quality of the program they "
+            "matched to (close to 1 when the strongest applicants are at the best programs, in order; 0 = no "
+            "relation). Hover a cell for its number of applicants."
+        ),
+        _(
+            "Applicants do not rank programs by quality alone: with tastes of their own (agreement below 1) a market "
+            "that works well is still not perfectly sorted. Strength and quality are the latent values, which the "
+            "other side sees only through its own noisy view. The fifths of programs hold equal numbers of programs, "
+            "not of positions. Sorting cannot quite reach 1, because the applicants of one program share its "
+            "quality: the fewer and larger the programs, the lower its ceiling (0.99 with 8 programs of 6 positions)."
+        ),
+        tab="match",
+    ),
+    "program_fill": ChartHelp(
+        _("Which programs fill their positions?"),
+        _(
+            "The positions of the programs in each fifth by quality, from the bottom 20% of programs to the top 20%, "
+            "and the share of them the match filled."
+        ),
+        _(
+            "Each bar is all the positions of its group; the green part is filled. A bar with grey at the top has "
+            "unfilled positions: hover it for the positions, how many were filled, and how many of the group's "
+            "programs have an unfilled position."
+        ),
+        _("In the real Match, unfilled positions go to the scramble after the match (SOAP), which is not simulated."),
+        tab="match",
+        side="program",
+    ),
+    "match_by_strength": ChartHelp(
+        _("Do stronger applicants match more often?"),
+        _(
+            "Applicants in ten groups by strength (deciles: 1 is the weakest tenth, 10 the strongest) and, in each, "
+            "the share who matched, who submitted a rank order list but did not match, and who had no list (no "
+            "interview, or no program they would rank)."
+        ),
+        _(
+            "Each bar is all the applicants of its decile; the green part matched. Hover a bar for the numbers and "
+            "for the match rate among applicants with a list, the rate NRMP reports use and the one in the table "
+            "below."
+        ),
+        _("Strength is the applicant's latent strength, which each program sees only through its own noisy view."),
+        tab="match",
     ),
     "ego_applicant": ChartHelp(
         _("How far did each of this applicant's applications get?"),

@@ -1,0 +1,21 @@
+{% load chart_tags %}
+{% comment %}Where applicants matched by strength, and which programs filled their positions. Context: charts.{% endcomment %}
+{% if charts.sorting or charts.program_fill %}
+<section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="where-title">
+  <div class="card-body">
+    <h2 id="where-title" class="card-title">Who matched where</h2>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      {% if charts.sorting %}
+        <div class="min-w-0">
+          {% chart_figure charts.sorting "sorting" "heatmap" table="sorting" height="h-80" x_label="Quality percentile of the program matched to" y_label="Applicant strength percentile" %}
+        </div>
+      {% endif %}
+      {% if charts.program_fill %}
+        <div class="min-w-0">
+          {% chart_figure charts.program_fill "program_fill" "shares" table="fill" height="h-80" x_label="Program quality percentile" y_label="Positions" %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}

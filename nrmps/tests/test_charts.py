@@ -1,18 +1,22 @@
 """Diagnostic chart payloads (plan step 3.8): requested against realised, samples, demand and the funnel."""
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from django.urls import reverse
 from django.utils.html import escape
+from scipy.stats import spearmanr
 
 from nrmps import help_registry
 from nrmps.charts import (
+    CHOICE_BINS,
     EGO_MAX_NODES,
     FUNNEL_ROWS,
     STRENGTH_BANDS,
     STRENGTH_RANGES,
+    TAB_CHARTS,
     _bands_note,
     agent_funnel,
     applicant_flow,
@@ -21,9 +25,13 @@ from nrmps.charts import (
     fit_check,
     funnel,
     gini,
+    match_by_strength,
+    matched_choice,
     perception_samples,
+    program_fill,
     requested_histogram,
     run_charts,
+    sorting,
     strength_bands,
 )
 from nrmps.engine.metrics import histogram
@@ -51,6 +59,10 @@ def test_every_chart_of_a_run(finished_run):
         "lorenz",
         "funnel",
         "applicant_flow",
+        "matched_choice",
+        "sorting",
+        "program_fill",
+        "match_by_strength",
     }
     for chart in charts.values():
         assert chart["summary"]
@@ -139,6 +151,7 @@ def test_the_scatter_sample_repeats_and_is_bounded(finished_run):
         ("run_population", {"strength", "quality", "capacity"}),
         ("run_pre_interview", {"applicant-fidelity", "program-fidelity", "perception-applicants", "demand"}),
         ("run_applications", {"funnel"}),
+        ("run_match", {"matched-choice", "sorting", "program-fill", "match-by-strength"}),
     ],
 )
 def test_the_run_tabs_embed_their_charts_and_numbers(auth_client, finished_run, view, kinds):
@@ -175,6 +188,9 @@ def test_runs_from_before_the_match_draw_the_population_charts(auth_client, fini
     charts = run_charts(RunData(finished_run))
     assert "funnel" not in charts
     assert charts["perception_applicants"]["payload"]["post"] is None
+    # The Match tab's charts need the stage decisions, except the choices, which the diagnostics keep.
+    assert [charts[key] for key in ("sorting", "program_fill", "match_by_strength")] == [None, None, None]
+    assert charts["matched_choice"]["summary"]
 
 
 # --- Plan step 5.1: the chart catalog and the network of one agent ---------------------------------------------------
@@ -184,7 +200,7 @@ def test_every_chart_on_the_run_tabs_has_its_question_and_help(auth_client, fini
     """Captions and "?" popovers come from the chart catalog; each chart carries its colour role."""
     kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number}
     shown = set()
-    for view in ("nrmps:run_population", "nrmps:run_pre_interview", "nrmps:run_applications"):
+    for view in ("nrmps:run_population", "nrmps:run_pre_interview", "nrmps:run_applications", "nrmps:run_match"):
         body = auth_client.get(reverse(view, kwargs=kwargs)).content.decode()
         for key, chart in help_registry.CHARTS.items():
             if f'popovertarget="help-chart-{key.replace("_", "-")}"' in body:
@@ -525,3 +541,205 @@ def test_the_applications_tab_shows_the_flow_with_its_switch(auth_client, finish
     assert "viz-dot-div-1" in body
     assert "viz-dot-div-5" in body
     assert escape(str(help_registry.CHARTS["applicant_flow"].title)) in body
+
+
+# --- Plan step 5.3: the charts of the Match tab -----------------------------------------------------------------------
+
+
+def _market(strength, quality, capacity, program, certified=None, filled=None):
+    """Return a stand-in for a run's data: applicants with strengths matched to `program` (-1: not matched)."""
+    program = np.asarray(program)
+    capacity = np.asarray(capacity)
+    return SimpleNamespace(
+        population=SimpleNamespace(
+            applicants=SimpleNamespace(strength=np.asarray(strength, dtype=float)),
+            programs=SimpleNamespace(quality=np.asarray(quality, dtype=float), capacity=capacity),
+        ),
+        stages=SimpleNamespace(
+            match_program=program,
+            certified=program >= 0 if certified is None else np.asarray(certified),
+            filled=np.bincount(program[program >= 0], minlength=capacity.size) if filled is None else filled,
+        ),
+    )
+
+
+def test_the_choices_of_matched_applicants_are_the_run_s_distribution(finished_run):
+    match = finished_run.metrics["outcomes"]["match"]
+    payload = matched_choice(finished_run.metrics)
+    assert payload["labels"] == list(CHOICE_BINS)
+    assert payload["names"][0] == "1st choice"
+    assert payload["names"][2] == "3rd choice"
+    assert payload["names"][-1] == "11th choice or lower"
+    assert payload["counts"] == [match["rank_distribution"][label] for label in CHOICE_BINS]
+    assert sum(payload["counts"]) == match["matched"]
+    chart = run_charts(RunData(finished_run), ("matched_choice",))["matched_choice"]
+    assert sum(row["share"] for row in chart["rows"]) == pytest.approx(1)
+    assert f"({match['first_choice_share'] * 100:.1f}%) matched to their first choice" in chart["summary"]
+    assert f"({match['top3_share'] * 100:.1f}%) to one of their first three" in chart["summary"]
+
+
+def test_no_choices_without_a_match():
+    assert matched_choice({}) is None
+    assert matched_choice({"outcomes": {"match": {"rank_distribution": dict.fromkeys(CHOICE_BINS, 0)}}}) is None
+
+
+def test_who_matched_where_counts_every_applicant_once(finished_run):
+    data = RunData(finished_run)
+    record, population = data.stages, data.population
+    payload = sorting(data)
+    counts = np.asarray(payload["counts"])
+    assert counts.shape == (5, 6)
+    assert counts.sum() == population.n_applicants
+    matched = record.match_program >= 0
+    assert counts[:, 0].sum() == int((~matched).sum())
+    assert [row["total"] for row in payload["rows"]] == counts.sum(axis=1).tolist()
+    assert [row["label"] for row in payload["rows"]] == list(STRENGTH_BANDS)
+    assert [column["label"] for column in payload["columns"]] == ["Not matched", *STRENGTH_BANDS]
+    # Each matched column holds the applicants matched to the programs of that quality fifth.
+    fifth = strength_bands(np.asarray(population.programs.quality, dtype=float))
+    for b in range(5):
+        assert counts[:, b + 1].sum() == int(record.filled[fifth == b].sum())
+    expected = spearmanr(
+        population.applicants.strength[matched], population.programs.quality[record.match_program[matched]]
+    ).statistic
+    assert payload["sorting"] == pytest.approx(expected, abs=0.001)
+
+
+def test_a_perfectly_sorted_market_lies_on_the_diagonal():
+    """Ten applicants, five programs with two positions: the strongest two at the best program, and so on down.
+
+    The sorting is just under 1: the two applicants of a program share its quality, and a rank correlation with ties
+    cannot reach 1 (with one position per program it does).
+    """
+    data = _market(strength=range(10), quality=range(5), capacity=[2] * 5, program=np.arange(10) // 2)
+    payload = sorting(data)
+    assert payload["sorting"] == 0.985
+    assert payload["counts"] == [[0, *(2 if column == row else 0 for column in range(5))] for row in range(5)]
+    reverse = sorting(_market(strength=range(10), quality=range(5), capacity=[2] * 5, program=(9 - np.arange(10)) // 2))
+    assert reverse["sorting"] == -0.985
+    assert reverse["counts"][0] == [0, 0, 0, 0, 0, 2]  # the weakest two at the best program
+    singles = _market(strength=range(10), quality=range(10), capacity=[1] * 10, program=np.arange(10))
+    assert sorting(singles)["sorting"] == 1
+
+
+def test_unmatched_applicants_fill_the_first_column_and_stay_out_of_the_sorting():
+    program = np.array([-1, -1, -1, -1, 0, 1, 2, 3, 4, 4])
+    payload = sorting(_market(strength=range(10), quality=range(5), capacity=[1, 1, 1, 1, 2], program=program))
+    assert [row[0] for row in payload["counts"]] == [2, 2, 0, 0, 0]
+    assert payload["counts"][4] == [0, 0, 0, 0, 0, 2]
+    assert payload["sorting"] == pytest.approx(spearmanr(range(4, 10), [0, 1, 2, 3, 4, 4]).statistic, abs=0.001)
+
+
+def test_the_sorting_chart_s_summary_and_table(finished_run):
+    chart = run_charts(RunData(finished_run), ("sorting",))["sorting"]
+    payload = chart["payload"]
+    assert chart["summary"].startswith(f"Sorting is {payload['sorting']:.2f}: the rank correlation")
+    assert "of the bottom 20%" in chart["summary"]
+    assert [row["label"] for row in chart["rows"]] == list(reversed(STRENGTH_BANDS))  # the strongest first
+    assert chart["column_ranges"] == STRENGTH_RANGES
+    for row, counts in zip(chart["rows"], reversed(payload["counts"]), strict=True):
+        assert [cell["count"] for cell in row["cells"]] == counts
+        assert sum(cell["share"] for cell in row["cells"]) == pytest.approx(1)
+    json.dumps(payload)
+
+
+def test_sides_that_cannot_be_split_into_fifths_have_no_sorting_chart():
+    few_programs = _market(strength=range(10), quality=range(4), capacity=[3] * 4, program=np.arange(10) % 4)
+    assert sorting(few_programs) is None
+    assert program_fill(few_programs) is None
+    same_quality = _market(strength=range(10), quality=[1] * 5, capacity=[2] * 5, program=np.arange(10) // 2)
+    assert sorting(same_quality) is None
+    nobody_matched = _market(strength=range(10), quality=range(5), capacity=[2] * 5, program=[-1] * 10)
+    assert sorting(nobody_matched)["sorting"] is None
+    assert [row[0] for row in sorting(nobody_matched)["counts"]] == [2] * 5
+
+
+def test_positions_filled_by_program_quality_add_up(finished_run):
+    data = RunData(finished_run)
+    match = finished_run.metrics["outcomes"]["match"]
+    payload = program_fill(data)
+    filled, unfilled = (series["counts"] for series in payload["series"])
+    programs, short = (extra["values"] for extra in payload["extra"])
+    assert [series["name"] for series in payload["series"]] == ["Filled", "Unfilled"]
+    assert sum(filled) == match["matched"]
+    assert sum(unfilled) == match["unfilled_positions"]
+    assert sum(filled) + sum(unfilled) == data.population.n_positions
+    assert sum(programs) == data.population.n_programs
+    assert sum(short) == match["programs_unfilled"]
+    assert payload["labels"] == list(STRENGTH_RANGES)
+    chart = run_charts(data, ("program_fill",))["program_fill"]
+    assert f"The match filled {match['matched']:,} of {data.population.n_positions:,} positions" in chart["summary"]
+    assert f"{match['programs_unfilled']:,} of {data.population.n_programs:,} programs" in chart["summary"]
+    assert [row["positions"] for row in chart["rows"]] == [a + b for a, b in zip(filled, unfilled, strict=True)]
+
+
+def test_unfilled_positions_are_counted_in_their_programs_fifth():
+    """Five programs of two positions; only the best two fill, and the middle one fills one."""
+    program = np.array([-1] * 5 + [2, 3, 3, 4, 4])
+    payload = program_fill(_market(strength=range(10), quality=range(5), capacity=[2] * 5, program=program))
+    filled, unfilled = (series["counts"] for series in payload["series"])
+    assert filled == [0, 0, 1, 2, 2]
+    assert unfilled == [2, 2, 1, 0, 0]
+    assert payload["extra"][0]["values"] == [1, 1, 1, 1, 1]
+    assert payload["extra"][1]["values"] == [1, 1, 1, 0, 0]
+    assert payload["names"][0] == "Bottom 20% of programs by quality"
+
+
+def test_who_matched_by_strength_agrees_with_the_run_s_table(finished_run):
+    """The chart's deciles are the table's: the same applicants, lists and match rates."""
+    data = RunData(finished_run)
+    outcomes = finished_run.metrics["outcomes"]
+    payload = match_by_strength(data)
+    got, listed, unlisted = (series["counts"] for series in payload["series"])
+    assert [series["name"] for series in payload["series"]] == ["Matched", "Not matched", "No rank order list"]
+    for d, row in enumerate(outcomes["by_strength_decile"]):
+        assert got[d] + listed[d] + unlisted[d] == row["applicants"]
+        assert got[d] + listed[d] == row["certified"]
+        assert payload["extra"][0]["values"][d] == (pytest.approx(row["match_rate"]) if row["certified"] else None)
+    assert sum(got) == outcomes["match"]["matched"]
+    assert sum(unlisted) == data.population.n_applicants - outcomes["match"]["certified"]
+    assert payload["labels"] == [str(d) for d in range(1, 11)]
+    assert payload["names"][0] == "Strength decile 1 (the weakest tenth)"
+    assert payload["names"][9] == "Strength decile 10 (the strongest tenth)"
+    chart = run_charts(data, ("match_by_strength",))["match_by_strength"]
+    assert f"{outcomes['match']['matched']:,} matched" in chart["summary"]
+    assert [row["total"] for row in chart["rows"]] == [row["applicants"] for row in outcomes["by_strength_decile"]]
+
+
+def test_who_matched_by_strength_needs_ten_applicants():
+    nine = _market(strength=range(9), quality=range(5), capacity=[2] * 5, program=np.arange(9) // 2)
+    assert match_by_strength(nine) is None
+    ten = _market(
+        strength=range(10),
+        quality=range(5),
+        capacity=[2] * 5,
+        program=[-1, -1, 0, 0, 1, 1, 2, 2, 3, 3],
+        certified=[False, True, True, True, True, True, True, True, True, True],
+    )
+    payload = match_by_strength(ten)
+    got, listed, unlisted = (series["counts"] for series in payload["series"])
+    assert (got, listed, unlisted) == ([0, 0, 1, 1, 1, 1, 1, 1, 1, 1], [0, 1, *[0] * 8], [1, *[0] * 9])
+    assert payload["extra"][0]["values"][:3] == [None, 0, 1]
+
+
+def test_the_match_tab_shows_its_charts_with_their_numbers(auth_client, finished_run):
+    kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number}
+    body = auth_client.get(reverse("nrmps:run_match", kwargs=kwargs)).content.decode()
+    for kind in ("bars", "heatmap", "shares"):
+        assert f'data-chart="{kind}"' in body, kind
+    assert body.count('data-chart="shares"') == 2
+    assert 'data-chart="shares" data-payload="chart-program-fill" data-series="program"' in body
+    for text in (
+        "Who matched where",
+        "Matched to a program, by its quality percentile",
+        "Programs with an unfilled position",
+        "Match rate with a list",
+        "Share of matched",
+        "11th choice or lower",
+        "Sorting is ",
+    ):
+        assert text in body, text
+    assert body.count("The numbers") == len(TAB_CHARTS["match"])
+    for key in TAB_CHARTS["match"]:
+        assert escape(str(help_registry.CHARTS[key].title)) in body
+        assert help_registry.CHARTS[key].tab == "match"

@@ -155,7 +155,9 @@ clean-up on HTMX swaps, escaped tooltips, theme-aware colours) with nine charts;
 | Step | Status | Notes |
 |---|---|---|
 | 5.1 Foundations | Done | **Registry** (`static/js/nrmp-charts.js`): one registry for ECharts charts and sigma.js networks (`register(kind, build, {engine})`); charts are drawn when they come near the screen (`IntersectionObserver`), resize with their box, redraw when the theme or the patterns setting changes, and are disposed of when HTMX removes them; a chart that cannot be drawn (no WebGL, say) is marked and leaves the others alone. **Safe tooltips:** every tooltip is built by `tip()`, which escapes every value, and numbers by `format.*` (`Intl.NumberFormat` in the page's language); a browser test uploads a program named `<img src=x onerror=...>` and shows its tooltip: the name stays text (and with escaping disabled the test fails). **Chart tokens and dark mode** (`styles.css`, `--viz-*`): series 1 applicants, series 2 programs, series 3 a match, neutral grey for everything else, a blue ramp for stages; separate dark values; every colour at least 3:1 against the card in its theme (checked by script). **Display settings** replace the dark-mode toggle: the theme (the system's, light or dark; the old toggle could not go back to the system's) and "Patterns as well as colours" (ECharts decals, also on with the system's "more contrast" preference). **sigma.js 3.0.3 + graphology 0.26.0** vendored (`npm run vendor`, MIT, with licences), with a first network: on each applicant's and program's page, its applications on rings by how far each got (not invited, invited, interviewed, ranked, matched), with a key of counts and a summary sentence; hover labels follow the theme; no zooming or panning, so scrolling the page never gets caught (`charts.ego_network`, at most 2,000 applications, the furthest first). **Chart catalog** (`help_registry.CHARTS`): each chart's question (its caption), what it shows, how to read it and caveats, its place and colour; `{% chart_figure %}` renders a chart from its entry with a "?" popover; the guide's Reading the results page lists them all (`[[chart_catalog]]`), and the popovers link there; check `nrmps.H004` fails incomplete entries. **Help search** (HELP-25): `/help/search/` and a search box on every guide page search one index of the guide's sections (with their text), the glossary (terms now have anchors), every parameter (list tables too), the charts, and the columns and buttons of the registry; every word must match, titles rank first. **CSP, report-only** (`SECURE_CSP_REPORT_ONLY`, Django's `ContentSecurityPolicyMiddleware`): `'self'` only, a nonce on the one inline script (the theme), no inline handlers (the rows-per-page select moved to `site.js`), `'unsafe-eval'` until 5.5 moves the list editors to Alpine's CSP build; browsers report to `/csp-report/`, which logs each distinct violation once per process. Every browser test now fails on any policy violation (none today), and one checks the policy is live. **Found and fixed while testing:** graphology's minified file points to a source map, which Django's manifest storage must resolve, so collectstatic (and the Docker build) failed until the map was vendored too (`npm run vendor` now copies referenced maps; a test guards it); and CI's deploy check had been failing since step 4.4 without anyone seeing it (the branch was never pushed): the help checks render guide pages whose sample-file links need the static manifest, so CI now runs collectstatic first, as the Docker build does. **Deviations:** the ego network (MAT-7, planned for 5.4) is 5.1's first network so that the sigma integration is tested on real data; 5.4 adds the market-wide views. graphology-library (layouts, communities) waits for 5.4, which needs it. Help search is on the server (a results page) rather than an Alpine filter over a JSON index: it needs no script, works under the strict policy and is testable without a browser. No "keep the previous render at 55% opacity while refetching": charts are not refetched until the data API (5.2). |
-| 5.2–5.5 | Not started | |
+| 5.2 Data API | Not started | |
+| 5.3 P0 dashboards | In part | The Match tab's four charts (see "The Match tab's charts" below): the choice matched to, who matched where (the assortativity heatmap, with the sorting), positions filled by program quality, and who matched by strength decile. With the charts of steps 3.8 and 5.1 (population, true against observed, first-choice demand, the funnel, the applicants' flow) and the key numbers on each tab, that leaves interviews per applicant, the match rate against the length of the rank order list, and warnings on degenerate inputs. |
+| 5.4–5.5 | Not started | |
 
 **After 5.1 (owner request): the funnel for one applicant or program.** The Sankey funnel of the Applications and
 interviews tab also appears on each applicant's and program's page, beside its network: the same five stages over
@@ -325,6 +327,36 @@ sign-up link, so a visitor without an account who pressed "Log in" still comes b
 and users, the redirects (log in, sign up, an unknown market), coming back with the market chosen, the login page's
 sign-up link (a foreign `next` is dropped), and in the browser a visitor from the landing page through logging in to
 the demo's results, with axe and phone width on the visitor's demo page.
+
+**Step 5.3, in part (owner request): the Match tab's charts.** The Match tab was the one stage without charts (its
+choices were plain bars in a table), and nothing in the app showed *where* applicants match by strength, which the
+idealized and noisy demos are about. Four charts, each with its question, "?" help, summary sentence and table:
+- **Do stronger applicants match to better programs?** A heatmap: applicants in strength fifths (rows, the top 20% at
+  the top) against where they ended up (columns): not matched, or a program in each quality fifth. Each cell is its
+  share of the row. The scale is fixed from 0% to 100%, so two runs compare: blue for matches, neutral grey for "Not
+  matched". The summary gives the **sorting**, the rank correlation between an applicant's strength and the quality of
+  the program they matched to, as the demo tests measure it. The applicants of one program share its quality, so the
+  ceiling is just under 1 (0.99 with 8 programs of 6 positions, 0.99999 with 250 of 8); the help says so. On the
+  local demo runs: idealized 0.96, noisy applicants 0.91, NRMP-like 0.70, noisy programs 0.51.
+- **Which choice did applicants match to?** Bars for the first to the tenth choice and lower ones together, replacing
+  the table with bars (its numbers are under "The numbers").
+- **Which programs fill their positions?** Positions filled and unfilled by program quality fifth, with the number of
+  programs that have an unfilled position.
+- **Do stronger applicants match more often?** Each strength decile split into matched, not matched (with a rank
+  order list) and no list; the deciles are those of the table below it (one function, `outcomes.strength_decile`).
+
+Everything is computed when the page is shown, from the stored population and decisions, so runs made before this
+change get the charts too. Three new chart kinds in `nrmp-charts.js`: `bars`, `shares` (stacked to 100%) and
+`heatmap`. The heatmap's scale runs from nearly the background through the stage ramp, placed so that lightness
+changes evenly with the share (the ramp passes the dataviz validator's ordinal checks in both themes); each cell's
+label takes the ink or the background colour, whichever contrasts more. **Found by looking at the drawings:** a gap
+between stacked parts swallowed parts of one percent, so a bar seemed to stop at 98% (the parts now touch, and both
+greys show against the background); on a phone the heatmap's column labels ran into each other and its axis name was
+cut off (smaller labels, "No match" for "Not matched", the name on two lines), and a legend of three wrapped onto the
+bars (more room above them). Tested: the payloads against the run's own numbers (every applicant once, positions and
+programs add up, the deciles agree with the table), constructed markets (perfect and reversed sorting, unmatched
+applicants, unfilled positions, sides that cannot be split into fifths), the page, and in the browser the drawn
+charts wide and at phone width, with patterns on, and axe in both themes.
 
 ## Phases 6–8
 

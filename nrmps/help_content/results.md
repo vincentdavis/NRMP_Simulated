@@ -72,8 +72,16 @@ Positions filled
 : The share of positions the match filled.
 
 Matched to their first choice
-: The share of matched applicants who matched to the program they ranked first; the table shows the whole
-  distribution.
+: The share of matched applicants who matched to the program they ranked first; the chart beside it shows every
+  choice, from the first to the tenth, and lower ones together.
+
+Sorting
+: Whether stronger applicants match to better programs: the rank correlation between an applicant's strength and the
+  quality of the program they matched to, over matched applicants. Close to 1, the strongest applicants are at the
+  best programs, in order; at 0, strength has nothing to do with where applicants match. It is the summary of the
+  chart under **Who matched where**, which shows where each fifth of applicants by strength ended up: not matched,
+  or matched to a program in each fifth of programs by quality. Beside it, a chart shows which programs filled
+  their positions, by quality.
 
 Checks
 : Every run checks that the match is stable (no blocking pairs), within capacity, only between pairs on both lists,
@@ -81,8 +89,9 @@ Checks
   deferred acceptance and checks that the same applicants match and every program fills the same number of
   positions.
 
-"Who matched" breaks the match rate, the mean choice matched and interviews down by applicant group and by strength
-decile (1 is the weakest tenth of applicants, 10 the strongest).
+"Who matched" starts with a chart of each strength decile (1 is the weakest tenth of applicants, 10 the strongest):
+the share who matched, who had a rank order list but did not match, and who had no list. Its tables break the match
+rate, the mean choice matched and interviews down by applicant group and by strength decile.
 
 ## Applicants, programs and one agent's page
 

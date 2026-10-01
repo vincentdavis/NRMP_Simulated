@@ -18,6 +18,10 @@ observed utilities scatter around the identity line, and the funnel's counts add
   through the stages.
 - MAT-7 (ego) `ego_network`: one applicant's or program's applications by how far each got, drawn as a network with
   sigma.js on the agent's page (plan step 5.1), next to `agent_funnel`, the same funnel for that agent alone.
+- The Match tab (plan step 5.3): `matched_choice` (which choice matched applicants got), `sorting` (applicants by
+  strength fifth against the quality fifth of the program they matched to, with the rank correlation of the two),
+  `program_fill` (positions filled by program quality fifth) and `match_by_strength` (who matched, by strength
+  decile).
 """
 
 import math
@@ -25,10 +29,13 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+from django.contrib.humanize.templatetags.humanize import ordinal
 from numpy.typing import NDArray
 from scipy.special import ndtr
+from scipy.stats import spearmanr
 
 from .engine.interviews import pair_views
+from .engine.outcomes import strength_decile
 from .engine.persistence import StageRecord
 from .params import SimulationParams
 from .runs import RunData, StageRows
@@ -49,6 +56,9 @@ STRENGTH_BANDS = (
     "Top 20%",
 )
 STRENGTH_RANGES = ("0\u201320", "20\u201340", "40\u201360", "60\u201380", "80\u2013100")
+# The choices matched applicants got, in the bins of the engine's rank distribution (outcomes.match).
+CHOICE_BINS = (*(str(rank) for rank in range(1, 11)), "11+")
+DECILES = 10
 # How far an application got, in order; each is exclusive (an interview that led nowhere is "Interviewed").
 EGO_STAGES = ("Applied", "Invited", "Interviewed", "Ranked", "Matched")
 EGO_KEY = (
@@ -580,11 +590,266 @@ def _perception_chart(payload: dict[str, Any], side: str) -> dict[str, Any]:
     return {"payload": payload, "summary": summary}
 
 
+# --- The Match tab (plan step 5.3) -----------------------------------------------------------------------------------
+
+
+def matched_choice(metrics: dict[str, Any]) -> dict[str, Any] | None:
+    """Return which choice matched applicants got: how many matched to each rank on their own rank order list.
+
+    The bins are the engine's (`outcomes.match.rank_distribution`): choices 1 to 10, then 11 and lower together.
+    None for a run without a match, or with nobody matched.
+    """
+    distribution = ((metrics.get("outcomes") or {}).get("match") or {}).get("rank_distribution")
+    if not distribution or not sum(distribution.values()):
+        return None
+    return {
+        "labels": list(CHOICE_BINS),
+        "names": [*(f"{ordinal(rank)} choice" for rank in range(1, 11)), "11th choice or lower"],
+        "counts": [int(distribution.get(label, 0)) for label in CHOICE_BINS],
+        "unit": "Applicants",
+        "of": "of matched applicants",
+    }
+
+
+def _choice_chart(metrics: dict[str, Any]) -> dict[str, Any] | None:
+    payload = matched_choice(metrics)
+    if payload is None:
+        return None
+    counts = payload["counts"]
+    matched, top3 = sum(counts), sum(counts[:3])
+    summary = (
+        f"Of {matched:,} matched applicants, {counts[0]:,} ({_share(counts[0], matched)}) matched to their first "
+        f"choice and {top3:,} ({_share(top3, matched)}) to one of their first three"
+    )
+    summary += f"; {counts[-1]:,} matched to their 11th choice or lower." if counts[-1] else "."
+    rows = [
+        {"label": name, "count": count, "share": count / matched}
+        for name, count in zip(payload["names"], counts, strict=True)
+    ]
+    return {"payload": payload, "summary": summary, "rows": rows}
+
+
+def _rank_correlation(x: NDArray[np.float64], y: NDArray[np.float64]) -> float | None:
+    """Return the Spearman rank correlation of two vectors, or None with under three values or a constant vector."""
+    if x.size < 3 or np.ptp(x) == 0 or np.ptp(y) == 0:
+        return None
+    return round(float(spearmanr(x, y).statistic), 3)
+
+
+def sorting(data: RunData) -> dict[str, Any] | None:
+    """Return who matched where: applicants by strength fifth against the quality fifth of their program.
+
+    `counts[b]` is strength fifth b (0 = the weakest): first the applicants who did not match, then those matched to
+    a program in each quality fifth, the lowest first; fifths as in `strength_bands`, for programs by quality (equal
+    numbers of programs, not of positions). `sorting` is the rank correlation between an applicant's strength and the
+    quality of the program they matched to, over matched applicants; the applicants of one program share its
+    quality, so even a perfectly sorted market stays just under 1 (0.99 with 8 programs of 6, closer with more
+    programs). None for runs from before the match, and when either side cannot be split into fifths.
+    """
+    record = data.stages
+    if record is None:
+        return None
+    population = data.population
+    strength = np.asarray(population.applicants.strength, dtype=np.float64)
+    quality = np.asarray(population.programs.quality, dtype=np.float64)
+    rows, columns = strength_bands(strength), strength_bands(quality)
+    if rows is None or columns is None:
+        return None
+    program = np.asarray(record.match_program, dtype=np.int64)
+    matched = program >= 0
+    k = len(STRENGTH_BANDS)
+    column = np.zeros(strength.size, dtype=np.int64)  # 0: not matched
+    column[matched] = columns[program[matched]] + 1
+    counts = np.bincount(rows * (k + 1) + column, minlength=k * (k + 1)).reshape(k, k + 1)
+    return {
+        "rows": [
+            {
+                "label": label,
+                "range": STRENGTH_RANGES[b],
+                "low": round(float(strength[rows == b].min()), 2),
+                "high": round(float(strength[rows == b].max()), 2),
+                "total": int(counts[b].sum()),
+            }
+            for b, label in enumerate(STRENGTH_BANDS)
+        ],
+        "columns": [
+            {"label": "Not matched", "short": "No match", "range": None},  # short: under a phone's narrow column
+            *({"label": label, "range": STRENGTH_RANGES[b]} for b, label in enumerate(STRENGTH_BANDS)),
+        ],
+        "counts": counts.tolist(),
+        "sorting": _rank_correlation(strength[matched], quality[program[matched]]),
+    }
+
+
+def _sorting_chart(data: RunData) -> dict[str, Any] | None:
+    payload = sorting(data)
+    if payload is None:
+        return None
+    counts, rows = payload["counts"], payload["rows"]
+    bottom, top = STRENGTH_BANDS[0].lower(), STRENGTH_BANDS[-1].lower()
+    summary = ""
+    if payload["sorting"] is not None:
+        summary = (
+            f"Sorting is {payload['sorting']:.2f}: the rank correlation between an applicant's strength and the "
+            "quality of the program they matched to (close to 1 when the strongest applicants are at the best "
+            "programs, in order; 0 = no relation). "
+        )
+    summary += (
+        f"Of the {top} of applicants by strength, {_share(counts[-1][-1], rows[-1]['total'])} matched to a program "
+        f"in the {top} by quality and {_share(counts[-1][0], rows[-1]['total'])} did not match; of the {bottom}, "
+        f"{_share(counts[0][1], rows[0]['total'])} matched to a program in the {bottom} and "
+        f"{_share(counts[0][0], rows[0]['total'])} did not match."
+    )
+    table = [
+        {
+            "label": row["label"],
+            "total": row["total"],
+            "cells": [{"count": count, "share": count / row["total"]} for count in counts[b]],
+        }
+        for b, row in reversed(list(enumerate(rows)))  # the strongest first, as the chart's rows run from the top
+    ]
+    return {"payload": payload, "summary": summary, "rows": table, "column_ranges": STRENGTH_RANGES}
+
+
+def program_fill(data: RunData) -> dict[str, Any] | None:
+    """Return the positions the match filled and left unfilled, by program quality fifth (the lowest first).
+
+    With each fifth's programs and how many of them have an unfilled position. None for runs from before the match,
+    and when the programs cannot be split into fifths (`strength_bands`).
+    """
+    record = data.stages
+    if record is None:
+        return None
+    programs = data.population.programs
+    bands = strength_bands(np.asarray(programs.quality, dtype=np.float64))
+    if bands is None:
+        return None
+    capacity = np.asarray(programs.capacity, dtype=np.int64)
+    filled = np.asarray(record.filled, dtype=np.int64)
+    k = len(STRENGTH_BANDS)
+
+    def per_fifth(values: NDArray[np.int64]) -> list[int]:
+        return [int(total) for total in np.bincount(bands, weights=values, minlength=k)]
+
+    return {
+        "labels": list(STRENGTH_RANGES),
+        "names": [f"{label} of programs by quality" for label in STRENGTH_BANDS],
+        "unit": "positions",
+        "series": [
+            {"name": "Filled", "role": "matched", "counts": per_fifth(filled)},
+            {"name": "Unfilled", "role": "neutral", "counts": per_fifth(capacity - filled)},
+        ],
+        "extra": [
+            {"label": "Programs", "values": per_fifth(np.ones_like(capacity)), "format": "count"},
+            {
+                "label": "Programs with an unfilled position",
+                "values": per_fifth((filled < capacity).astype(np.int64)),
+                "format": "count",
+            },
+        ],
+    }
+
+
+def _program_fill_chart(data: RunData) -> dict[str, Any] | None:
+    payload = program_fill(data)
+    if payload is None:
+        return None
+    filled, unfilled = (series["counts"] for series in payload["series"])
+    programs, short = (extra["values"] for extra in payload["extra"])
+    positions = [taken + free for taken, free in zip(filled, unfilled, strict=True)]
+    bottom, top = STRENGTH_BANDS[0].lower(), STRENGTH_BANDS[-1].lower()
+    summary = (
+        f"The match filled {sum(filled):,} of {sum(positions):,} positions ({_share(sum(filled), sum(positions))}). "
+        f"Programs in the {bottom} by quality filled {_share(filled[0], positions[0])} of their positions and those "
+        f"in the {top} {_share(filled[-1], positions[-1])}; {sum(short):,} of {sum(programs):,} programs have an "
+        "unfilled position."
+    )
+    rows = [
+        {
+            "label": label,
+            "programs": programs[b],
+            "positions": positions[b],
+            "filled": filled[b],
+            "unfilled": unfilled[b],
+            "share": filled[b] / positions[b] if positions[b] else None,
+            "short": short[b],
+        }
+        for b, label in enumerate(STRENGTH_BANDS)
+    ]
+    return {"payload": payload, "summary": summary, "rows": rows}
+
+
+def match_by_strength(data: RunData) -> dict[str, Any] | None:
+    """Return who matched by strength decile: matched, unmatched with a rank order list, and without a list.
+
+    The deciles are those of the run's "By strength decile" table (`engine.outcomes.strength_decile`), the weakest
+    first, with the match rate among applicants with a list (the rate NRMP reports use). None for runs from before
+    the match, and with fewer than ten applicants.
+    """
+    record = data.stages
+    strength = np.asarray(data.population.applicants.strength, dtype=np.float64)
+    if record is None or strength.size < DECILES:
+        return None
+    decile = strength_decile(strength)
+    certified = np.asarray(record.certified, dtype=bool)
+    matched = np.asarray(record.match_program) >= 0
+
+    def per_decile(mask: NDArray[np.bool_]) -> list[int]:
+        return [int(count) for count in np.bincount(decile[mask], minlength=DECILES)]
+
+    got, listed = per_decile(matched), per_decile(certified & ~matched)
+    ends = {0: " (the weakest tenth)", DECILES - 1: " (the strongest tenth)"}
+    return {
+        "labels": [str(d + 1) for d in range(DECILES)],
+        "names": [f"Strength decile {d + 1}{ends.get(d, '')}" for d in range(DECILES)],
+        "unit": "applicants",
+        "series": [
+            {"name": "Matched", "role": "matched", "counts": got},
+            {"name": "Not matched", "role": "strong", "counts": listed},
+            {"name": "No rank order list", "role": "neutral", "counts": per_decile(~certified & ~matched)},
+        ],
+        "extra": [
+            {
+                "label": "Match rate with a list",
+                "values": [g / (g + n) if g + n else None for g, n in zip(got, listed, strict=True)],
+                "format": "share",
+            }
+        ],
+    }
+
+
+def _match_by_strength_chart(data: RunData) -> dict[str, Any] | None:
+    payload = match_by_strength(data)
+    if payload is None:
+        return None
+    got, listed, unlisted = (series["counts"] for series in payload["series"])
+    totals = [sum(parts) for parts in zip(got, listed, unlisted, strict=True)]
+    summary = (
+        f"Of the weakest tenth of applicants by strength, {_share(got[0], totals[0])} matched; of the strongest tenth, "
+        f"{_share(got[-1], totals[-1])}. Of all {sum(totals):,} applicants, {sum(got):,} matched "
+        f"({_share(sum(got), sum(totals))}) and {sum(unlisted):,} had no rank order list."
+    )
+    rows = [
+        {
+            "label": label,
+            "total": totals[d],
+            "matched": got[d],
+            "listed": listed[d],
+            "unlisted": unlisted[d],
+            "share": got[d] / totals[d] if totals[d] else None,
+            "rate": payload["extra"][0]["values"][d],
+        }
+        for d, label in enumerate(payload["labels"])
+    ]
+    return {"payload": payload, "summary": summary, "rows": rows}
+
+
 # The charts of each run page tab.
 TAB_CHARTS = {
     "population": ("strength", "quality", "capacity"),
     "pre_interview": ("applicant_fidelity", "program_fidelity", "perception", "demand"),
     "applications": ("funnel", "applicant_flow"),
+    "match": ("matched_choice", "sorting", "program_fill", "match_by_strength"),
 }
 
 
@@ -671,4 +936,12 @@ def run_charts(data: RunData, names: tuple[str, ...] | None = None) -> dict[str,
         charts |= _funnel_chart(data.stages)
     if "applicant_flow" in wanted:
         charts["applicant_flow"] = _applicant_flow_chart(data)
+    if "matched_choice" in wanted:
+        charts["matched_choice"] = _choice_chart(metrics)
+    if "sorting" in wanted:
+        charts["sorting"] = _sorting_chart(data)
+    if "program_fill" in wanted:
+        charts["program_fill"] = _program_fill_chart(data)
+    if "match_by_strength" in wanted:
+        charts["match_by_strength"] = _match_by_strength_chart(data)
     return charts

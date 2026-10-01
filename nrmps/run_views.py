@@ -155,26 +155,11 @@ def _stage_rows(run: SimulationRun) -> list[dict[str, Any]]:
     return rows
 
 
-RANK_LABELS = [*(str(rank) for rank in range(1, 11)), "11+"]  # the matched-rank bins, in order
-
-
 def _outcomes(metrics: dict[str, Any]) -> dict[str, Any] | None:
-    """Return the matched-rank bars, the checks and the group tables (None for runs from before the match)."""
+    """Return the checks and the group tables (None for runs from before the match)."""
     outcomes = metrics.get("outcomes")
     if not outcomes:
         return None
-    distribution = outcomes["match"]["rank_distribution"]
-    matched = sum(distribution.values())
-    peak = max(distribution.values(), default=0) or 1
-    ranks = [
-        {
-            "label": label,
-            "count": count,
-            "share": count / matched if matched else None,
-            "width": round(100 * count / peak),
-        }
-        for label, count in ((label, distribution.get(label, 0)) for label in RANK_LABELS)
-    ]
     checks = outcomes.get("checks") or {}
     rows = [
         {"title": title, "value": checks.get(key), "ok": checks.get(key) == 0} for key, title in COUNT_CHECKS.items()
@@ -186,7 +171,7 @@ def _outcomes(metrics: dict[str, Any]) -> dict[str, Any] | None:
         ("By applicant group", outcomes["by_group"], "Group"),
         ("By strength decile", outcomes["by_strength_decile"], "Decile"),
     ]
-    return {"ranks": ranks, "checks": rows, "passed": checks.get("passed"), "group_tables": group_tables}
+    return {"checks": rows, "passed": checks.get("passed"), "group_tables": group_tables}
 
 
 def _number(value: float | None, digits: int) -> str:
@@ -350,12 +335,18 @@ def run_applications(request, pk: int, number: int):
 
 @require_GET
 def run_match(request, pk: int, number: int):
-    """The match: headline numbers, where applicants matched on their lists, the checks and who matched."""
+    """The match: headline numbers, which choice applicants got, who matched where, the checks and who matched."""
     run = get_run(request, pk, number)
     metrics = run.metrics or {}
     if run.status != SimulationRun.Status.SUCCEEDED or not metrics.get("outcomes"):
         raise Http404("This run has no match")
-    context = _run_context(run, "match", outcome_views=_outcomes(metrics))
+    charts = run_charts(RunData(run), TAB_CHARTS["match"])
+    context = _run_context(
+        run,
+        "match",
+        outcome_views=_outcomes(metrics),
+        charts={name: chart for name, chart in charts.items() if chart},
+    )
     return render(request, "nrmps/runs/match.html", context)
 
 

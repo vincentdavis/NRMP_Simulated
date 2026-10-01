@@ -1,5 +1,5 @@
-{% load humanize format_tags %}
-{% comment %}The match card (docs/model_spec.md §10). Context: run, outcomes, outcome_views.{% endcomment %}
+{% load humanize format_tags chart_tags %}
+{% comment %}The match card (docs/model_spec.md §10). Context: run, outcomes, outcome_views, charts.{% endcomment %}
 {% with match=outcomes.match funnel=outcomes.funnel %}
 <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="match-title">
   <div class="card-body">
@@ -33,29 +33,11 @@
       {{ funnel.applicants_without_interview|intcomma }} applicants had no interview and so no list.
     </p>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="overflow-x-auto" tabindex="0" role="region" aria-label="Where matched applicants had ranked their program">
-        <table class="table table-sm">
-          <caption class="text-left font-semibold">Where matched applicants had ranked their program</caption>
-          <thead>
-            <tr>
-              <th scope="col">Choice</th>
-              <th scope="col" class="w-1/2"><span class="sr-only">Bar</span></th>
-              <th scope="col" class="text-right">Applicants</th>
-              <th scope="col" class="text-right">Share</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for rank in outcome_views.ranks %}
-              <tr>
-                <th scope="row" class="font-normal whitespace-nowrap">{% if rank.label == "11+" %}11th or lower{% else %}{{ rank.label|ordinal }}{% endif %}</th>
-                <td aria-hidden="true"><div class="h-3 rounded-sm bg-primary" style="width: {{ rank.width }}%"></div></td>
-                <td class="text-right tabular-nums">{{ rank.count|intcomma }}</td>
-                <td class="text-right tabular-nums">{{ rank.share|percent }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+      {% if charts.matched_choice %}
+        <div class="min-w-0">
+          {% chart_figure charts.matched_choice "matched_choice" "bars" table="choice" height="h-64" x_label="Choice on the applicant's rank order list" y_label="Matched applicants" %}
+        </div>
+      {% endif %}
       <div>
         <h3 class="font-semibold">Rank order lists</h3>
         <dl class="mt-2 space-y-1 text-sm">

@@ -104,7 +104,7 @@ def _draw_every_chart(page, count: int) -> None:
 
 
 @pytest.mark.parametrize(
-    ("tab", "count"), [("", 1), ("population/", 3), ("before-interviews/", 6), ("applications/", 2)]
+    ("tab", "count"), [("", 1), ("population/", 3), ("before-interviews/", 6), ("applications/", 2), ("match/", 4)]
 )
 def test_the_run_tabs_draw_every_chart_without_script_errors(logged_in_page, live, worked_simulation, tab, count):
     """ECharts draws each chart as it comes into view (plan steps 3.8, 5.1), and again after the theme changes."""
@@ -125,6 +125,70 @@ def test_the_run_tabs_draw_every_chart_without_script_errors(logged_in_page, liv
     assert _overflow(page) <= 0
 
 
+# The Match tab's charts as drawn: the heatmap's cells (the "Not matched" column, then the program fifths), its fixed
+# scale, whether its column labels fit their columns, and the stacked bars' parts.
+MATCH_CHARTS = """() => {
+  const chartOf = (payload) => window.echarts.getInstanceByDom(document.querySelector(`[data-payload="${payload}"]`));
+  const heat = chartOf("chart-sorting").getOption();
+  const grid = heat.grid[0];
+  const band = (chartOf("chart-sorting").getWidth() - grid.left - grid.right) / heat.xAxis[0].data.length;
+  const context = document.createElement("canvas").getContext("2d");
+  context.font = `${heat.xAxis[0].axisLabel.fontSize}px ${heat.textStyle.fontFamily}`;
+  const lines = heat.xAxis[0].data.flatMap((label) => label.split("\\n"));
+  const strength = chartOf("chart-match-by-strength").getOption();
+  const whole = strength.series[0].data.map((_v, k) => strength.series.reduce((sum, s) => sum + s.data[k], 0));
+  return {
+    cells: heat.series.map((series) => series.data.length),
+    scale: heat.visualMap.map((map) => [map.min, map.max]),
+    rows: heat.series.flatMap((series) => series.data).reduce((sum, cell) => sum + cell.value[2], 0),
+    labelsFit: Math.max(...lines.map((line) => context.measureText(line).width)) < band,
+    nameLines: heat.xAxis[0].name.split("\\n").length,
+    parts: strength.series.map((series) => series.name),
+    whole: whole.every((sum) => Math.abs(sum - 1) < 1e-9),
+    top: strength.grid[0].top,
+    choices: chartOf("chart-matched-choice").getOption().series[0].data.length,
+    fill: chartOf("chart-program-fill").getOption().series.map((series) => series.name),
+  };
+}"""
+
+
+def test_the_match_tab_draws_who_matched_where(logged_in_page, live, worked_simulation):
+    """The Match tab's charts (plan step 5.3): the heatmap of strength against program quality on a fixed scale, the
+    choices, and the stacked bars, whose parts add up to the whole. At phone width the heatmap's labels still fit
+    their columns, its axis name takes two lines and the legend of three gets a second line."""
+    page = logged_in_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/match/")
+    _draw_every_chart(page, 4)
+    drawn = page.evaluate(MATCH_CHARTS)
+    assert drawn["rows"] == pytest.approx(5)  # each of the five rows adds up to 100%
+    assert drawn | {"rows": 5} == {
+        "cells": [5, 25],
+        "scale": [[0, 1], [0, 1]],
+        "rows": 5,
+        "labelsFit": True,
+        "nameLines": 1,
+        "parts": ["Matched", "Not matched", "No rank order list"],
+        "whole": True,
+        "top": 36,
+        "choices": 11,
+        "fill": ["Filled", "Unfilled"],
+    }
+    page.evaluate("document.documentElement.dataset.chartPatterns = 'on'")  # patterns: on the bars, not the heatmap
+    page.wait_for_timeout(200)
+    assert page.locator("[data-chart-failed]").count() == 0
+    page.evaluate("document.documentElement.dataset.chartPatterns = 'off'")
+    page.set_viewport_size(PHONE)
+    page.wait_for_timeout(300)
+    narrow = page.evaluate(MATCH_CHARTS)
+    assert (narrow["labelsFit"], narrow["nameLines"], narrow["top"]) == (True, 2, 60)
+    assert narrow["cells"] == [5, 25]
+    assert page.locator("[data-chart-failed]").count() == 0
+    assert _overflow(page) <= 0
+    assert errors == []
+
+
 def test_new_simulation_page_has_no_serious_accessibility_violations(logged_in_page, live, simulation):
     """The page of a brand-new simulation (nothing run yet)."""
     page = logged_in_page
@@ -143,6 +207,7 @@ def test_new_simulation_page_has_no_serious_accessibility_violations(logged_in_p
         "/simulations/{pk}/runs/1/",
         "/simulations/{pk}/runs/1/before-interviews/",
         "/simulations/{pk}/runs/1/applications/",
+        "/simulations/{pk}/runs/1/match/",
         "/simulations/{pk}/runs/1/applicants/1/",
     ],
 )
