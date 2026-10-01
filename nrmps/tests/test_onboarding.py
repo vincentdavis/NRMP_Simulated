@@ -43,7 +43,13 @@ def test_the_landing_page_lists_recent_simulations(auth_client, finished_run, si
 
 def test_the_demo_page_offers_markets(auth_client):
     body = auth_client.get(reverse("nrmps:demo")).content.decode()
-    for title in ("NRMP-like market", "Idealized market", "Small classroom market", "Preference signals"):
+    for title in (
+        "NRMP-like market",
+        "Idealized market",
+        "Noisy market",
+        "Small classroom market",
+        "Preference signals",
+    ):
         assert title in body
 
 

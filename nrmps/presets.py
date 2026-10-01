@@ -17,6 +17,29 @@ from .params import SimulationParams, load_params
 GOLD_SILVER = [{"name": "gold", "count": 3, "boost": 0.8}, {"name": "silver", "count": 5, "boost": 0.4}]
 
 
+def _one_measure(info: dict[str, float], *, self_assessment_noise_sd: float) -> dict[str, Any]:
+    """Return the changes of a market with one measure on each side (the idealized and noisy markets), seen with `info`.
+
+    One applicant group, so strength is a single normal distribution; complete agreement on quality alone (no fit,
+    no personal taste, no attributes in the common score) and no surprises at the interview; the NRMP-like limits on
+    applications and interviews, with no chance left in the choices: the same number of applications for everyone,
+    the best interview offers accepted first, every interviewee ranked.
+    """
+    return {
+        "applicants": {"groups": [{"name": "all", "share": 1.0}]},
+        "prefs": {
+            "applicant_pref_correlation": 1.0,
+            "program_pref_correlation": 1.0,
+            "attribute_weight_share": 0.0,
+            "taste_share": 0.0,
+        },
+        "info": {"fit_shock_sd": 0.0, **info},
+        "apps": {"self_assessment_noise_sd": self_assessment_noise_sd, "count_dist": "fixed"},
+        "interview": {"acceptance_order": "best_first"},
+        "rol": {"program_policy": "all_interviewed"},
+    }
+
+
 @dataclass(frozen=True)
 class Preset:
     """A named set of parameter changes from the defaults."""
@@ -71,29 +94,22 @@ PRESETS: dict[str, Preset] = {
         "One measure on each side, seen exactly: applicants rank programs by quality alone and programs rank "
         "applicants by strength alone, with no taste and no noise at any stage. Applications and interviews keep the "
         "NRMP-like limits, so the match sorts the strongest applicants into the best programs as far as they allow.",
-        {
-            # One group, so strength is a single normal distribution.
-            "applicants": {"groups": [{"name": "all", "share": 1.0}]},
-            # Complete agreement on quality alone: no fit, no personal taste, no attributes in the common score.
-            "prefs": {
-                "applicant_pref_correlation": 1.0,
-                "program_pref_correlation": 1.0,
-                "attribute_weight_share": 0.0,
-                "taste_share": 0.0,
-            },
+        _one_measure(
             # Seen exactly before, at and after interviews, and applicants know where they stand.
-            "info": {
-                "applicant_pre_noise_sd": 0.0,
-                "program_pre_noise_sd": 0.0,
-                "interview_informativeness": 1.0,
-                "fit_shock_sd": 0.0,
-            },
-            # The same number of applications for everyone, the best interview offers accepted first, and every
-            # interviewee ranked: no chance left in the choices.
-            "apps": {"self_assessment_noise_sd": 0.0, "count_dist": "fixed"},
-            "interview": {"acceptance_order": "best_first"},
-            "rol": {"program_policy": "all_interviewed"},
-        },
+            {"applicant_pre_noise_sd": 0.0, "program_pre_noise_sd": 0.0, "interview_informativeness": 1.0},
+            self_assessment_noise_sd=0.0,
+        ),
+    ),
+    "noisy": Preset(
+        "Noisy market",
+        "The idealized market seen through heavy noise: every view of quality and strength is off by a random error "
+        "three times their spread, too high or too low, interviews correct none of it, and applicants misjudge where "
+        "they stand. Only the noise differs from the idealized market.",
+        _one_measure(
+            # The largest noise the parameters allow, kept through interviews to the rank order lists.
+            {"applicant_pre_noise_sd": 3.0, "program_pre_noise_sd": 3.0, "interview_informativeness": 0.0},
+            self_assessment_noise_sd=2.0,
+        ),
     ),
     "same_favourites": Preset(
         "Everyone wants the same programs",

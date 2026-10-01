@@ -265,6 +265,20 @@ interviews for everyone) the engine sorts perfectly: the strongest applicants fi
 applicant at a worse program. A test checks that perfect sorting on a 60 × 8 market, because the interview caps cannot
 reach every applicant at 1,000 × 142.
 
+**After 5.1 (owner request): a noisy demo market.** A new preset, `noisy`, is offered third on the demo page. It is the
+idealized market seen through the largest noise the parameters allow:
+- pre-interview noise 3 on both sides, so each view correlates about 0.32 with the truth;
+- interviews correct nothing (informativeness 0);
+- self-assessment noise 2.
+
+Both presets are built from one helper, `presets._one_measure`, and a test checks that only those four values differ.
+At seed 2026 each agent's ranking agrees with the true ranking as theory predicts for that noise: a mean Spearman of
+0.30 for applicants and 0.305 for programs, against 0.303 in theory. Over seeds 2026, 7 and 11 the noisy market fills
+nearly every position it can: 92.3% of applicants match, where the most possible is 92.6% (82% in the idealized
+market). But who goes where is close to random: Spearman's correlation of strength with the matched program's quality
+is 0.26, against 0.94 idealized and 0.72 NRMP-like. Noise spreads interviews around, so people find places, and
+scrambles the sorting.
+
 ## Phases 6–8
 
 Not started.
