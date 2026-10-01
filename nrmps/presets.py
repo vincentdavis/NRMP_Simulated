@@ -40,6 +40,16 @@ def _one_measure(info: dict[str, float], *, self_assessment_noise_sd: float) -> 
     }
 
 
+# The idealized market: one measure on each side, seen exactly before, at and after interviews, and applicants know
+# where they stand. The two signal demos add signals to it.
+IDEALIZED = _one_measure(
+    {"applicant_pre_noise_sd": 0.0, "program_pre_noise_sd": 0.0, "interview_informativeness": 1.0},
+    self_assessment_noise_sd=0.0,
+)
+# Gold and silver signals, sent to programs at the applicant's level first ("realistic") and read by every program.
+SIGNALS_READ_BY_ALL = {"tiers": GOLD_SILVER, "program_use_share": 1.0}
+
+
 @dataclass(frozen=True)
 class Preset:
     """A named set of parameter changes from the defaults."""
@@ -94,11 +104,21 @@ PRESETS: dict[str, Preset] = {
         "One measure on each side, seen exactly: applicants rank programs by quality alone and programs rank "
         "applicants by strength alone, with no taste and no noise at any stage. Applications and interviews keep the "
         "NRMP-like limits, so the match sorts the strongest applicants into the best programs as far as they allow.",
-        _one_measure(
-            # Seen exactly before, at and after interviews, and applicants know where they stand.
-            {"applicant_pre_noise_sd": 0.0, "program_pre_noise_sd": 0.0, "interview_informativeness": 1.0},
-            self_assessment_noise_sd=0.0,
-        ),
+        IDEALIZED,
+    ),
+    "idealized_signals": Preset(
+        "Idealized market with signals",
+        "The idealized market with signals: each applicant sends 3 gold and 5 silver signals to programs at their own "
+        "level, and programs pass over stronger applicants who did not signal them. Signals tell programs who would "
+        "really come, so most of the idealized market's empty positions fill.",
+        IDEALIZED | {"signals": SIGNALS_READ_BY_ALL, "invites": {"yield_protection": 2.0}},
+    ),
+    "signals_first": Preset(
+        "Idealized market, signals first",
+        "The same signals, but programs invite everyone who signalled them before anyone else. Positions fill, but "
+        "weaker applicants who signalled take interviews from stronger ones who did not, so the strongest applicants "
+        "usually match less often.",
+        IDEALIZED | {"signals": SIGNALS_READ_BY_ALL, "invites": {"strategy": "signal_first"}},
     ),
     "noisy": Preset(
         "Noisy market",

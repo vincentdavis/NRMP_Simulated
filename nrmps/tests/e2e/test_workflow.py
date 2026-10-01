@@ -197,3 +197,17 @@ def test_the_demo_runs_and_opens_its_results(logged_in_page, live):
     expect(page.get_by_role("heading", level=1)).to_contain_text("Run 1")
     expect(page.locator("main")).to_contain_text("Checks passed")
     assert Simulation.objects.get(name="Demo: Small classroom market").runs.get().status == "succeeded"
+
+
+def test_the_demo_button_shows_its_spinner_only_while_the_demo_runs(logged_in_page, live):
+    """The spinner in "Run the demo" takes no room until the form is submitted (it left a gap before the label), then
+    shows while the demo runs; the form is marked busy so a second click does not start another demo."""
+    page = logged_in_page
+    page.goto(f"{live}/demo/")
+    button = page.get_by_role("button", name="Run the demo")
+    spinner = button.locator(".htmx-indicator")
+    expect(spinner).to_be_hidden()
+    page.evaluate("window.addEventListener('submit', (event) => event.preventDefault())")  # stay on the page
+    button.click()
+    expect(spinner).to_be_visible()
+    expect(page.locator("form[data-busy]")).to_have_attribute("aria-busy", "true")

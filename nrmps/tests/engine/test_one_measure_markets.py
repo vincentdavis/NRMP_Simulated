@@ -1,5 +1,6 @@
-"""The markets with one measure on each side: the idealized one, seen exactly, and the noisy one, seen through the
-largest noise the parameters allow (presets "idealized" and "noisy")."""
+"""The markets with one measure on each side: the idealized one, seen exactly, with signals (two ways) and the noisy
+one, seen through the largest noise the parameters allow (presets "idealized", "idealized_signals", "signals_first"
+and "noisy")."""
 
 import math
 
@@ -126,3 +127,58 @@ def test_noise_scrambles_the_sorting_but_the_match_stays_stable():
         assert result.match.blocking_pairs == 0
     assert correlation["noisy"] < 0.5
     assert correlation["idealized"] > correlation["noisy"] + 0.4
+
+
+def _outcomes(key, seed=2026):
+    """Return the shares of applicants matched and positions filled, the sorting, and the bottom and top fifths."""
+    result = run_pipeline(preset_params(key, seed=seed), seed)
+    strength, quality = _strength_quality(result)
+    program = np.asarray(result.match.program)
+    matched = program >= 0
+    fifth = np.minimum((np.argsort(np.argsort(strength)) * 5) // strength.size, 4)
+    assert result.match.blocking_pairs == 0
+    return {
+        "matched": matched.mean(),
+        "filled": matched.sum() / np.asarray(result.population.programs.capacity).sum(),
+        "sorting": spearmanr(strength[matched], quality[program[matched]]).statistic,
+        "bottom": matched[fifth == 0].mean(),
+        "top": matched[fifth == 4].mean(),
+    }
+
+
+@pytest.mark.parametrize(
+    ("key", "invites"),
+    [
+        ("idealized_signals", {"invites.yield_protection": (0.0, 2.0)}),
+        ("signals_first", {"invites.strategy": ("top_score", "signal_first")}),
+    ],
+)
+def test_the_signal_demos_add_only_signals_to_the_idealized_market(key, invites):
+    idealized = _flat(preset_params("idealized", seed=1).to_json_data())
+    demo = _flat(preset_params(key, seed=1).to_json_data())
+    changed = {name: (idealized[name], demo[name]) for name in idealized if idealized[name] != demo[name]}
+    assert changed == {
+        "signals.tiers": (
+            [],
+            [{"name": "gold", "count": 3, "boost": 0.8}, {"name": "silver", "count": 5, "boost": 0.4}],
+        ),
+        **invites,
+    }
+
+
+def test_signals_at_the_applicants_level_fill_most_empty_positions():
+    """Signals sent at the applicant's own level, read by programs that pass over stronger applicants who did not
+    signal them, fill most of the positions the idealized market leaves empty (at this seed 98% of positions against
+    88%, 90.5% of applicants against 82%) and keep the sorting close (0.91 against 0.94)."""
+    idealized, signals = _outcomes("idealized"), _outcomes("idealized_signals")
+    assert signals["matched"] > idealized["matched"] + 0.05
+    assert signals["filled"] > 0.95
+    assert signals["sorting"] > 0.85
+
+
+def test_inviting_signallers_first_crowds_out_strong_applicants():
+    """When programs invite everyone who signalled them first, strong applicants lose interviews to weaker ones who
+    signalled: the top fifth matches less (at this seed 83.5% against 94.5%) and the bottom fifth more."""
+    first, levelled = _outcomes("signals_first"), _outcomes("idealized_signals")
+    assert first["top"] < levelled["top"] - 0.05
+    assert first["bottom"] > levelled["bottom"]

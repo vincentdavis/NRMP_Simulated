@@ -46,6 +46,8 @@ def test_the_demo_page_offers_markets(auth_client):
     for title in (
         "NRMP-like market",
         "Idealized market",
+        "Idealized market with signals",
+        "Idealized market, signals first",
         "Noisy market",
         "Small classroom market",
         "Preference signals",

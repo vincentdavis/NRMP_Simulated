@@ -79,6 +79,17 @@
   }
 }
 
+/* Loading indicators (the spinner in a button) take no room until their request runs: htmx's own rule only makes them
+   transparent, which left a gap before the button's label. Plain forms with data-busy show theirs while they submit
+   (static/js/site.js). */
+.htmx-indicator {
+  display: none;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}
+
 /* Keys (legends) drawn in HTML next to a chart, in the chart's colours. */
 .viz-dot {
   display: inline-block;

@@ -1,5 +1,5 @@
-// Site-wide behaviour: toasts, the confirmation dialog, HTMX error reporting, sliders, the unsaved-changes guard,
-// selects that submit their form, and the display settings (theme and chart patterns).
+// Site-wide behaviour: toasts, the confirmation dialog, busy forms (data-busy), HTMX error reporting, sliders, the
+// unsaved-changes guard, selects that submit their form, and the display settings (theme and chart patterns).
 // Loaded on every page after htmx. Text is always inserted with textContent, never as HTML. There are no inline
 // event handlers (onchange="..."): the Content Security Policy would block them, so behaviour lives here.
 (function () {
@@ -56,6 +56,26 @@
     confirmAction(form.dataset.confirm, () => {
       form.dataset.confirmed = "1";
       form.requestSubmit();
+    });
+  });
+
+  // Ordinary forms with data-busy show their loading indicator while they submit, as HTMX does for its requests, and
+  // ignore a second submission, so a double click cannot start two runs. Coming back to the page (the back button
+  // restores it from the cache) makes the form usable again.
+  document.addEventListener("submit", (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-busy") || event.defaultPrevented) return;
+    if (form.classList.contains("htmx-request")) {
+      event.preventDefault();
+      return;
+    }
+    form.classList.add("htmx-request");
+    form.setAttribute("aria-busy", "true");
+  });
+  window.addEventListener("pageshow", () => {
+    document.querySelectorAll("form[data-busy].htmx-request").forEach((form) => {
+      form.classList.remove("htmx-request");
+      form.removeAttribute("aria-busy");
     });
   });
 

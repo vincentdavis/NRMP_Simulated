@@ -7,7 +7,7 @@
     Pick a market. The demo creates a simulation from it, runs every stage from the population to the match, and opens
     the results. You can then change its parameters and run it again.
   </p>
-  <form method="post" class="card bg-base-100 shadow-xl">
+  <form method="post" class="card bg-base-100 shadow-xl" data-busy>
     {% csrf_token %}
     <div class="card-body">
       <fieldset class="fieldset">

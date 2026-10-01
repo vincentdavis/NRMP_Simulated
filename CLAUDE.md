@@ -163,8 +163,8 @@ nrmps/
 templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/ (the run's tabs
                           #   extend runs/_layout.html), help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
-static/js/site.js         # toasts, confirmation dialog, HTMX errors, sliders, unsaved-changes guard, display
-                          #   settings (theme, chart patterns), autosubmit selects, list editors
+static/js/site.js         # toasts, confirmation dialog, busy forms, HTMX errors, sliders, unsaved-changes guard,
+                          #   display settings (theme, chart patterns), autosubmit selects, list editors
 static/js/nrmp-charts.js  # the chart registry: draws [data-chart] elements (ECharts charts, sigma.js networks) from
                           #   json_script payloads when they come into view; chart tokens, tip(), format.*
 static/vendor/            # htmx, Alpine.js, ECharts, sigma.js and graphology by version (`npm run vendor`)

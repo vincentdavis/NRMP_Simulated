@@ -279,6 +279,28 @@ market). But who goes where is close to random: Spearman's correlation of streng
 is 0.26, against 0.94 idealized and 0.72 NRMP-like. Noise spreads interviews around, so people find places, and
 scrambles the sorting.
 
+**After 5.1 (owner request): signals in the idealized market, two demos.** Both are offered on the demo page after the
+idealized market. Each adds 3 gold and 5 silver signals to it, sent to programs at the applicant's own level first
+("realistic") and read by every program; a test checks that nothing else changes:
+- **Idealized market with signals** (`idealized_signals`) adds yield protection 2: programs pass over stronger
+  applicants who did not signal them.
+- **Idealized market, signals first** (`signals_first`) has programs invite everyone who signalled them first.
+
+Over seeds 2026, 7 and 11, against the idealized market's 82% of applicants matched and 88.7% of positions filled:
+- with signals and yield protection, 90% are matched, 97% of positions filled and sorting stays at 0.90;
+- with signals first, about 90% are matched, but the top fifth matches about 10 points less (78–85%), because strong
+  applicants lose interviews to weaker ones who signalled. Over seeds 100–119 the gap is 5.7 points on average and the
+  top fifth does worse on 15 of 20 seeds, so the demo's description says "usually".
+
+Signals sent to applicants' top choices instead (`top_utility`) change no invitation: they go to programs 47
+percentile points above the applicant on average, and a boost of 0.8 never reaches those programs' invitation range.
+The same 8,000 signals sent at the applicant's level change 3,074 invitations.
+
+**The demo button's spinner.** "Run the demo" had a gap before its label: the loading spinner of a button is an
+`htmx-indicator`, which htmx only makes transparent, and the demo form is a plain form, so it never showed. Indicators
+now take no room until their request runs (`styles.css`), which also closes the same gap on the run panel's Run button.
+Plain forms opt in with `data-busy` to show theirs while they submit and to ignore a second submission (`site.js`).
+
 ## Phases 6–8
 
 Not started.
