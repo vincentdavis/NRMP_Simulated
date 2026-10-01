@@ -248,6 +248,23 @@ found the dark theme's own primary under 4.5:1 with its text. A three-line `{# #
 tabs during the change (Django only knows one-line `{# #}` comments). A new test fails on any template comment that
 spans lines.
 
+**After 5.1 (owner request): an idealized demo market.** A new preset, `idealized`, is offered on the demo page,
+second after the NRMP-like market. Each side has one measure, seen exactly at every stage:
+- agreement 1 on both sides, no attribute weight and no taste;
+- no noise before, at or after interviews, and none in applicants' self-assessment;
+- one applicant group.
+
+The application and interview limits of the NRMP-like market stay (the owner's choice). The choices are made
+deterministic: 30 applications each, interview offers accepted best first, every interviewee ranked. At seed 2026 every
+rank list follows true quality and the match sorts far more closely: Spearman's correlation of applicant strength with
+the matched program's quality is about 0.94, against 0.72 in the NRMP-like market. Fewer applicants match, though:
+about 82% against 88%. Because every program wants the same applicants, programs interview strong applicants who
+applied to them as a safety, lose them all to better programs and leave positions empty. Noise in the NRMP-like market
+spreads interviews around, and yield protection barely helps (83%). Without the limits (applications to every program,
+interviews for everyone) the engine sorts perfectly: the strongest applicants fill every position, with no stronger
+applicant at a worse program. A test checks that perfect sorting on a 60 × 8 market, because the interview caps cannot
+reach every applicant at 1,000 × 142.
+
 ## Phases 6–8
 
 Not started.

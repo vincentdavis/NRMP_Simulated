@@ -66,6 +66,35 @@ PRESETS: dict[str, Preset] = {
             }
         },
     ),
+    "idealized": Preset(
+        "Idealized market",
+        "One measure on each side, seen exactly: applicants rank programs by quality alone and programs rank "
+        "applicants by strength alone, with no taste and no noise at any stage. Applications and interviews keep the "
+        "NRMP-like limits, so the match sorts the strongest applicants into the best programs as far as they allow.",
+        {
+            # One group, so strength is a single normal distribution.
+            "applicants": {"groups": [{"name": "all", "share": 1.0}]},
+            # Complete agreement on quality alone: no fit, no personal taste, no attributes in the common score.
+            "prefs": {
+                "applicant_pref_correlation": 1.0,
+                "program_pref_correlation": 1.0,
+                "attribute_weight_share": 0.0,
+                "taste_share": 0.0,
+            },
+            # Seen exactly before, at and after interviews, and applicants know where they stand.
+            "info": {
+                "applicant_pre_noise_sd": 0.0,
+                "program_pre_noise_sd": 0.0,
+                "interview_informativeness": 1.0,
+                "fit_shock_sd": 0.0,
+            },
+            # The same number of applications for everyone, the best interview offers accepted first, and every
+            # interviewee ranked: no chance left in the choices.
+            "apps": {"self_assessment_noise_sd": 0.0, "count_dist": "fixed"},
+            "interview": {"acceptance_order": "best_first"},
+            "rol": {"program_policy": "all_interviewed"},
+        },
+    ),
     "same_favourites": Preset(
         "Everyone wants the same programs",
         "High agreement on both sides (0.9): applicants want the same programs and programs the same applicants, "

@@ -43,7 +43,7 @@ def test_the_landing_page_lists_recent_simulations(auth_client, finished_run, si
 
 def test_the_demo_page_offers_markets(auth_client):
     body = auth_client.get(reverse("nrmps:demo")).content.decode()
-    for title in ("NRMP-like market", "Small classroom market", "Preference signals"):
+    for title in ("NRMP-like market", "Idealized market", "Small classroom market", "Preference signals"):
         assert title in body
 
 
@@ -55,6 +55,14 @@ def test_the_demo_creates_runs_and_opens_a_simulation(auth_client, user):
     assert run.status == "succeeded"
     assert sim.name == "Demo: Small classroom market"
     assert sim.get_params().with_seed(1) == preset_params("classroom", seed=1)
+
+
+def test_the_idealized_demo_runs_its_preset(auth_client, user):
+    auth_client.post(reverse("nrmps:demo"), {"preset": "idealized"})
+    sim = Simulation.objects.get(owner=user)
+    assert sim.name == "Demo: Idealized market"
+    assert sim.runs.get().status == "succeeded"
+    assert sim.get_params().with_seed(1) == preset_params("idealized", seed=1)
 
 
 def test_an_unknown_demo_market_falls_back_to_the_default(auth_client, user):
