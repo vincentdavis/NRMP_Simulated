@@ -18,6 +18,8 @@ from nrmps.charts import (
     STRENGTH_RANGES,
     TAB_CHARTS,
     _bands_note,
+    _count_bins,
+    _count_names,
     agent_funnel,
     applicant_flow,
     digits,
@@ -25,6 +27,8 @@ from nrmps.charts import (
     fit_check,
     funnel,
     gini,
+    interviews_per_applicant,
+    match_by_list_length,
     match_by_strength,
     matched_choice,
     perception_samples,
@@ -59,7 +63,9 @@ def test_every_chart_of_a_run(finished_run):
         "lorenz",
         "funnel",
         "applicant_flow",
+        "interviews",
         "matched_choice",
+        "list_length",
         "sorting",
         "program_fill",
         "match_by_strength",
@@ -150,8 +156,8 @@ def test_the_scatter_sample_repeats_and_is_bounded(finished_run):
     [
         ("run_population", {"strength", "quality", "capacity"}),
         ("run_pre_interview", {"applicant-fidelity", "program-fidelity", "perception-applicants", "demand"}),
-        ("run_applications", {"funnel"}),
-        ("run_match", {"matched-choice", "sorting", "program-fill", "match-by-strength"}),
+        ("run_applications", {"funnel", "applicant-flow", "interviews"}),
+        ("run_match", {"matched-choice", "list-length", "sorting", "program-fill", "match-by-strength"}),
     ],
 )
 def test_the_run_tabs_embed_their_charts_and_numbers(auth_client, finished_run, view, kinds):
@@ -188,8 +194,9 @@ def test_runs_from_before_the_match_draw_the_population_charts(auth_client, fini
     charts = run_charts(RunData(finished_run))
     assert "funnel" not in charts
     assert charts["perception_applicants"]["payload"]["post"] is None
-    # The Match tab's charts need the stage decisions, except the choices, which the diagnostics keep.
-    assert [charts[key] for key in ("sorting", "program_fill", "match_by_strength")] == [None, None, None]
+    # The charts of the later tabs need the stage decisions, except the choices, which the diagnostics keep.
+    for key in ("interviews", "list_length", "sorting", "program_fill", "match_by_strength"):
+        assert charts[key] is None, key
     assert charts["matched_choice"]["summary"]
 
 
@@ -727,7 +734,7 @@ def test_the_match_tab_shows_its_charts_with_their_numbers(auth_client, finished
     body = auth_client.get(reverse("nrmps:run_match", kwargs=kwargs)).content.decode()
     for kind in ("bars", "heatmap", "shares"):
         assert f'data-chart="{kind}"' in body, kind
-    assert body.count('data-chart="shares"') == 2
+    assert body.count('data-chart="shares"') == 3
     assert 'data-chart="shares" data-payload="chart-program-fill" data-series="program"' in body
     for text in (
         "Who matched where",
@@ -737,9 +744,179 @@ def test_the_match_tab_shows_its_charts_with_their_numbers(auth_client, finished
         "Share of matched",
         "11th choice or lower",
         "Sorting is ",
+        "Programs ranked",
+        "applicants with a rank order list",
     ):
         assert text in body, text
     assert body.count("The numbers") == len(TAB_CHARTS["match"])
     for key in TAB_CHARTS["match"]:
         assert escape(str(help_registry.CHARTS[key].title)) in body
         assert help_registry.CHARTS[key].tab == "match"
+
+
+# --- Plan step 5.3: interviews per applicant, and the match rate by list length ---------------------------------------
+
+
+def _interviewed(interviews, *, matched=None, ranked=None, strength=None):
+    """Return a stand-in for a run's data: applicant k had interviews[k] interviews and ranked them all (or `ranked`
+    of them), and matched if matched[k]."""
+    interviews = np.asarray(interviews)
+    n = interviews.size
+    i = np.repeat(np.arange(n), interviews)
+    place = np.concatenate([np.arange(1, count + 1) for count in interviews]) if i.size else np.zeros(0, dtype=int)
+    keep = interviews if ranked is None else np.asarray(ranked)
+    return SimpleNamespace(
+        population=SimpleNamespace(
+            n_applicants=n,
+            applicants=SimpleNamespace(
+                strength=np.arange(n, dtype=float) if strength is None else np.asarray(strength)
+            ),
+        ),
+        stages=SimpleNamespace(
+            i=i,
+            accepted=np.ones(i.size, dtype=bool),
+            applicant_rank=np.where(place <= keep[i], place, 0),
+            match_program=np.where(np.zeros(n, dtype=bool) if matched is None else np.asarray(matched), 0, -1),
+        ),
+    )
+
+
+def test_counts_per_applicant_get_a_bin_each_and_share_the_last_from_twenty():
+    labels, bins = _count_bins(np.array([0, 3, 3, 1]), 0)
+    assert labels == ["0", "1", "2", "3"]
+    assert bins.tolist() == [0, 3, 3, 1]
+    labels, bins = _count_bins(np.array([1, 20, 25, 7]), 1)
+    assert labels[0] == "1"
+    assert labels[-1] == "20+"
+    assert len(labels) == 20
+    assert bins.tolist() == [0, 19, 19, 6]
+    assert _count_bins(np.array([20, 2]), 1)[0][-1] == "20"  # exactly twenty is its own bin, not "20+"
+    assert _count_names(["1", "2", "20+"], "interview", "interviews") == [
+        "1 interview",
+        "2 interviews",
+        "20 or more interviews",
+    ]
+
+
+def test_interviews_per_applicant_are_the_run_s(finished_run):
+    data = RunData(finished_run)
+    funnel_metrics = finished_run.metrics["outcomes"]["funnel"]
+    payload = interviews_per_applicant(data)
+    n = data.population.n_applicants
+    assert sum(payload["counts"]) == n
+    assert payload["counts"][0] == funnel_metrics["applicants_without_interview"]
+    assert payload["mean"] == pytest.approx(funnel_metrics["interviews_per_applicant"])
+    held = sum(int(label) * count for label, count in zip(payload["labels"], payload["counts"], strict=True))
+    assert held == int(data.stages.accepted.sum())
+    assert payload["names"][:3] == ["No interview", "1 interview", "2 interviews"]
+    assert len(payload["bands"]) == 5
+    for k, count in enumerate(payload["counts"]):
+        assert sum(band["counts"][k] for band in payload["bands"]) == count
+    assert 0 <= payload["gini"] < 1
+    assert 0.1 <= payload["top_share"] <= 1
+    json.dumps(payload)
+
+
+def test_the_interviews_chart_has_a_summary_a_table_and_the_strength_switch(finished_run):
+    chart = run_charts(RunData(finished_run), ("interviews",))["interviews"]
+    payload = chart["payload"]
+    assert chart["summary"].startswith(f"Applicants had {payload['mean']:.1f} interviews on average: ")
+    assert f"(Gini {payload['gini']:.2f})" in chart["summary"]
+    assert "By strength, the bottom 20% had " in chart["summary"]
+    assert chart["switchable"] is True
+    assert chart["switch_note"] == ""
+    assert [step["dot"] for step in chart["switch_key"]["steps"]] == [f"viz-dot-div-{k}" for k in range(1, 6)]
+    assert chart["band_ranges"] == STRENGTH_RANGES
+    assert [row["count"] for row in chart["rows"]] == payload["counts"]
+    assert [row["bands"] for row in chart["rows"]] == [
+        [band["counts"][k] for band in payload["bands"]] for k in range(len(payload["counts"]))
+    ]
+
+
+def test_interviews_concentrate_and_follow_strength_in_a_constructed_market():
+    """Ten applicants: the weakest five have none, the strongest five have four each."""
+    payload = interviews_per_applicant(_interviewed([0] * 5 + [4] * 5))
+    assert payload["labels"] == ["0", "1", "2", "3", "4"]
+    assert payload["counts"] == [5, 0, 0, 0, 5]
+    assert payload["mean"] == 2
+    assert payload["top_share"] == pytest.approx(0.2)  # one applicant of ten holds four of the twenty interviews
+    assert payload["gini"] == pytest.approx(0.5)
+    assert [band["mean"] for band in payload["bands"]] == [0, 0, 2, 4, 4]
+    assert payload["bands"][0]["counts"] == [2, 0, 0, 0, 0]
+    assert payload["bands"][4]["counts"] == [0, 0, 0, 0, 2]
+    nobody = interviews_per_applicant(_interviewed([0] * 10))
+    assert (nobody["counts"], nobody["top_share"], nobody["gini"]) == ([10], None, None)
+    many = interviews_per_applicant(_interviewed([25, 20, 3]))
+    assert many["labels"][-1] == "20+"
+    assert many["counts"][-1] == 2
+    assert many["names"][-1] == "20 or more interviews"
+    assert many["bands"] is None  # three applicants cannot be split into fifths
+    chart = run_charts(
+        SimpleNamespace(run=SimpleNamespace(metrics={}, population_source={}), **vars(_interviewed([25, 20, 3]))),
+        ("interviews",),
+    )
+    assert chart["interviews"]["switchable"] is False
+    assert chart["interviews"]["switch_note"] == "fewer than 5 applicants"
+    assert "had 20 or more." in chart["interviews"]["summary"]
+
+
+def test_the_match_rate_by_list_length_counts_applicants_with_a_list(finished_run):
+    data = RunData(finished_run)
+    match = finished_run.metrics["outcomes"]["match"]
+    payload = match_by_list_length(data)
+    got, missed = (series["counts"] for series in payload["series"])
+    assert [series["name"] for series in payload["series"]] == ["Matched", "Not matched"]
+    assert sum(got) == match["matched"]
+    assert sum(got) + sum(missed) == match["certified"]
+    assert payload["labels"][0] == "1"
+    assert payload["names"][0] == "1 program ranked"
+    assert payload["names"][1] == "2 programs ranked"
+    lengths = sum(int(label) * (g + m) for label, g, m in zip(payload["labels"], got, missed, strict=True))
+    assert lengths == int((data.stages.applicant_rank > 0).sum())
+    chart = run_charts(data, ("list_length",))["list_length"]
+    assert chart["summary"].startswith(f"Of {match['certified']:,} applicants with a rank order list, ")
+    assert f"{match['matched']:,} matched ({match['match_rate'] * 100:.1f}%)" in chart["summary"]
+    assert [row["total"] for row in chart["rows"]] == [g + m for g, m in zip(got, missed, strict=True)]
+    json.dumps(payload)
+
+
+def test_the_match_rate_by_list_length_in_a_constructed_market():
+    """Six applicants: no list, lists of 1, 1, 3, 3 and 3; one of the short lists and two of the long ones match."""
+    data = _interviewed([0, 1, 1, 3, 3, 3], matched=[False, True, False, True, True, False])
+    payload = match_by_list_length(data)
+    assert payload["labels"] == ["1", "2", "3"]
+    assert [series["counts"] for series in payload["series"]] == [[1, 0, 2], [1, 0, 1]]
+    chart = run_charts(
+        SimpleNamespace(run=SimpleNamespace(metrics={}, population_source={}), **vars(data)), ("list_length",)
+    )
+    chart = chart["list_length"]
+    assert chart["summary"] == (
+        "Of 5 applicants with a rank order list, 3 matched (60.0%): 50.0% of the 2 who ranked 1 program, and 66.7% "
+        "of the 3 who ranked 3 programs."
+    )
+    assert [row["rate"] for row in chart["rows"]] == [0.5, None, pytest.approx(2 / 3)]
+    assert [row["label"] for row in chart["rows"]] == ["1 program", "2 programs", "3 programs"]
+
+
+def test_lists_shorter_than_the_interviews_and_lists_all_alike():
+    """A list holds the programs the applicant ranked, which can be fewer than their interviews."""
+    shorter = _interviewed([4, 4, 2], ranked=[1, 3, 0], matched=[True, True, False])
+    assert match_by_list_length(shorter)["labels"] == ["1", "2", "3"]
+    assert [series["counts"] for series in match_by_list_length(shorter)["series"]] == [[1, 0, 1], [0, 0, 0]]
+    assert match_by_list_length(_interviewed([2, 2, 2], matched=[True, False, True])) is None  # one bar says nothing
+    assert match_by_list_length(_interviewed([0, 0])) is None
+    long_lists = match_by_list_length(_interviewed([1, 22, 30], matched=[False, True, True]))
+    assert long_lists["labels"][-1] == "20+"
+    assert long_lists["names"][-1] == "20 or more programs ranked"
+    assert long_lists["series"][0]["counts"][-1] == 2
+
+
+def test_the_applications_tab_shows_who_gets_the_interviews(auth_client, finished_run):
+    kwargs = {"pk": finished_run.simulation_id, "number": finished_run.number}
+    body = auth_client.get(reverse("nrmps:run_applications", kwargs=kwargs)).content.decode()
+    assert 'data-chart="bars" data-payload="chart-interviews"' in body
+    assert escape(str(help_registry.CHARTS["interviews"].title)) in body
+    assert body.count('data-chart-switch="bands"') == 2  # the applicants' flow and the interviews
+    assert body.count('data-chart-switch-key="bands" hidden') == 2
+    assert "interviews on average" in body
+    assert "No interview</th>" in body

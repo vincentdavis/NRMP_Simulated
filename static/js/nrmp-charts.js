@@ -294,12 +294,17 @@
     }
   }
 
+  // A switch's choice is one for the whole site, so the page's other charts with the same switch follow at once.
   document.addEventListener("change", (event) => {
     const input = event.target;
     if (!(input instanceof HTMLInputElement) || !input.matches("[data-chart-switch]")) return;
     remember(`chart-switch-${input.dataset.chartSwitch}`, input.checked ? "on" : "off");
-    const element = applySwitch(input);
-    if (element && drawn.has(element)) draw(element);
+    document.querySelectorAll("input[data-chart-switch]").forEach((other) => {
+      if (other.dataset.chartSwitch !== input.dataset.chartSwitch) return;
+      if (!other.disabled) other.checked = input.checked;
+      const element = applySwitch(other);
+      if (element && drawn.has(element)) draw(element);
+    });
   });
 
   function renderAll(root = document) {
@@ -883,10 +888,29 @@
     return `${name.slice(0, at)}\n${name.slice(at + 1)}`;
   };
 
-  // Counts per ordered category as bars of their share of the total {labels, names, counts, unit, of}: `names` are the
-  // tooltips' titles ("1st choice"), `unit` what is counted and `of` the total ("of matched applicants").
+  // Counts per ordered category as bars of their share of the total {labels, names, counts, unit, of, bands}: `names`
+  // are the tooltips' titles ("1st choice"), `unit` what is counted and `of` the total ("of matched applicants"). With
+  // the "bands" switch on and the counts of each strength fifth (bands: [{label, counts}]), each bar is stacked from
+  // the bottom 20% up to the top 20% in the diverging scale (the key is under the chart), and the tooltip lists them.
   register("bars", (p, t, element, option) => {
     const total = Math.max(1, p.counts.reduce((sum, count) => sum + count, 0));
+    const split = bandsOn(p, element);
+    const bar = { type: "bar", barMaxWidth: 24 };
+    const series = split
+      ? p.bands.map((band, b) => ({
+          ...bar,
+          name: band.label,
+          stack: "fifths",
+          data: band.counts.map((count) => count / total),
+          itemStyle: { color: scaleStep(t.diverging, b, p.bands.length) },
+        }))
+      : [
+          {
+            ...bar,
+            data: p.counts.map((count) => count / total),
+            itemStyle: { color: sideColour(t, element), borderRadius: [4, 4, 0, 0] },
+          },
+        ];
     return {
       ...option,
       legend: { show: false },
@@ -895,21 +919,21 @@
         trigger: "axis",
         axisPointer: shadowPointer(t),
         formatter: ([item]) => {
-          const count = p.counts[item.dataIndex];
-          const share = `${format.share(count / total)} ${p.of}`;
-          return tip(p.names[item.dataIndex], [[p.unit, `${format.count(count)} (${share})`]]);
+          const k = item.dataIndex;
+          const rows = [[p.unit, `${format.count(p.counts[k])} (${format.share(p.counts[k] / total)} ${p.of})`]];
+          if (split) {
+            const whole = Math.max(1, p.counts[k]);
+            // The strongest first, as the bar is stacked from the top down.
+            [...p.bands].reverse().forEach((band) => {
+              rows.push([band.label, `${format.count(band.counts[k])} (${format.share(band.counts[k] / whole)})`]);
+            });
+          }
+          return tip(p.names[k], rows);
         },
       },
       xAxis: categoryAxis(t, element.dataset.xLabel || "", p.labels),
       yAxis: shareAxis(t, element.dataset.yLabel || ""),
-      series: [
-        {
-          type: "bar",
-          data: p.counts.map((count) => count / total),
-          barMaxWidth: 24,
-          itemStyle: { color: sideColour(t, element), borderRadius: [4, 4, 0, 0] },
-        },
-      ],
+      series,
     };
   });
 
@@ -938,6 +962,7 @@
         axisPointer: shadowPointer(t),
         formatter: (items) => {
           const k = items[0].dataIndex;
+          if (!totals[k]) return tip(p.names[k], [`No ${p.unit}`]);
           const whole = Math.max(1, totals[k]);
           const all = `${format.count(totals[k])} ${p.unit}`;
           const rows = p.series.map((series) => [

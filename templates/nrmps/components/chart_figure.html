@@ -159,6 +159,41 @@
                 </tr>
               {% endfor %}
             </tbody>
+          {% elif table == "interviews" %}
+            {# Each number of interviews, and with strength fifths (chart.band_ranges) the applicants of each fifth. #}
+            {% if chart.band_ranges %}<colgroup span="3"></colgroup><colgroup span="{{ chart.band_ranges|length }}"></colgroup>{% endif %}
+            <thead>
+              <tr>
+                <th scope="col"{% if chart.band_ranges %} rowspan="2"{% endif %}>Interviews</th>
+                <th scope="col" class="text-right"{% if chart.band_ranges %} rowspan="2"{% endif %}>Applicants</th>
+                <th scope="col" class="text-right"{% if chart.band_ranges %} rowspan="2"{% endif %}>Share of all</th>
+                {% if chart.band_ranges %}<th scope="colgroup" colspan="{{ chart.band_ranges|length }}" class="text-center">By strength percentile</th>{% endif %}
+              </tr>
+              {% if chart.band_ranges %}<tr>{% for range in chart.band_ranges %}<th scope="col" class="text-right tabular-nums">{{ range }}</th>{% endfor %}</tr>{% endif %}
+            </thead>
+            <tbody>
+              {% for row in chart.rows %}
+                <tr><th scope="row" class="font-normal whitespace-nowrap">{{ row.label }}</th><td class="text-right tabular-nums">{{ row.count|intcomma }}</td><td class="text-right tabular-nums">{{ row.share|percent }}</td>{% for count in row.bands %}<td class="text-right tabular-nums">{{ count|intcomma }}</td>{% endfor %}</tr>
+              {% endfor %}
+            </tbody>
+          {% elif table == "list_length" %}
+            <thead>
+              <tr>
+                <th scope="col">Programs ranked</th><th scope="col" class="text-right">Applicants</th><th scope="col" class="text-right">Matched</th>
+                <th scope="col" class="text-right">Not matched</th><th scope="col" class="text-right">Match rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in chart.rows %}
+                <tr>
+                  <th scope="row" class="font-normal whitespace-nowrap">{{ row.label }}</th>
+                  <td class="text-right tabular-nums">{{ row.total|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.matched|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.missed|intcomma }}</td>
+                  <td class="text-right tabular-nums">{{ row.rate|percent }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
           {% elif table == "by_strength" %}
             <thead>
               <tr>

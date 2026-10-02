@@ -18,7 +18,10 @@ observed utilities scatter around the identity line, and the funnel's counts add
   through the stages.
 - MAT-7 (ego) `ego_network`: one applicant's or program's applications by how far each got, drawn as a network with
   sigma.js on the agent's page (plan step 5.1), next to `agent_funnel`, the same funnel for that agent alone.
-- The Match tab (plan step 5.3): `matched_choice` (which choice matched applicants got), `sorting` (applicants by
+- INT-2 `interviews_per_applicant`: how many applicants had each number of interviews, optionally split into
+  strength fifths, with how concentrated the interviews are.
+- The Match tab (plan step 5.3): `matched_choice` (which choice matched applicants got), `match_by_list_length`
+  (ROL-1: the match rate by the number of programs on the applicant's rank order list), `sorting` (applicants by
   strength fifth against the quality fifth of the program they matched to, with the rank correlation of the two),
   `program_fill` (positions filled by program quality fifth) and `match_by_strength` (who matched, by strength
   decile).
@@ -59,6 +62,7 @@ STRENGTH_RANGES = ("0\u201320", "20\u201340", "40\u201360", "60\u201380", "80\u2
 # The choices matched applicants got, in the bins of the engine's rank distribution (outcomes.match).
 CHOICE_BINS = (*(str(rank) for rank in range(1, 11)), "11+")
 DECILES = 10
+COUNT_LIMIT = 20  # a count per applicant (interviews, programs ranked) from this number on shares the last bin
 # How far an application got, in order; each is exclusive (an interview that led nowhere is "Interviewed").
 EGO_STAGES = ("Applied", "Invited", "Interviewed", "Ranked", "Matched")
 EGO_KEY = (
@@ -377,11 +381,12 @@ def applicant_flow(data: RunData) -> dict[str, Any] | None:
 
 
 def _strength_groups(
-    strength: NDArray[np.float64], bands: NDArray[np.int64], counts_of: Callable[[NDArray[np.bool_]], dict[str, int]]
+    strength: NDArray[np.float64], bands: NDArray[np.int64], counts_of: Callable[[NDArray[np.bool_]], Any]
 ) -> list[dict[str, Any]]:
     """Return each strength fifth's label, strength range (over all its applicants) and counts.
 
-    `counts_of` gets the fifth as a mask over all applicants.
+    `counts_of` gets the fifth as a mask over all applicants and returns its counts, in the chart's own shape (by
+    stage for a flow, per bar for bars).
     """
     return [
         {
@@ -588,6 +593,171 @@ def _perception_chart(payload: dict[str, Any], side: str) -> dict[str, Any]:
         else "."
     )
     return {"payload": payload, "summary": summary}
+
+
+# --- Counts per applicant (plan step 5.3): interviews, and the match rate by list length -----------------------------
+
+
+def _count_bins(values: NDArray[np.int64], start: int) -> tuple[list[str], NDArray[np.int64]]:
+    """Return the labels of the bins of a count per applicant, from `start`, and each value's bin.
+
+    One bin per number up to the largest value; from COUNT_LIMIT on, the numbers share the last bin ("20+").
+    """
+    top = int(values.max(initial=start))
+    last = min(top, COUNT_LIMIT)
+    labels = [str(number) for number in range(start, last + 1)]
+    if top > COUNT_LIMIT:
+        labels[-1] = f"{COUNT_LIMIT}+"
+    return labels, np.minimum(values, last) - start
+
+
+def _count_names(labels: list[str], one: str, many: str) -> list[str]:
+    """Return the bins' names for tooltips and tables: "1 interview", "2 interviews", "20 or more interviews"."""
+    names = []
+    for label in labels:
+        unit = one if label == "1" else many
+        names.append(f"{label.removesuffix('+')} or more {unit}" if label.endswith("+") else f"{label} {unit}")
+    return names
+
+
+def interviews_per_applicant(data: RunData) -> dict[str, Any] | None:
+    """Return INT-2: how many applicants had each number of interviews, in total and per strength fifth.
+
+    With the mean, the share of all interviews held by the tenth of applicants with the most, and the Gini
+    coefficient of interviews over applicants. `bands` is None when the applicants cannot be split into fifths
+    (`strength_bands`), with each fifth's mean otherwise. None for runs from before the match.
+    """
+    record = data.stages
+    if record is None:
+        return None
+    n = data.population.n_applicants
+    interviews = np.bincount(record.i[record.accepted.astype(bool)], minlength=n).astype(np.int64)
+    labels, bins = _count_bins(interviews, 0)
+    total = int(interviews.sum())
+    most = np.sort(interviews)[::-1][: max(1, -(-n // DECILES))]  # the tenth of applicants with the most, rounded up
+    strength = np.asarray(data.population.applicants.strength, dtype=np.float64)
+    fifths = strength_bands(strength)
+    payload: dict[str, Any] = {
+        "labels": labels,
+        "names": ["No interview", *_count_names(labels[1:], "interview", "interviews")],
+        "counts": np.bincount(bins, minlength=len(labels)).tolist(),
+        "unit": "Applicants",
+        "of": "of all applicants",
+        "mean": float(interviews.mean()),
+        "top_share": float(most.sum()) / total if total else None,
+        "gini": gini(interviews),
+        "bands": None,
+    }
+    if fifths is not None:
+        payload["bands"] = _strength_groups(
+            strength, fifths, lambda fifth: np.bincount(bins[fifth], minlength=len(labels)).tolist()
+        )
+        for b, band in enumerate(payload["bands"]):
+            band["mean"] = float(interviews[fifths == b].mean())
+    return payload
+
+
+def _interviews_chart(data: RunData) -> dict[str, Any] | None:
+    payload = interviews_per_applicant(data)
+    if payload is None:
+        return None
+    counts, bands = payload["counts"], payload["bands"]
+    applicants = sum(counts)
+    most = payload["labels"][-1]
+    most = f"{most.removesuffix('+')} or more" if most.endswith("+") else f"{most}, the most"
+    summary = (
+        f"Applicants had {payload['mean']:.1f} interviews on average: {counts[0]:,} ({_share(counts[0], applicants)}) "
+        f"had none and {counts[-1]:,} ({_share(counts[-1], applicants)}) had {most}."
+    )
+    if payload["top_share"] is not None:
+        summary += (
+            f" The tenth of applicants with the most interviews holds {payload['top_share'] * 100:.1f}% of all "
+            f"interviews (Gini {payload['gini']:.2f})."
+        )
+    if bands:
+        summary += (
+            f" By strength, the {STRENGTH_BANDS[0].lower()} had {bands[0]['mean']:.1f} interviews on average and the "
+            f"{STRENGTH_BANDS[-1].lower()} {bands[-1]['mean']:.1f}."
+        )
+    rows = [
+        {
+            "label": name,
+            "count": count,
+            "share": count / applicants if applicants else None,
+            "bands": [band["counts"][k] for band in bands or []],
+        }
+        for k, (name, count) in enumerate(zip(payload["names"], counts, strict=True))
+    ]
+    return {
+        "payload": payload,
+        "summary": summary,
+        "rows": rows,
+        "band_ranges": STRENGTH_RANGES if bands else None,
+        "switchable": bool(bands),
+        "switch_note": _strength_note(applicants, bool(bands)),
+        "switch_key": strength_key() if bands else None,
+    }
+
+
+def match_by_list_length(data: RunData) -> dict[str, Any] | None:
+    """Return ROL-1: applicants with a rank order list by the number of programs on it, matched and not.
+
+    A length nobody has keeps its place, with no applicants. None for runs from before the match, and when every list
+    has the same length (one bar says nothing).
+    """
+    record = data.stages
+    if record is None:
+        return None
+    n = data.population.n_applicants
+    length = np.bincount(record.i[record.applicant_rank > 0], minlength=n).astype(np.int64)
+    listed = length > 0
+    if not listed.any():
+        return None
+    matched = (np.asarray(record.match_program) >= 0)[listed]
+    labels, bins = _count_bins(length[listed], 1)
+    if np.unique(bins).size < 2:
+        return None
+
+    def per_length(mask: NDArray[np.bool_]) -> list[int]:
+        return [int(count) for count in np.bincount(bins[mask], minlength=len(labels))]
+
+    return {
+        "labels": labels,
+        "names": [f"{name} ranked" for name in _count_names(labels, "program", "programs")],
+        "unit": "applicants",
+        "series": [
+            {"name": "Matched", "role": "matched", "counts": per_length(matched)},
+            {"name": "Not matched", "role": "strong", "counts": per_length(~matched)},
+        ],
+        "extra": [],
+    }
+
+
+def _list_length_chart(data: RunData) -> dict[str, Any] | None:
+    payload = match_by_list_length(data)
+    if payload is None:
+        return None
+    got, missed = (series["counts"] for series in payload["series"])
+    totals = [g + m for g, m in zip(got, missed, strict=True)]
+    names = [name.removesuffix(" ranked") for name in payload["names"]]
+    # The shortest and the longest lists that anyone has.
+    first, last = (next(k for k in order if totals[k]) for order in (range(len(totals)), reversed(range(len(totals)))))
+    summary = (
+        f"Of {sum(totals):,} applicants with a rank order list, {sum(got):,} matched "
+        f"({_share(sum(got), sum(totals))}): {_share(got[first], totals[first])} of the {totals[first]:,} who ranked "
+        f"{names[first]}, and {_share(got[last], totals[last])} of the {totals[last]:,} who ranked {names[last]}."
+    )
+    rows = [
+        {
+            "label": names[k],
+            "total": totals[k],
+            "matched": got[k],
+            "missed": missed[k],
+            "rate": got[k] / totals[k] if totals[k] else None,
+        }
+        for k in range(len(totals))
+    ]
+    return {"payload": payload, "summary": summary, "rows": rows}
 
 
 # --- The Match tab (plan step 5.3) -----------------------------------------------------------------------------------
@@ -848,8 +1018,8 @@ def _match_by_strength_chart(data: RunData) -> dict[str, Any] | None:
 TAB_CHARTS = {
     "population": ("strength", "quality", "capacity"),
     "pre_interview": ("applicant_fidelity", "program_fidelity", "perception", "demand"),
-    "applications": ("funnel", "applicant_flow"),
-    "match": ("matched_choice", "sorting", "program_fill", "match_by_strength"),
+    "applications": ("funnel", "applicant_flow", "interviews"),
+    "match": ("matched_choice", "list_length", "sorting", "program_fill", "match_by_strength"),
 }
 
 
@@ -936,8 +1106,12 @@ def run_charts(data: RunData, names: tuple[str, ...] | None = None) -> dict[str,
         charts |= _funnel_chart(data.stages)
     if "applicant_flow" in wanted:
         charts["applicant_flow"] = _applicant_flow_chart(data)
+    if "interviews" in wanted:
+        charts["interviews"] = _interviews_chart(data)
     if "matched_choice" in wanted:
         charts["matched_choice"] = _choice_chart(metrics)
+    if "list_length" in wanted:
+        charts["list_length"] = _list_length_chart(data)
     if "sorting" in wanted:
         charts["sorting"] = _sorting_chart(data)
     if "program_fill" in wanted:

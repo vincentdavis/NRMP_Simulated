@@ -38,13 +38,16 @@
           {% chart_figure charts.matched_choice "matched_choice" "bars" table="choice" height="h-64" x_label="Choice on the applicant's rank order list" y_label="Matched applicants" %}
         </div>
       {% endif %}
-      <div>
+      <div class="min-w-0">
         <h3 class="font-semibold">Rank order lists</h3>
         <dl class="mt-2 space-y-1 text-sm">
           <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Mean list length, matched applicants</dt><dd class="tabular-nums">{{ match.list_length_matched|floatformat:2|default:"-" }}</dd></div>
           <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Mean list length, unmatched applicants</dt><dd class="tabular-nums">{{ match.list_length_unmatched|floatformat:2|default:"-" }}</dd></div>
           <div class="flex justify-between gap-4 border-b border-base-300 py-1"><dt>Applicants with a list</dt><dd class="tabular-nums">{{ match.certified|intcomma }} of {{ run.n_applicants|intcomma }}</dd></div>
         </dl>
+        {% if charts.list_length %}
+          <div class="mt-4">{% chart_figure charts.list_length "list_length" "shares" table="list_length" height="h-64" x_label="Programs on the applicant's rank order list" y_label="Applicants with a list" %}</div>
+        {% endif %}
         {% if match.comparison %}
           <h3 class="font-semibold mt-4">With the other side proposing</h3>
           <p class="text-sm mt-1">

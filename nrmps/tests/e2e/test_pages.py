@@ -104,7 +104,7 @@ def _draw_every_chart(page, count: int) -> None:
 
 
 @pytest.mark.parametrize(
-    ("tab", "count"), [("", 1), ("population/", 3), ("before-interviews/", 6), ("applications/", 2), ("match/", 4)]
+    ("tab", "count"), [("", 1), ("population/", 3), ("before-interviews/", 6), ("applications/", 3), ("match/", 5)]
 )
 def test_the_run_tabs_draw_every_chart_without_script_errors(logged_in_page, live, worked_simulation, tab, count):
     """ECharts draws each chart as it comes into view (plan steps 3.8, 5.1), and again after the theme changes."""
@@ -148,6 +148,7 @@ MATCH_CHARTS = """() => {
     top: strength.grid[0].top,
     choices: chartOf("chart-matched-choice").getOption().series[0].data.length,
     fill: chartOf("chart-program-fill").getOption().series.map((series) => series.name),
+    lists: chartOf("chart-list-length").getOption().series.map((series) => series.name),
   };
 }"""
 
@@ -160,7 +161,7 @@ def test_the_match_tab_draws_who_matched_where(logged_in_page, live, worked_simu
     errors: list[str] = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/match/")
-    _draw_every_chart(page, 4)
+    _draw_every_chart(page, 5)
     drawn = page.evaluate(MATCH_CHARTS)
     assert drawn["rows"] == pytest.approx(5)  # each of the five rows adds up to 100%
     assert drawn | {"rows": 5} == {
@@ -174,6 +175,7 @@ def test_the_match_tab_draws_who_matched_where(logged_in_page, live, worked_simu
         "top": 36,
         "choices": 11,
         "fill": ["Filled", "Unfilled"],
+        "lists": ["Matched", "Not matched"],
     }
     page.evaluate("document.documentElement.dataset.chartPatterns = 'on'")  # patterns: on the bars, not the heatmap
     page.wait_for_timeout(200)
@@ -295,7 +297,8 @@ def test_colour_by_strength_splits_a_programs_funnel(logged_in_page, live, worke
     assert page.evaluate(CHART_LABELS, '[data-chart="funnel"]') == CLEAN_FUNNEL_LABELS
     assert _overflow(page) <= 0
     page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/applications/")  # the same switch, remembered
-    expect(page.get_by_role("switch", name="Colour by strength")).to_be_checked()
+    for switch in page.get_by_role("switch", name="Colour by strength").all():  # the flow's and the interviews'
+        expect(switch).to_be_checked()
     page.go_back()
     funnel = page.locator('[data-chart="funnel"]')
     funnel.scroll_into_view_if_needed()
@@ -355,8 +358,9 @@ def test_colour_by_strength_splits_the_applicants_flow_and_is_remembered(logged_
     expect(flow.locator("canvas").first).to_be_attached()
     assert page.evaluate(FLOW_NODES) == 5  # three stages and two drop-offs
     assert page.evaluate(FLOW_DROP) == {"fill": "plain", "end": None, "focus": "trajectory"}
-    switch = page.get_by_role("switch", name="Colour by strength")
-    key = page.locator('[data-chart-switch-key="bands"]')
+    figure = page.locator("figure").filter(has=flow)  # the tab's interviews chart has the same switch
+    switch = figure.get_by_role("switch", name="Colour by strength")
+    key = figure.locator('[data-chart-switch-key="bands"]')
     expect(key).to_be_hidden()
     switch.check()
     expect(key).to_be_visible()
@@ -368,7 +372,8 @@ def test_colour_by_strength_splits_the_applicants_flow_and_is_remembered(logged_
     flow = page.locator('[data-chart="flow"]')
     flow.scroll_into_view_if_needed()
     expect(flow.locator("canvas").first).to_be_attached()
-    expect(page.get_by_role("switch", name="Colour by strength")).to_be_checked()
+    figure = page.locator("figure").filter(has=flow)
+    expect(figure.get_by_role("switch", name="Colour by strength")).to_be_checked()
     assert page.evaluate(FLOW_NODES) == 19
     assert flow.get_attribute("data-chart-failed") is None
     page.evaluate("document.documentElement.dataset.chartPatterns = 'on'")  # patterns: the spacers get none
@@ -380,7 +385,62 @@ def test_colour_by_strength_splits_the_applicants_flow_and_is_remembered(logged_
     assert page.evaluate(FLOW_NODES) == 19
     assert page.evaluate(FLOW_NODES.replace("data.length", "top")) == 44
     assert _overflow(page) <= 0
-    page.get_by_role("switch", name="Colour by strength").uncheck()
+    figure.get_by_role("switch", name="Colour by strength").uncheck()
     assert page.evaluate(FLOW_NODES) == 5
-    expect(page.locator('[data-chart-switch-key="bands"]')).to_be_hidden()
+    expect(figure.locator('[data-chart-switch-key="bands"]')).to_be_hidden()
+    assert errors == []
+
+
+# The interviews chart as drawn: its series (one, or the five strength fifths stacked) and how much each bar adds up to.
+INTERVIEWS = """() => {
+  const element = document.querySelector('[data-payload="chart-interviews"]');
+  const option = window.echarts.getInstanceByDom(element).getOption();
+  const bars = option.series[0].data.map((_v, k) => option.series.reduce((sum, series) => sum + series.data[k], 0));
+  return {series: option.series.length, stacked: option.series.every((series) => series.stack === "fifths"),
+          total: bars.reduce((sum, bar) => sum + bar, 0),
+          colours: new Set(option.series.map((series) => series.itemStyle.color)).size};
+}"""
+
+
+def test_colour_by_strength_splits_the_interviews_and_both_charts_follow_one_switch(
+    logged_in_page, live, worked_simulation
+):
+    """Who gets the interviews: bars of applicants by their number of interviews, which the Colour by strength switch
+    stacks by strength fifth. The Applications and interviews tab has two charts with the switch (the applicants' flow
+    too): turning one turns both."""
+    page = logged_in_page
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto(f"{live}/simulations/{worked_simulation.pk}/runs/1/applications/")
+    _draw_every_chart(page, 3)
+    bars = page.locator('[data-payload="chart-interviews"]')
+    figure = page.locator("figure").filter(has=bars)
+    key = figure.locator('[data-chart-switch-key="bands"]')
+    plain = page.evaluate(INTERVIEWS)
+    assert (plain["series"], plain["stacked"], plain["colours"]) == (1, False, 1)
+    assert plain["total"] == pytest.approx(1)  # the bars are shares of all applicants
+    expect(key).to_be_hidden()
+    assert page.evaluate(FLOW_NODES) == 5
+    figure.get_by_role("switch", name="Colour by strength").check()
+    expect(key).to_be_visible()
+    split = page.evaluate(INTERVIEWS)
+    assert (split["series"], split["stacked"], split["colours"]) == (5, True, 5)
+    assert split["total"] == pytest.approx(1)  # the fifths add up to the same bars
+    # The flow's switch followed, and its chart is split too.
+    flow_figure = page.locator("figure").filter(has=page.locator('[data-chart="flow"]'))
+    expect(flow_figure.get_by_role("switch", name="Colour by strength")).to_be_checked()
+    expect(flow_figure.locator('[data-chart-switch-key="bands"]')).to_be_visible()
+    assert page.evaluate(FLOW_NODES) == 19
+    page.evaluate("document.documentElement.dataset.chartPatterns = 'on'")
+    page.wait_for_timeout(200)
+    assert page.locator("[data-chart-failed]").count() == 0
+    page.evaluate("document.documentElement.dataset.chartPatterns = 'off'")
+    page.set_viewport_size(PHONE)
+    page.wait_for_timeout(300)
+    assert page.evaluate(INTERVIEWS)["series"] == 5
+    assert _overflow(page) <= 0
+    flow_figure.get_by_role("switch", name="Colour by strength").uncheck()  # and back, from the other chart
+    expect(figure.get_by_role("switch", name="Colour by strength")).not_to_be_checked()
+    assert page.evaluate(INTERVIEWS)["series"] == 1
+    expect(key).to_be_hidden()
     assert errors == []

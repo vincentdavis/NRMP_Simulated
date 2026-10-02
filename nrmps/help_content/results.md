@@ -47,9 +47,9 @@ them; the dashed line is observed = true.
 The funnel from applications through invitations, interviews and rank order lists to matches, with how many
 applications drop out at each step; the same flow for applicants, each counted once (who gets an interview and who
 matches), which **Colour by strength** splits into five groups by strength percentile to follow the quality of the
-applicants through the stages and see who makes up each drop-off; applications, signals, invitations, interviews
-and list entries per applicant;
-the signals' effect on interview rates; and, over matched applicants:
+applicants through the stages and see who makes up each drop-off; how many applicants had each number of interviews,
+which the same switch splits by strength to show who holds the interviews; applications, signals, invitations,
+interviews and list entries per applicant; the signals' effect on interview rates; and, over matched applicants:
 
 Regret
 : How much better (in SD units) the best program an applicant interviewed at turned out to be than the one they
@@ -72,8 +72,14 @@ Positions filled
 : The share of positions the match filled.
 
 Matched to their first choice
-: The share of matched applicants who matched to the program they ranked first; the chart beside it shows every
+: The share of matched applicants who matched to the program they ranked first; the chart below it shows every
   choice, from the first to the tenth, and lower ones together.
+
+Rank order lists
+: The mean length of the lists of matched and of unmatched applicants, and a chart of the match rate by the number
+  of programs on the list, as NRMP's Charting Outcomes reports show it: the share who matched usually climbs steeply
+  over the first few programs ranked. Longer lists belong to stronger applicants, who get more interviews, so the
+  chart does not show what one more program on a list would do for a given applicant.
 
 Sorting
 : Whether stronger applicants match to better programs: the rank correlation between an applicant's strength and the

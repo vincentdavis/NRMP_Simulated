@@ -10,6 +10,9 @@
     {% if charts.applicant_flow %}
       <div class="mt-4">{% chart_figure charts.applicant_flow "applicant_flow" "flow" table="flow" height="h-96" %}</div>
     {% endif %}
+    {% if charts.interviews %}
+      <div class="mt-4 max-w-3xl">{% chart_figure charts.interviews "interviews" "bars" table="interviews" height="h-64" x_label="Interviews" y_label="Applicants" %}</div>
+    {% endif %}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div class="overflow-x-auto">
         <table class="table table-sm">

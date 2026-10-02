@@ -25,8 +25,8 @@ def chart_figure(
     """Render one chart: `chart` from nrmps.charts (payload, summary, rows), `key` its entry in the chart catalog.
 
     `kind` is the builder in static/js/nrmp-charts.js; `table` the data table under it (histogram, demand, flow,
-    funnel, choice, sorting, fill, by_strength, or none); `payload` the id of another figure's payload to draw
-    instead (the Lorenz curve reuses the demand's);
+    funnel, interviews, choice, list_length, sorting, fill, by_strength, or none); `payload` the id of another
+    figure's payload to draw instead (the Lorenz curve reuses the demand's);
     `switch_on` starts the chart's switch on (the reader's remembered choice, if any, still wins). The
     caption, the "?" help and the colour come from the catalog; an undescribed key raises KeyError, so a page that
     shows one fails its tests.

@@ -336,8 +336,9 @@ PAGES: dict[str, PageHelp] = {
     "run_applications": PageHelp(
         _("Applications and interviews"),
         _(
-            "The funnel from applications to rank order lists, the signals, what interviews revealed, and every "
-            "application with filters."
+            "The funnel from applications to rank order lists, which applicants get an interview and a match, how "
+            "the interviews are spread over applicants, the signals, what interviews revealed, and every application "
+            "with filters."
         ),
         (_("Filter the applications by the stage they reached, by signal or by name."), _RUN_TABS),
         columns=tuple(key for key in COLUMNS if key.startswith("applications.")),
@@ -346,9 +347,10 @@ PAGES: dict[str, PageHelp] = {
     "run_match": PageHelp(
         _("The match"),
         _(
-            "The match rate, the positions filled, which choice applicants matched to, who matched where (applicant "
-            "strength against program quality, with the sorting), which programs filled their positions, the checks "
-            "of the match, and who matched by group and strength."
+            "The match rate, the positions filled, which choice applicants matched to, the match rate by the length "
+            "of the rank order list, who matched where (applicant strength against program quality, with the "
+            "sorting), which programs filled their positions, the checks of the match, and who matched by group and "
+            "strength."
         ),
         (_RUN_TABS,),
         more="results",
@@ -562,6 +564,29 @@ CHARTS: dict[str, ChartHelp] = {
         switch="bands",
         switch_label=_("Colour by strength"),
     ),
+    "interviews": ChartHelp(
+        _("Who gets the interviews?"),
+        _(
+            "Applicants by the number of interviews they had, from none upwards. With Colour by strength on, each bar "
+            "is split into five groups by strength percentile, from the bottom 20% in red at its foot, through the "
+            "middle in grey, to the top 20% in blue at its top."
+        ),
+        _(
+            "Each bar is a share of all applicants. A tall first bar is applicants no program interviewed; a tall "
+            "last bar is applicants who reached the most interviews an applicant accepts (Interviews per applicant "
+            "(max)). With the switch on, a bar's colours show who had that many: blue towards the right means the "
+            "strongest applicants hold the most interviews. Hover a bar for the numbers. The summary says how "
+            "concentrated the interviews are: the share held by the tenth of applicants with the most, and the Gini "
+            "coefficient (0 = every applicant has the same number, 1 = one applicant has them all)."
+        ),
+        _(
+            "It counts the interviews held, not the invitations: one an applicant declined, or could not fit under "
+            "their limit, is left out."
+        ),
+        tab="applications",
+        switch="bands",
+        switch_label=_("Colour by strength"),
+    ),
     "matched_choice": ChartHelp(
         _("Which choice did applicants match to?"),
         _(
@@ -576,6 +601,24 @@ CHARTS: dict[str, ChartHelp] = {
             "Choices are places on the list the applicant submitted, which holds only programs they interviewed at: a "
             "first choice here is not always the program they wanted most before interviews. Applicants who did not "
             "match are not shown."
+        ),
+        tab="match",
+    ),
+    "list_length": ChartHelp(
+        _("Does a longer rank order list help?"),
+        _(
+            "Applicants with a rank order list, by the number of programs on it, and in each group the share who "
+            "matched."
+        ),
+        _(
+            "Each bar is all the applicants whose list has that many programs; the green part matched. As in the "
+            "real Match, the share usually climbs steeply over the first few programs ranked and then levels off. "
+            "Hover a bar for the numbers."
+        ),
+        _(
+            "A longer list is a sign of a stronger application, not only a cause of matching: a list is as long as "
+            "the applicant's interviews, and strong applicants get more of them. A bar that stands for a handful of "
+            "applicants can be far off. Applicants without a list are left out."
         ),
         tab="match",
     ),
