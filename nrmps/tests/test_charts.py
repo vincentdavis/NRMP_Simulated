@@ -214,7 +214,8 @@ def test_every_chart_on_the_run_tabs_has_its_question_and_help(auth_client, fini
                 shown.add(key)
                 assert escape(str(chart.title)) in body
         assert 'data-series="program"' in body or view == "nrmps:run_applications"
-    assert shown == {key for key, chart in help_registry.CHARTS.items() if chart.tab != "agent"}
+    # Every chart of the catalog except those of an agent's page and of the comparison of two runs (test_compare).
+    assert shown == {key for key, chart in help_registry.CHARTS.items() if chart.tab not in {"agent", "compare"}}
 
 
 def _stage_rows(**changes):

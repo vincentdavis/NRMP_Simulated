@@ -6,6 +6,7 @@
   <h1 class="text-3xl font-bold">Your simulations</h1>
   <div class="flex flex-wrap gap-2">
     {% page_help "simulation_list" %}
+    {% if rows %}<a class="btn btn-outline" href="{% url 'nrmps:compare' %}">Compare runs</a>{% endif %}
     <a class="btn btn-primary" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
   </div>
 </div>

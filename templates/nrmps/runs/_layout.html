@@ -17,6 +17,7 @@
     <div class="flex flex-wrap gap-2">
       {% page_help help_page %}
       {% block run_actions %}{% endblock %}
+      {% if outcomes %}<a href="{% url 'nrmps:compare' %}?a={{ simulation.pk }}-{{ run.number }}" class="btn btn-outline">Compare</a>{% endif %}
       <a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}" class="btn btn-outline">Back to simulation</a>
     </div>
   </div>

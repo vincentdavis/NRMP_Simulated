@@ -129,6 +129,15 @@ ACTIONS: dict[str, HelpEntry] = {
         ),
         "csv",
     ),
+    "compare_rerun": HelpEntry(
+        _("Run B again with A's seed"),
+        _(
+            "Sets the seed of run B's simulation to run A's and runs it, then compares A with the new run. With the "
+            "same seed the two runs share every random draw their parameters do not change, so a difference between "
+            "them comes from the parameters. The simulation keeps the new seed; run B itself stays."
+        ),
+        "results#comparing-two-runs",
+    ),
 }
 
 
@@ -139,6 +148,15 @@ def _column(title: Text, text: Text, more: str = "results") -> HelpEntry:
 RANK_1 = _("1 is the favourite.")
 
 COLUMNS: dict[str, HelpEntry] = {
+    # The comparison of two runs.
+    "compare.difference": _column(
+        _("B \u2212 A"),  # B minus A, with a minus sign
+        _(
+            "Run B's number minus run A's. For percentages it is in percentage points (pts): 80% against 75% is +5 "
+            "pts. Unless the note above says the runs share their draws, a point or two can be chance."
+        ),
+        "results#comparing-two-runs",
+    ),
     # The applicants of a run.
     "applicants.index": _column(_("#"), _("The applicant's number in the population.")),
     "applicants.name": _column(
@@ -355,6 +373,24 @@ PAGES: dict[str, PageHelp] = {
         (_RUN_TABS,),
         more="results",
     ),
+    "compare": PageHelp(
+        _("Compare two runs"),
+        _(
+            "Two runs side by side: what they share, their key numbers with the difference between them, charts "
+            "with both runs, where applicants matched in each, and the parameters that differ. Run A is blue and "
+            "run B orange; differences are B minus A."
+        ),
+        (
+            _("Choose the two runs; only finished runs with a match are listed."),
+            _(
+                "Read the note under the runs first: it says whether a difference comes from the parameters or "
+                "could be chance."
+            ),
+        ),
+        actions=("compare_rerun",),
+        columns=("compare.difference",),
+        more="results#comparing-two-runs",
+    ),
     "run_applicants": PageHelp(
         _("The applicants of a run"),
         _("Every applicant with their attributes, weights, pre-interview results and outcome."),
@@ -410,6 +446,7 @@ CHART_PLACES: dict[str, Text] = {
     "applications": _("Applications and interviews tab"),
     "match": _("Match tab"),
     "agent": _("One applicant's or program's page"),
+    "compare": _("Comparing two runs"),
 }
 
 CHARTS: dict[str, ChartHelp] = {
@@ -732,6 +769,65 @@ CHARTS: dict[str, ChartHelp] = {
         side="program",
         switch="bands",
         switch_label=_("Colour by strength"),
+    ),
+}
+
+
+# The comparison's charts put two runs on one question: run A in the first series colour, run B in the second.
+_VERSUS = _(
+    "Blue is run A and orange run B, as the key at the top of the page says. Hover a pair for both runs' numbers."
+)
+CHARTS |= {
+    "compare_strength": ChartHelp(
+        _("In which run do weaker or stronger applicants match more often?"),
+        _(
+            "Applicants in ten groups by strength (deciles: 1 is the weakest tenth, 10 the strongest), and for each "
+            "the share of its applicants who matched, in run A and in run B."
+        ),
+        format_lazy(
+            "{} {}",
+            _("Where one bar of a pair is taller, that run matched more of the decile's applicants."),
+            _VERSUS,
+        ),
+        _(
+            "Each run's deciles are of its own applicants. Unless both runs have the same applicants, the same "
+            "decile holds different people."
+        ),
+        tab="compare",
+    ),
+    "compare_choice": ChartHelp(
+        _("In which run do applicants get a higher choice?"),
+        _(
+            "Matched applicants by where they had ranked their program on their own rank order list, first choice, "
+            "second and so on, as a share of each run's matched applicants."
+        ),
+        format_lazy("{} {}", _("A taller first pair means more applicants matched to their first choice."), _VERSUS),
+        _("Shares of matched applicants: a run that matched fewer applicants can still show a taller first bar."),
+        tab="compare",
+    ),
+    "compare_interviews": ChartHelp(
+        _("In which run are the interviews spread more evenly?"),
+        _("Applicants by the number of interviews they had, from none upwards, as a share of each run's applicants."),
+        format_lazy(
+            "{} {}",
+            _(
+                "Compare the first pair (applicants with no interview) and the last (applicants at the most "
+                "interviews an applicant accepts)."
+            ),
+            _VERSUS,
+        ),
+        tab="compare",
+    ),
+    "compare_fill": ChartHelp(
+        _("In which run do programs fill their positions?"),
+        _(
+            "The share of positions filled in each fifth of programs by quality, from the bottom 20% to the top "
+            "20%, in run A and in run B."
+        ),
+        format_lazy("{} {}", _("A shorter bar is a group of programs with unfilled positions."), _VERSUS),
+        _("Each run's fifths are of its own programs."),
+        tab="compare",
+        side="program",
     ),
 }
 

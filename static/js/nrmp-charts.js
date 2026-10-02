@@ -986,6 +986,47 @@
     };
   }, { widths: [480] });
 
+  // Two runs on one question {labels, names, unit, whole, runs: [{name, values, counts, totals}, ...]}: grouped bars,
+  // the first run in series 1 and the second in series 2 (the page's own key says which is which, and the legend
+  // repeats it). A value is a share (null: no bar): of each category itself when `whole` (the axis runs to 100%), else
+  // of the run's total. The tooltip gives each run's share with its counts, and the difference in percentage points.
+  register("versus", (p, t, element, option) => {
+    const points = (value) => `${value > 0 ? "+" : ""}${format.fixed(value * 100, 1)} pts`;
+    const shown = (run, k) => {
+      if (run.values[k] === null) return "-";
+      const of = `${format.count(run.counts[k])} of ${format.count(run.totals[k])} ${p.unit}`;
+      return `${format.share(run.values[k])} (${of})`;
+    };
+    return {
+      ...option,
+      legend: { ...option.legend, show: true },
+      tooltip: {
+        ...option.tooltip,
+        trigger: "axis",
+        axisPointer: shadowPointer(t),
+        formatter: (items) => {
+          const k = items[0].dataIndex;
+          const rows = p.runs.map((run) => [run.name, shown(run, k)]);
+          const [first, second] = p.runs.map((run) => run.values[k]);
+          if (first !== null && second !== null) {
+            rows.push([`${p.runs[1].name} − ${p.runs[0].name}`, points(second - first)]);
+          }
+          return tip(p.names[k], rows);
+        },
+      },
+      xAxis: categoryAxis(t, element.dataset.xLabel || "", p.labels),
+      yAxis: shareAxis(t, element.dataset.yLabel || "", p.whole ? { min: 0, max: 1 } : {}),
+      series: p.runs.map((run, r) => ({
+        name: run.name,
+        type: "bar",
+        barMaxWidth: 16,
+        barGap: "15%",
+        data: run.values,
+        itemStyle: { color: t.series[r], borderRadius: [3, 3, 0, 0] },
+      })),
+    };
+  });
+
   // Who matched where {rows: [{label, range, total}], columns: [{label, short, range}], counts: [[...]], sorting}:
   // rows are the applicants' strength fifths (the weakest first, drawn at the bottom), column 0 is "Not matched" and
   // the others the program quality fifths, the lowest first. Each cell is its share of the row's applicants, on a

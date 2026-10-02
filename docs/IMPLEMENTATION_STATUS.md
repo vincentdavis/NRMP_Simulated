@@ -377,6 +377,32 @@ chart kind gained the split by strength fifth. Tested: the payloads against the 
 (concentration, the last bar from 20, lists shorter than the interviews, lists all alike), the pages, and in the
 browser both charts, the two switches following each other, patterns and phone width.
 
+**Comparing two runs (owner request; a first part of step 6.2's paired scenarios).** The demos are meant to be
+compared, and each was its own simulation with its own pages. `/compare/?a=<simulation>-<run>&b=...` puts any two of
+the user's finished runs side by side; **Compare** on a run's pages and **Compare runs** on the simulations list lead
+to it, and two pickers choose the runs. Run A is blue and run B orange throughout; differences are B minus A.
+- **What the runs share** comes first, from the stage fingerprints: two runs with the same seed are the same up to
+  the first stage that a parameter they differ in reaches, and the note names that stage and says the differences come
+  from the parameters. With different seeds it warns that a point or two can be chance, and offers **Run B again with
+  A's seed** when B's simulation still has B's parameters: it sets the simulation's seed, runs it and compares A with
+  the new run (the seed stays unchanged if the run cannot start; with a worker the page waits for the run). On the
+  local demos, the idealized market and "noisy programs" then share the population and first differ at the
+  pre-interview stage.
+- **Key numbers** in four groups (the market, before interviews, applications and interviews, the match), each with
+  A, B and the difference; percentages differ in points.
+- **Charts:** four with both runs as two series (who matched by strength decile, the choice matched to, interviews
+  per applicant, positions filled by program quality) and each run's "who matched where" side by side on its fixed
+  scale. A new chart kind, `versus`; the chart figure takes a suffix so one chart can appear twice on a page.
+- **Parameters that differ**, the seed among them, in the form's order; a list (the applicant groups) is one row.
+
+Everything is computed from the stored runs (`nrmps/compare.py`). Tested: pairing from fingerprints (identical runs,
+a parameter of an early and of a late stage, other seeds, another population), the numbers and their differences, the
+parameter rows, the charts (bars of the longer run when the numbers of interviews differ; runs from before the match),
+the page's states (nothing chosen, one run, the same run twice, a run without a match, a queued run), the rerun (and
+that a refused run leaves the seed alone), other users' runs (404), and in the browser the charts, the pickers, the
+rerun, axe in both themes and phone width. Not done from step 6.2: sweeps, what-if sliders, and comparing more than
+two runs or over replicates.
+
 ## Phases 6–8
 
 Not started.

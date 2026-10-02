@@ -111,6 +111,34 @@ pages are the same from the program's side, and a program's funnel has **Colour 
 applications by the applicant's strength percentile among all applicants, so you can see whom the program invites,
 ranks and matches.
 
+## Comparing two runs
+
+**Compare** on a run's page (or **Compare runs** on your simulations) puts two runs side by side: any two finished
+runs with a match, of the same simulation or of two. Run A is blue and run B orange throughout, and every difference
+is B minus A; for percentages it is in percentage points (pts).
+
+What the runs share
+: The note under the two runs says how far they can be compared. A run follows from its parameters and its seed
+  alone, so two runs with the **same seed** are the same up to the first stage that a parameter they differ in
+  reaches, and what differs between them comes from those parameters. Two runs with **different seeds** have
+  different applicants and programs, and a difference of a point or two between them can be chance alone. When the
+  seeds differ, **Run B again with A's seed** sets the seed of run B's simulation to run A's and runs it, then
+  compares A with the new run.
+
+Key numbers
+: The market's size, agreement and fidelity before interviews, applications and interviews per applicant, and the
+  match: the match rate, the share of all applicants matched (and of the bottom and top 20% by strength), positions
+  filled, first choices and sorting.
+
+Charts
+: Four charts show both runs on one question: who matched by strength decile, which choice applicants matched to,
+  how many interviews applicants had, and which programs filled. Then each run's chart of who matched where, on the
+  same scale so their shades compare.
+
+Parameters that differ
+: Only the parameters whose values differ, the seed among them. A list, such as the applicant groups, is one row
+  with the names of its rows.
+
 ## Charts
 
 Every chart answers one question, written as its caption, and its "?" button explains how to read it. Each has a

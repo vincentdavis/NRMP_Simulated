@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% load static humanize chart_tags help_tags %}
+{% comment %}
+  Two runs side by side (nrmps/compare.py, run_views.compare): the pickers, what the runs share, their key numbers
+  with the differences, charts with both runs (A in the first series colour, B in the second), where applicants
+  matched in each, and the parameters that differ.
+  Context: sides (name, letter, dot, run, key), choices (the pickers' runs by simulation), a, b, swap_url; then one of
+  waiting + wait_url (a run is queued or running), same_run, no_match (runs without a match), or the comparison:
+  pairing, rerun, groups, charts, differences.
+{% endcomment %}
+{% block title %}Compare two runs - NRMP Simulations{% endblock %}
+{% block content %}
+<div class="mt-4">
+  <nav class="breadcrumbs text-sm mb-2" aria-label="Breadcrumbs">
+    <ul>
+      <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
+      <li><span aria-current="page">Compare two runs</span></li>
+    </ul>
+  </nav>
+  <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
+    <h1 class="text-2xl font-bold">Compare two runs</h1>
+    <div class="flex flex-wrap gap-2">{% page_help "compare" %}</div>
+  </div>
+  <p class="text-sm text-base-content/70 mb-4">
+    Simulated from the assumptions in the parameters; not a prediction of any real applicant's or program's match.
+  </p>
+
+  <form method="get" action="{% url 'nrmps:compare' %}" class="card bg-base-100 shadow-xl mb-6" aria-label="The two runs">
+    <div class="card-body">
+      {% if choices %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {% for side in sides %}
+            <fieldset class="fieldset min-w-0">
+              <legend class="fieldset-legend"><span class="viz-dot {{ side.dot }}" aria-hidden="true"></span> Run {{ side.letter }}</legend>
+              <select name="{{ side.name }}" id="compare-{{ side.name }}" class="select w-full text-ellipsis" aria-label="Run {{ side.letter }}" data-autosubmit>
+                <option value="">Choose a run</option>
+                {% for group in choices %}
+                  <optgroup label="{{ group.name }}">
+                    {% for run in group.runs %}
+                      <option value="{{ run.key }}"{% if run.key == side.key %} selected{% endif %}>{{ group.name }}: run {{ run.number }}</option>
+                    {% endfor %}
+                  </optgroup>
+                {% endfor %}
+              </select>
+              {% if side.run %}
+                <p class="text-xs text-base-content/70">
+                  <a class="link whitespace-nowrap" href="{% url 'nrmps:run_detail' pk=side.run.simulation_id number=side.run.number %}">Open run {{ side.run.number }}</a>:
+                  seed {{ side.run.seed }}; {{ side.run.n_applicants|intcomma }} applicants, {{ side.run.n_programs|intcomma }} programs
+                </p>
+              {% endif %}
+            </fieldset>
+          {% endfor %}
+        </div>
+        <div class="card-actions justify-end">
+          {% if swap_url %}<a class="btn btn-ghost" href="{{ swap_url }}">Swap A and B</a>{% endif %}
+          <button type="submit" class="btn btn-primary">Compare</button>
+        </div>
+      {% else %}
+        <p>You have no finished run with a match yet. Run a simulation, or try a demo, and come back with two runs.</p>
+        <div class="card-actions">
+          <a class="btn btn-primary" href="{% url 'nrmps:demo' %}">Try a demo</a>
+          <a class="btn btn-outline" href="{% url 'nrmps:simulation_list' %}">Your simulations</a>
+        </div>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if waiting %}
+    <div role="status" class="alert alert-info mb-6" hx-get="{{ wait_url }}" hx-trigger="every 2s" hx-swap="none">
+      <span>
+        {% for run in waiting %}Run {{ run.number }} of “{{ run.simulation.name }}” is {{ run.get_status_display|lower }}. {% endfor %}
+        This page shows the comparison as soon as it has finished.
+      </span>
+    </div>
+  {% elif same_run %}
+    <div role="status" class="alert alert-info mb-6"><span>A and B are the same run. Choose two different runs.</span></div>
+  {% elif no_match %}
+    <div role="status" class="alert alert-warning mb-6">
+      <span>{% for run in no_match %}Run {{ run.number }} of “{{ run.simulation.name }}” has no match to compare. {% endfor %}Choose a finished run with a match.</span>
+    </div>
+  {% elif pairing %}
+    {# One child, so the alert's grid gives it the whole width and the button wraps under the text when it must. #}
+    <div class="alert {% if pairing.paired or pairing.identical %}alert-info{% else %}alert-warning{% endif %} mb-6" role="note" aria-label="What the runs share">
+      <div class="flex flex-wrap items-center justify-between gap-3 w-full min-w-0">
+        <span class="min-w-0 basis-96 grow">{{ pairing.note }}</span>
+        {% if rerun %}
+          {# On the page's own background, so the button and its "?" keep their contrast inside the coloured note. #}
+          <form method="post" action="{% url 'nrmps:compare_rerun' %}" class="flex items-center gap-1 rounded-box bg-base-100 text-base-content p-1" data-busy>
+            {% csrf_token %}
+            <input type="hidden" name="a" value="{{ sides.0.key }}">
+            <input type="hidden" name="b" value="{{ sides.1.key }}">
+            <button type="submit" class="btn btn-sm">
+              <span class="loading loading-spinner loading-xs htmx-indicator" aria-hidden="true"></span>
+              Run B again with A's seed
+            </button>
+            {% help_icon "action" "compare_rerun" %}
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="numbers-title">
+      <div class="card-body">
+        <h2 id="numbers-title" class="card-title">Key numbers</h2>
+        <div class="overflow-x-auto" tabindex="0" role="region" aria-label="Key numbers of both runs">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th scope="col">Number</th>
+                <th scope="col" class="text-right"><span class="viz-dot viz-dot-series-1" aria-hidden="true"></span> A</th>
+                <th scope="col" class="text-right"><span class="viz-dot viz-dot-series-2" aria-hidden="true"></span> B</th>
+                <th scope="col" class="text-right whitespace-nowrap">B − A {% help_icon "column" "compare.difference" %}</th>
+              </tr>
+            </thead>
+            {% for group in groups %}
+              <tbody>
+                <tr><th scope="rowgroup" colspan="4" class="bg-base-200 font-semibold">{{ group.title }}</th></tr>
+                {% for row in group.rows %}
+                  <tr>
+                    <th scope="row" class="font-normal">{{ row.label }}</th>
+                    <td class="text-right tabular-nums">{{ row.a }}</td>
+                    <td class="text-right tabular-nums">{{ row.b }}</td>
+                    <td class="text-right tabular-nums whitespace-nowrap">{{ row.difference }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            {% endfor %}
+          </table>
+        </div>
+        <p class="text-xs text-base-content/70">
+          Differences are B minus A; for percentages, in percentage points (pts). The agreement and fidelity numbers
+          are correlations (1 = identical), and sorting is the rank correlation between an applicant's strength and
+          the quality of the program they matched to.
+        </p>
+      </div>
+    </section>
+
+    {% if charts.compare_strength or charts.compare_choice or charts.compare_interviews or charts.compare_fill %}
+      <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="both-title">
+        <div class="card-body">
+          <h2 id="both-title" class="card-title">Both runs, question by question</h2>
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {% if charts.compare_strength %}
+              <div class="min-w-0">{% chart_figure charts.compare_strength "compare_strength" "versus" table="versus" height="h-72" x_label="Strength decile (1 = the weakest tenth)" y_label="Applicants matched" %}</div>
+            {% endif %}
+            {% if charts.compare_choice %}
+              <div class="min-w-0">{% chart_figure charts.compare_choice "compare_choice" "versus" table="versus" height="h-72" x_label="Choice on the applicant's rank order list" y_label="Matched applicants" %}</div>
+            {% endif %}
+            {% if charts.compare_interviews %}
+              <div class="min-w-0">{% chart_figure charts.compare_interviews "compare_interviews" "versus" table="versus" height="h-72" x_label="Interviews" y_label="Applicants" %}</div>
+            {% endif %}
+            {% if charts.compare_fill %}
+              <div class="min-w-0">{% chart_figure charts.compare_fill "compare_fill" "versus" table="versus" height="h-72" x_label="Program quality percentile" y_label="Positions filled" %}</div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    {% if charts.sorting_a and charts.sorting_b %}
+      <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="where-title">
+        <div class="card-body">
+          <h2 id="where-title" class="card-title">Who matched where, in each run</h2>
+          <p class="text-sm text-base-content/70">Both charts use the same scale, from 0% to 100% of a row, so their shades compare.</p>
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div class="min-w-0">
+              <h3 class="font-semibold mb-1"><span class="viz-dot viz-dot-series-1" aria-hidden="true"></span> A: {{ a.simulation.name }}, run {{ a.number }}</h3>
+              {% chart_figure charts.sorting_a "sorting" "heatmap" table="sorting" height="h-80" x_label="Quality percentile of the program matched to" y_label="Applicant strength percentile" suffix="a" %}
+            </div>
+            <div class="min-w-0">
+              <h3 class="font-semibold mb-1"><span class="viz-dot viz-dot-series-2" aria-hidden="true"></span> B: {{ b.simulation.name }}, run {{ b.number }}</h3>
+              {% chart_figure charts.sorting_b "sorting" "heatmap" table="sorting" height="h-80" x_label="Quality percentile of the program matched to" y_label="Applicant strength percentile" suffix="b" %}
+            </div>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    <section class="card bg-base-100 shadow-xl mb-6" aria-labelledby="parameters-title">
+      <div class="card-body">
+        <h2 id="parameters-title" class="card-title">Parameters that differ</h2>
+        {% if differences %}
+          <div class="overflow-x-auto" tabindex="0" role="region" aria-label="Parameters that differ between the runs">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th scope="col">Section</th><th scope="col">Parameter</th>
+                  <th scope="col" class="text-right">A</th><th scope="col" class="text-right">B</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in differences %}
+                  <tr>
+                    <td>{{ row.section }}</td>
+                    <th scope="row" class="font-normal">{{ row.title }}</th>
+                    <td class="text-right tabular-nums">{{ row.a }}</td>
+                    <td class="text-right tabular-nums">{{ row.b }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <p class="text-xs text-base-content/70">Every other parameter is the same in both runs. Each run's page lists all of its parameters.</p>
+        {% else %}
+          <p>Both runs have the same parameters and the same seed.</p>
+        {% endif %}
+      </div>
+    </section>
+  {% elif choices %}
+    <div role="status" class="alert alert-info mb-6">
+      <span>Choose two runs to compare. Only finished runs with a match are listed.</span>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}
+  {% if charts %}
+    <script src="{% static 'vendor/echarts/6.1.0/echarts.min.js' %}"></script>
+    <script src="{% static 'js/nrmp-charts.js' %}"></script>
+  {% endif %}
+{% endblock %}

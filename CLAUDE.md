@@ -138,8 +138,10 @@ nrmps/
 ├── population_csv.py     # CSV format for population upload/download (one module for both directions)
 ├── views.py              # public pages, simulation list, the simulation page, runs and uploads (HTMX)
 ├── run_views.py          # a run's tabs (summary, population, before interviews, applications with filters, match),
-│                         #   the applicant and program lists, one agent's stages, downloads
+│                         #   the applicant and program lists, one agent's stages, downloads; the comparison page
 ├── charts.py             # chart payloads: the run tabs' charts, one agent's network (static/js/nrmp-charts.js)
+├── compare.py            # two runs side by side (/compare/): what they share (stage fingerprints), key numbers with
+│                         #   differences, the parameters that differ, charts with both runs
 ├── account_views.py      # sign-up, account page, email confirmation, data export, deletion
 ├── help_views.py         # the /help/ guide pages and the staff-only developer reference
 ├── guide.py              # renders the guide: Markdown in help_content/, TeX formulas to MathML, shortcodes

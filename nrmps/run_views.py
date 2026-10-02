@@ -1,28 +1,38 @@
-"""Pages of one run: summary, outcomes and diagnostics, applicants, programs, one agent's view, and downloads."""
+"""Pages of one run, and the comparison of two runs.
+
+A run's pages: summary, outcomes and diagnostics, applicants, programs, one agent's view, and downloads.
+"""
 
 import json
+import re
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import urlencode
 
 import numpy as np
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_POST
+from pydantic import ValidationError
 
 from .charts import TAB_CHARTS, agent_funnel, ego_network, run_charts
+from .compare import comparison_charts, key_numbers, pairing, parameter_differences, same_setup
 from .engine.numeric import quantiles
 from .engine.persistence import StageRecord
 from .engine.pipeline import SideResult
 from .engine.validate import COUNT_CHECKS, FLAG_CHECKS
+from .exceptions import SimulationError
 from .models import IMPLEMENTED_STAGES, RunArtifact, SimulationRun
 from .params_forms import ParamsForm
 from .population_csv import plain_csv_lines, population_csv_lines
+from .ratelimit import rate_limit
 from .runs import (
     APPLICATION_COLUMNS,
     MATCH_COLUMNS,
@@ -31,7 +41,9 @@ from .runs import (
     PairRows,
     RunData,
     StageRows,
+    dispatch_run,
     run_wait,
+    start_run,
 )
 from .views import get_owned_simulation
 
@@ -795,3 +807,128 @@ def run_download(request, pk: int, number: int, name: str):
     else:
         raise Http404("Unknown download")
     return _attachment(StreamingHttpResponse(lines, content_type="text/csv; charset=utf-8"), f"{prefix}-{name}")
+
+
+# --- Comparing two runs -----------------------------------------------------------------------------------------------
+
+RUN_KEY = re.compile(r"(\d{1,9})-(\d{1,9})")  # a run in the comparison's address: "<simulation>-<run number>"
+COMPARE_CHOICES = 300  # the most recent runs the comparison's pickers offer
+COMPARE_SIDES = (("a", "A", "viz-dot-series-1"), ("b", "B", "viz-dot-series-2"))
+
+
+def run_key(run: SimulationRun) -> str:
+    """Return the run's key in the comparison's address."""
+    return f"{run.simulation_id}-{run.number}"
+
+
+def _keyed_run(request: HttpRequest, key: str | None) -> SimulationRun | None:
+    """Return the user's run a comparison key names, or None without a key (or with one that is not a key).
+
+    Raises Http404 when the key names no run of the user's.
+    """
+    match = RUN_KEY.fullmatch(key or "")
+    return get_run(request, int(match[1]), int(match[2])) if match else None
+
+
+def _has_match(run: SimulationRun) -> bool:
+    return run.status == SimulationRun.Status.SUCCEEDED and bool((run.metrics or {}).get("outcomes"))
+
+
+def _run_choices(user: Any) -> list[dict[str, Any]]:
+    """Return the user's runs with a match for the comparison's pickers, by simulation, the newest first."""
+    runs = (
+        SimulationRun.objects.filter(
+            simulation__owner=user, status=SimulationRun.Status.SUCCEEDED, metrics__has_key="outcomes"
+        )
+        .select_related("simulation")
+        .defer("metrics", "params", "fingerprints", "population_source")
+        .order_by("-simulation_id", "-number")[:COMPARE_CHOICES]
+    )
+    groups: list[dict[str, Any]] = []
+    for run in runs:
+        if not groups or groups[-1]["pk"] != run.simulation_id:
+            groups.append({"pk": run.simulation_id, "name": run.simulation.name, "runs": []})
+        groups[-1]["runs"].append({"key": run_key(run), "number": run.number})
+    return groups
+
+
+def _compare_url(a: SimulationRun | None, b: SimulationRun | None) -> str:
+    keys = {side: run_key(run) for side, run in (("a", a), ("b", b)) if run is not None}
+    return reverse("nrmps:compare") + (f"?{urlencode(keys)}" if keys else "")
+
+
+@require_GET
+def compare(request):
+    """Two runs side by side: what they share, key numbers with differences, charts with both, parameters that differ.
+
+    The runs are `?a=` and `?b=`, each as "<simulation>-<run number>"; without both, the page asks for them.
+    """
+    a, b = (_keyed_run(request, request.GET.get(side)) for side in ("a", "b"))
+    sides = [
+        {"name": name, "letter": letter, "dot": dot, "run": run, "key": run_key(run) if run else ""}
+        for (name, letter, dot), run in zip(COMPARE_SIDES, (a, b), strict=True)
+    ]
+    context: dict[str, Any] = {"a": a, "b": b, "sides": sides, "choices": _run_choices(request.user)}
+    if a is not None and b is not None:
+        context["swap_url"] = _compare_url(b, a)
+        if a.is_active or b.is_active:
+            context["waiting"] = [run for run in (a, b) if run.is_active]
+            context["wait_url"] = reverse("nrmps:compare_wait") + "?" + urlencode({"a": run_key(a), "b": run_key(b)})
+        elif a.pk == b.pk:
+            context["same_run"] = True
+        elif _has_match(a) and _has_match(b):
+            data_a, data_b = RunData(a), RunData(b)
+            pairs = pairing(a, b)
+            context |= {
+                "pairing": pairs,
+                "groups": key_numbers(data_a, data_b),
+                "differences": parameter_differences(a, b),
+                "charts": comparison_charts(data_a, data_b),
+                # Offered when the seeds differ and B's simulation still has B's parameters: then running it again
+                # with A's seed repeats B on A's draws.
+                "rerun": not pairs.same_seed and same_setup(b),
+            }
+        else:
+            context["no_match"] = [run for run in (a, b) if not _has_match(run)]
+    return render(request, "nrmps/compare.html", context)
+
+
+@require_GET
+def compare_wait(request):
+    """Polled by the comparison page while one of its runs is queued or running: reload when both have finished."""
+    runs = [_keyed_run(request, request.GET.get(side)) for side in ("a", "b")]
+    response = HttpResponse(status=204)
+    if not any(run is not None and run.is_active for run in runs):
+        response["HX-Refresh"] = "true"
+    return response
+
+
+@require_POST
+@rate_limit("run", by="user")
+def compare_rerun(request):
+    """Run B's simulation again with A's seed, and compare A with the new run.
+
+    The simulation keeps A's seed afterwards. Offered by the comparison page when the seeds differ and B's simulation
+    still has B's parameters; whatever its parameters are now, this runs them.
+    """
+    a, b = (_keyed_run(request, request.POST.get(side)) for side in ("a", "b"))
+    if a is None or b is None:
+        raise Http404("Two runs are needed")
+    sim = b.simulation
+    try:
+        with transaction.atomic():  # a run that cannot start leaves the simulation's seed as it was
+            sim.set_params(sim.get_params().with_seed(a.seed))
+            sim.save()
+            run = start_run(sim, request.user)
+        run = dispatch_run(run)
+    except ValidationError:
+        messages.error(request, f"The saved parameters of “{sim.name}” are not valid. Open them, fix them and save.")
+        return redirect(_compare_url(a, b))
+    except SimulationError as exc:
+        messages.error(request, str(exc))
+        return redirect(_compare_url(a, b))
+    if run.status == SimulationRun.Status.FAILED:
+        messages.error(request, f"Run {run.number} of “{sim.name}” failed: {run.error}")
+        return redirect(_compare_url(a, b))
+    messages.success(request, f"Run {run.number} of “{sim.name}” uses the seed of run A ({a.seed}).")
+    return redirect(_compare_url(a, run))

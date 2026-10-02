@@ -8,11 +8,12 @@
   key shown while it is on (chart.switch_key: a scale of five steps, each with its colour, label and range, under a
   caption with its two ends); chart.switchable false disables it, with chart.switch_note saying why.
   Context: chart (payload, summary, rows, digits, legend, switchable, switch_note, switch_key), key, kind, entry,
-  element_id, table, height, x_label, y_label, payload, switch_on (the switch starts on; a remembered choice wins).
+  element_id, table, height, x_label, y_label, payload, switch_on (the switch starts on; a remembered choice wins),
+  suffix (on the ids, when a page shows the chart twice).
 {% endcomment %}
 <figure class="block w-full min-w-0">
   <figcaption class="font-medium flex flex-wrap items-center gap-x-4 gap-y-1">
-    <span>{{ entry.title }} {% help_icon "chart" key %}</span>
+    <span>{{ entry.title }} {% help_icon "chart" key suffix %}</span>
     {% if entry.switch %}
       <label class="flex items-center gap-2 text-sm font-normal cursor-pointer" for="{{ element_id }}-{{ entry.switch }}">
         <input type="checkbox" role="switch" id="{{ element_id }}-{{ entry.switch }}" class="toggle toggle-sm" data-chart-switch="{{ entry.switch }}"{% if switch_on and chart.switchable %} checked{% endif %}{% if not chart.switchable %} disabled{% endif %}>
@@ -191,6 +192,19 @@
                   <td class="text-right tabular-nums">{{ row.matched|intcomma }}</td>
                   <td class="text-right tabular-nums">{{ row.missed|intcomma }}</td>
                   <td class="text-right tabular-nums">{{ row.rate|percent }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          {% elif table == "versus" %}
+            {# Two runs on the same rows: each run's share, with its counts, and the difference B minus A in points. #}
+            <thead><tr><th scope="col">{{ chart.head }}</th><th scope="col" class="text-right">A</th><th scope="col" class="text-right">B</th><th scope="col" class="text-right">B − A</th></tr></thead>
+            <tbody>
+              {% for row in chart.rows %}
+                <tr>
+                  <th scope="row" class="font-normal whitespace-nowrap">{{ row.label }}</th>
+                  <td class="text-right tabular-nums whitespace-nowrap">{{ row.a|percent }} ({{ row.a_count|intcomma }} of {{ row.a_total|intcomma }})</td>
+                  <td class="text-right tabular-nums whitespace-nowrap">{{ row.b|percent }} ({{ row.b_count|intcomma }} of {{ row.b_total|intcomma }})</td>
+                  <td class="text-right tabular-nums whitespace-nowrap">{{ row.difference }}</td>
                 </tr>
               {% endfor %}
             </tbody>

@@ -71,6 +71,10 @@ urlpatterns = [
     path("help/<slug:slug>/", help_views.help_page, name="help_page"),
     path("ops/", ops_views.ops, name="ops"),
     path("documentation/", help_views.documentation_redirect, name="documentation"),
+    # Two runs side by side
+    path("compare/", run_views.compare, name="compare"),
+    path("compare/wait/", run_views.compare_wait, name="compare_wait"),
+    path("compare/same-seed/", run_views.compare_rerun, name="compare_rerun"),
     # Simulations
     path("demo/", views.demo, name="demo"),
     path("simulations/", views.simulation_list, name="simulation_list"),
