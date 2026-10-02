@@ -19,12 +19,12 @@
           {% if request.user.is_authenticated %}
             <a class="btn btn-primary" href="{% url 'nrmps:demo' %}">Try a demo</a>
             <a class="btn btn-outline" href="{% url 'nrmps:simulation_list' %}">Your simulations</a>
-            <a class="btn btn-ghost" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
+            <a class="btn btn-outline" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
           {% else %}
             <a class="btn btn-primary" href="{% url 'nrmps:demo' %}">Try a demo</a>
             <a class="btn btn-outline" href="{% url 'nrmps:login' %}">Log in</a>
           {% endif %}
-          <a class="btn btn-ghost" href="{% url 'nrmps:help' %}">Read the guide</a>
+          <a class="btn btn-outline" href="{% url 'nrmps:help' %}">Read the guide</a>
         </div>
         {% if not request.user.is_authenticated %}
           <p class="text-sm text-base-content/70 mt-3">Look through the demo markets without an account; running one needs a free account, which keeps your simulations.</p>

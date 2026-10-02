@@ -49,7 +49,7 @@
                 <a class="btn btn-sm btn-outline" href="{% url 'nrmps:simulation_manage' pk=row.sim.pk %}">Open</a>
                 <form method="post" action="{% url 'nrmps:simulation_duplicate' pk=row.sim.pk %}">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-ghost" aria-label="Duplicate {{ row.sim.name }}">Duplicate</button>
+                  <button type="submit" class="btn btn-sm btn-outline" aria-label="Duplicate {{ row.sim.name }}">Duplicate</button>
                 </form>
                 <form method="post" action="{% url 'nrmps:simulation_delete' pk=row.sim.pk %}"
                       data-confirm="Delete the simulation “{{ row.sim.name }}” and everything in it? This cannot be undone.">
@@ -92,7 +92,7 @@
             <span><span class="font-medium">{{ preset.name }}</span>{% if preset.description %} <span class="text-sm text-base-content/70">– {{ preset.description }}</span>{% endif %}</span>
             <form method="post" action="{% url 'nrmps:preset_delete' preset_id=preset.pk %}" data-confirm="Delete the preset “{{ preset.name }}”? Simulations made from it keep their parameters.">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm btn-ghost" aria-label="Delete the preset {{ preset.name }}">Delete</button>
+              <button type="submit" class="btn btn-sm btn-outline btn-error" aria-label="Delete the preset {{ preset.name }}">Delete</button>
             </form>
           </li>
         {% endfor %}

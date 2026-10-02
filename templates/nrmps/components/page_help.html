@@ -4,14 +4,14 @@
   registry: what the page is, what to do next, the buttons and the columns. A popover: Escape or a click outside
   closes it. The popover element itself has no display class, which would override the hiding of closed popovers.
 {% endcomment %}
-<button type="button" class="btn btn-ghost" popovertarget="{{ id }}">Help</button>
+<button type="button" class="btn btn-outline" popovertarget="{{ id }}">Help</button>
 <div id="{{ id }}" popover class="page-help m-auto p-0 bg-transparent w-[36rem] max-w-[92vw]" role="dialog"
      aria-labelledby="{{ id }}-title">
   <div class="card bg-base-100 border border-base-300 shadow-xl max-h-[85vh] overflow-y-auto">
   <div class="card-body text-sm">
     <div class="flex justify-between items-start gap-2">
       <h2 id="{{ id }}-title" class="card-title">{{ page.title }}</h2>
-      <button type="button" class="btn btn-ghost btn-sm" popovertarget="{{ id }}" popovertargetaction="hide">Close</button>
+      <button type="button" class="btn btn-outline btn-sm" popovertarget="{{ id }}" popovertargetaction="hide">Close</button>
     </div>
     <p>{{ page.what }}</p>
     {% if page.next_steps %}

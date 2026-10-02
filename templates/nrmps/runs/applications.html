@@ -40,7 +40,7 @@
         </fieldset>
         <div class="flex gap-2 pb-1">
           <button type="submit" class="btn btn-sm btn-primary">Filter</button>
-          {% if filtered %}<a class="btn btn-sm btn-ghost" href="{% url 'nrmps:run_applications' pk=simulation.pk number=run.number %}#applications-title">Clear</a>{% endif %}
+          {% if filtered %}<a class="btn btn-sm btn-outline" href="{% url 'nrmps:run_applications' pk=simulation.pk number=run.number %}#applications-title">Clear</a>{% endif %}
         </div>
       </form>
       {% include "nrmps/components/page_size.html" %}
