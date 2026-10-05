@@ -1,6 +1,7 @@
 """The user guide at /help/ (plan step 4.4): Markdown pages with formulas, rendered on the server.
 
-Pages live in nrmps/help_content/<slug>.md with a front matter block (title, order, summary). They are rendered with
+Pages live in nrmps/help_content/<slug>.md with a front matter block (title, order, summary, and for search engines
+seo_title and description: nrmps.seo). They are rendered with
 markdown-it (CommonMark with tables, definition lists and heading anchors; raw HTML is off) and formulas written in
 TeX between dollar signs are turned into MathML, which browsers display and screen readers read without any script.
 
@@ -52,6 +53,8 @@ class GuidePage:
     title: str
     order: int
     summary: str
+    seo_title: str = ""  # the page's title in a search result (default: title)
+    description: str = ""  # its description there (default: summary)
 
 
 @dataclass(frozen=True)
@@ -80,7 +83,14 @@ def guide_pages() -> tuple[GuidePage, ...]:
     for path in CONTENT.glob("*.md"):
         meta, _body = _front_matter(path.read_text(encoding="utf-8"))
         pages.append(
-            GuidePage(path.stem, meta.get("title", path.stem), int(meta.get("order", 99)), meta.get("summary", ""))
+            GuidePage(
+                path.stem,
+                meta.get("title", path.stem),
+                int(meta.get("order", 99)),
+                meta.get("summary", ""),
+                meta.get("seo_title", ""),
+                meta.get("description", ""),
+            )
         )
     return tuple(sorted(pages, key=lambda page: (page.order, page.slug)))
 

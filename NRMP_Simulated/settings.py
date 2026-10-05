@@ -347,6 +347,11 @@ SITE_URL = os.environ.get("SITE_URL", "").strip().rstrip("/") or (
     f"https://{railway_domain}" if railway_domain else "https://nrmp-simulated.heteroskedastic.org"
 )
 
+# Search engines (nrmps/seo.py). The verification codes of Google Search Console and Bing Webmaster Tools, shown as
+# <meta> tags on every page when set (verifying by DNS record needs neither).
+GOOGLE_SITE_VERIFICATION = os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip()
+BING_SITE_VERIFICATION = os.environ.get("BING_SITE_VERIFICATION", "").strip()
+
 # Authentication redirects
 LOGIN_REDIRECT_URL = "nrmps:index"
 LOGOUT_REDIRECT_URL = "nrmps:index"

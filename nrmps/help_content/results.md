@@ -2,6 +2,8 @@
 title: Reading the results
 order: 3
 summary: What each number, table and chart on a run's pages means.
+seo_title: Reading the results of a simulated Match
+description: What each number, table and chart of a simulated Match means: match rate, positions filled, sorting, who gets interviews and who matches where.
 ---
 
 A run's pages are tabs: Summary, Population, Before interviews, Applications and interviews, Match, Applicants and

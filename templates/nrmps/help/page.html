@@ -3,7 +3,7 @@
   One page of the guide (plan step 4.4): the pages' menu, the page's contents list and its rendered Markdown
   (nrmps.guide.render_page; SafeString from our own content with raw HTML off).
 {% endcomment %}
-{% block title %}{% if rendered.page.slug != "index" %}{{ rendered.page.title }} - {% endif %}Help - NRMP Simulations{% endblock %}
+{% block title %}{{ seo.title }}{% endblock %}
 {% block content %}
 <div class="py-4 grid grid-cols-1 lg:grid-cols-4 gap-8">
   {% include "nrmps/help/_menu.html" with current=rendered.page.slug %}

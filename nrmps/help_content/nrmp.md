@@ -2,6 +2,8 @@
 title: How the Match works
 order: 1
 summary: The real process the simulator follows, from applications to Match Day.
+seo_title: How the residency Match works
+description: The residency Match in brief: who takes part, the timeline from applications to Match Day, the deferred acceptance algorithm, and what the simulator models.
 ---
 
 The Main Residency Match places graduating medical students and other applicants into residency positions in the

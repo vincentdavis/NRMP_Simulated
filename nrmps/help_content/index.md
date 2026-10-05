@@ -2,6 +2,8 @@
 title: Help
 order: 0
 summary: What the simulator does, a quick start, and where to read more.
+seo_title: Guide to the residency Match simulator
+description: Start here: what the residency Match simulator does, a quick start, the pages of the guide and the simulator's current limitations.
 ---
 
 NRMP Simulations models the residency Match: applicants and residency programs with preferences and imperfect

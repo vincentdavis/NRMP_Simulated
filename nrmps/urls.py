@@ -8,6 +8,9 @@ app_name = "nrmps"
 urlpatterns = [
     path("", views.index, name="index"),
     path("healthz", views.healthz, name="healthz"),
+    path("robots.txt", views.robots_txt, name="robots_txt"),
+    path("sitemap.xml", views.sitemap_xml, name="sitemap"),
+    path("favicon.ico", views.favicon, name="favicon"),
     path("csp-report/", views.csp_report, name="csp_report"),
     # Auth routes
     path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),

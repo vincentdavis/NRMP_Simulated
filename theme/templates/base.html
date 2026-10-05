@@ -1,12 +1,33 @@
 {% load static tailwind_tags %}
-{% load django_htmx nav_tags %}
+{% load django_htmx nav_tags seo_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}NRMP Simulations{% endblock %}</title>
-    <link rel="icon" type="image/png" href="{% static 'NRMP_Simulations_favcon.png' %}">
+    {# Search engines and link previews (nrmps/seo.py): only the public pages listed there are indexed. #}
+    {% if seo.index %}
+    <meta name="description" content="{{ seo.description }}">
+    <link rel="canonical" href="{{ seo.url }}">
+    <meta property="og:type" content="{{ seo.type }}">
+    <meta property="og:site_name" content="{{ seo.site_name }}">
+    <meta property="og:title" content="{{ seo.heading }}">
+    <meta property="og:description" content="{{ seo.description }}">
+    <meta property="og:url" content="{{ seo.url }}">
+    <meta property="og:image" content="{{ seo.image }}">
+    <meta property="og:image:width" content="{{ seo.image_width }}">
+    <meta property="og:image:height" content="{{ seo.image_height }}">
+    <meta property="og:image:alt" content="{{ seo.image_alt }}">
+    <meta name="twitter:card" content="summary_large_image">
+    {% jsonld seo.structured %}
+    {% else %}
+    <meta name="robots" content="noindex">
+    {% endif %}
+    {% if GOOGLE_SITE_VERIFICATION %}<meta name="google-site-verification" content="{{ GOOGLE_SITE_VERIFICATION }}">{% endif %}
+    {% if BING_SITE_VERIFICATION %}<meta name="msvalidate.01" content="{{ BING_SITE_VERIFICATION }}">{% endif %}
+    <link rel="icon" type="image/png" sizes="96x96" href="{% static 'img/icon-96.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'img/icon-180.png' %}">
     {# Apply a saved light/dark choice before first paint; without one, daisyUI follows the system setting. #}
     <script nonce="{{ csp_nonce }}">try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
     {% tailwind_css %}

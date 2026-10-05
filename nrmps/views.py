@@ -12,6 +12,7 @@ from django.db import DatabaseError, connection, transaction
 from django.db.models import F
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
@@ -33,6 +34,7 @@ from .quotas import QuotaError, check_preset_quota, check_simulation_quota
 from .ratelimit import MESSAGE as RATE_MESSAGE
 from .ratelimit import over_limit, rate_limit
 from .runs import WORKER_STALE_SECONDS, dispatch_run, run_wait, start_run, worker_last_seen
+from .seo import absolute, sitemap_urls
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +146,48 @@ def _recent_simulations(user: Any, count: int = 3) -> list[dict[str, Any]]:
         outcomes = (latest.metrics or {}).get("outcomes") or {} if latest else {}
         recent.append({"sim": sim, "match_rate": (outcomes.get("match") or {}).get("match_rate")})
     return recent
+
+
+# What search engines should stay out of: everything behind the login (they would only meet the login page), the
+# admin, the searches and the endpoints that are not pages.
+ROBOTS_DISALLOW = (
+    "/admin/",
+    "/simulations/",
+    "/compare/",
+    "/account/",
+    "/ops/",
+    "/help/search/",
+    "/help/developer/",
+    "/csp-report/",
+    "/healthz",
+)
+
+
+@login_not_required
+@require_GET
+def robots_txt(request):
+    """Tell search engines which parts of the site are not for them, and where the sitemap is."""
+    lines = [
+        "User-agent: *",
+        *(f"Disallow: {path}" for path in ROBOTS_DISALLOW),
+        "",
+        f"Sitemap: {absolute(reverse('nrmps:sitemap'))}",
+    ]
+    return HttpResponse("\n".join(lines) + "\n", content_type="text/plain; charset=utf-8")
+
+
+@login_not_required
+@require_GET
+def sitemap_xml(request):
+    """The sitemap: the address of every page offered to search engines (nrmps.seo)."""
+    return render(request, "nrmps/sitemap.xml", {"urls": sitemap_urls()}, content_type="application/xml")
+
+
+@login_not_required
+@require_GET
+def favicon(request):
+    """Browsers and crawlers that ask for /favicon.ico get the site's icon."""
+    return redirect(static("img/icon-96.png"), permanent=True)
 
 
 @login_not_required

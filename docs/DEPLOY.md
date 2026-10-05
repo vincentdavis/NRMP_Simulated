@@ -116,6 +116,31 @@ Without `EMAIL_HOST`, emails are written to the log instead: fine for developmen
 confirmation or password-reset links, and Django 6.1's `check --deploy` reports it as an error (mail.E001; CI sets a
 placeholder host for that check). Check delivery with `python manage.py sendtestemail you@example.com`.
 
+## Search engines
+
+The app tells search engines what to index (`nrmps/seo.py`): the home page, the demo page, the guide and the
+contact, privacy and terms pages each have a title and description written for a search result, a canonical address,
+a link preview (`static/img/social-card.png`) and structured data. `/sitemap.xml` lists them and `/robots.txt` names
+the sitemap and keeps crawlers out of everything behind the login. Every other page carries `noindex`. Addresses
+are built from `SITE_URL` (Railway's public domain by default), so they name one host.
+
+What the owner does once, after the first deploy with this:
+
+1. **Google Search Console** (https://search.google.com/search-console): add the site. Either verify the domain with
+   the DNS record it gives (at the domain's DNS provider), or choose "HTML tag", copy the code from the tag's
+   `content` and set it as `GOOGLE_SITE_VERIFICATION` on the web service; the tag then appears on every page.
+2. In Search Console, **Sitemaps**: submit `sitemap.xml`. Then **URL inspection** for the home page and **Request
+   indexing**. New sites take days to weeks to appear.
+3. **Bing Webmaster Tools** (https://www.bing.com/webmasters): import the site from Search Console, or set
+   `BING_SITE_VERIFICATION` the same way. Bing's index also feeds other search engines.
+
+Cloudflare, in front of the site, adds its own comment block to the top of `/robots.txt` (its "content signals"
+notice); the app's rules follow it. To change what AI crawlers may do with the content, use Cloudflare's settings.
+
+To change the link preview image or the icons, edit `docs/assets/social-card.html` and run
+`uv run python docs/assets/render_images.py`. Check a page's preview with a link-preview tester and its structured
+data with Google's Rich Results Test.
+
 ## Background runs, clean-up and operations
 
 **Runs in the request (default).** With `TASK_BACKEND=immediate` a run executes inside the web request that starts it,

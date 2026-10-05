@@ -403,6 +403,28 @@ that a refused run leaves the seed alone), other users' runs (404), and in the b
 rerun, axe in both themes and phone width. Not done from step 6.2: sweeps, what-if sliders, and comparing more than
 two runs or over replicates.
 
+**Search engines, step 1: the technical basics (owner request).** The site was not in search results, and its public
+pages had generic titles ("Home - NRMP Simulations"), no descriptions, no sitemap, no link previews and no structured
+data. Now (`nrmps/seo.py`):
+- **Titles and descriptions** written for a search result, for the home page, the demo page, the nine guide pages
+  (`seo_title` and `description` in their front matter) and the contact, privacy and terms pages; tests hold titles to
+  60 characters and descriptions to 70–160, and require them to differ from page to page.
+- **Canonical addresses** from `SITE_URL` without the query, so `/demo/?preset=noisy` is `/demo/` on one host.
+- **`/sitemap.xml`** with those 14 pages and **`/robots.txt`** naming it and keeping crawlers out of the admin and
+  everything behind the login. Every page not in the registry carries `noindex` (the login and sign-up forms,
+  searches, and all private pages); a test fails for a new public page that is neither indexed nor listed as not.
+- **Link previews** (Open Graph and a large Twitter card) with an image rendered from `docs/assets/social-card.html`,
+  and **structured data**: the site and the simulator as a free web application on the home page, an article with
+  breadcrumbs on each guide page.
+- An icon of 96 pixels (search results want a multiple of 48), one for home screens, and `/favicon.ico`.
+- Optional verification codes for Google Search Console and Bing Webmaster Tools (`GOOGLE_SITE_VERIFICATION`,
+  `BING_SITE_VERIFICATION`).
+
+**Owner actions** (docs/DEPLOY.md, "Search engines"): verify the site in Google Search Console, submit the sitemap
+and request indexing; the same for Bing. Next steps discussed and not started: public pages that answer research and
+strategy questions with worked examples, a citable artifact (DOI, methods preprint, public validation page), and
+links from academic sites.
+
 ## Phases 6–8
 
 Not started.

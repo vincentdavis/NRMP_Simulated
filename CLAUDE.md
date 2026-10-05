@@ -149,6 +149,8 @@ nrmps/
 ├── help_registry.py      # help for actions, table columns, pages and charts (the chart catalog: "?" popovers,
 │                         #   Help panels, the guide's chart section)
 ├── help_search.py        # search of the help (/help/search/): guide sections, glossary, parameters, charts ...
+├── seo.py                # search engines: the public pages' titles and descriptions, canonical addresses, link
+│                         #   previews, structured data, the sitemap (/sitemap.xml, /robots.txt in views.py)
 ├── checks.py             # system checks of the help (nrmps.H001-H004)
 ├── ops_views.py          # staff-only /ops/: runs per day, failures, durations, queue, workers, quota use
 ├── accounts.py           # confirmation tokens and emails, the personal data export
@@ -197,6 +199,10 @@ docs/                     # review, plan, status, deployment, model spec
   chart needs a summary sentence (and a table where the numbers matter). Build tooltips with `tip()` (it escapes
   every value; names come from uploaded files) and numbers with `format.*`; take colours from the tokens
   (`--viz-*` in styles.css), never hard-coded.
+- Search engines: only the pages in `nrmps/seo.py` (`PAGES`, and the guide's pages through `seo_title` and
+  `description` in their front matter) are indexed; every other page gets `noindex`. A new page that visitors can
+  open needs an entry there, or a place in the not-indexed list of `nrmps/tests/test_seo.py`, and its template takes
+  its title from `{{ seo.title }}`.
 - Scripts are static files: no inline `<script>` (except with `nonce="{{ csp_nonce }}"`) and no inline event
   handlers (`onchange=`); the Content Security Policy (report-only, enforced from step 5.5) would block them, and
   every browser test fails on a violation.

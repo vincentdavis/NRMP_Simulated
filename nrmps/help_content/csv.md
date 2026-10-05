@@ -2,6 +2,8 @@
 title: CSV files
 order: 5
 summary: Uploading your own applicants or programs, and the files a run downloads.
+seo_title: CSV files: uploading populations, downloading results
+description: Upload your own applicants or programs as CSV files and download a run's population, match and applications: the file formats and their columns.
 ---
 
 ## Uploading a population

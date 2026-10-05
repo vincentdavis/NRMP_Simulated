@@ -2,6 +2,8 @@
 title: Questions
 order: 7
 summary: Common questions about runs, results and data.
+seo_title: Questions about the residency Match simulator
+description: Common questions answered: why runs repeat, why an applicant with interviews did not match, how the match rate is counted, real data and reproducing runs.
 ---
 
 ## Why do two runs give the same results?

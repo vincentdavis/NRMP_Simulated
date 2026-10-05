@@ -2,6 +2,8 @@
 title: The simulation model
 order: 2
 summary: Every stage of model {{model_version}}, with its formulas and a worked example.
+seo_title: The simulation model of the residency Match
+description: How the simulator models the Match: preferences, noisy information, applications, signals, interviews, rank order lists and the match, with formulas.
 ---
 
 This is model {{model_version}} (engine {{engine_version}}). Values such as strength, quality and utility are on a

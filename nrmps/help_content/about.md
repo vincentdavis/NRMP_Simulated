@@ -2,6 +2,8 @@
 title: About and citing
 order: 8
 summary: Versions, how to cite the simulator, and the source code.
+seo_title: About the simulator and how to cite it
+description: The versions of the residency Match simulator, how to cite it in research and reproduce a run, and its open-source code and licence.
 ---
 
 NRMP Simulations is an independent educational and research simulator of the residency Match. It is not affiliated

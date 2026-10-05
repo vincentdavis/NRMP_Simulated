@@ -2,6 +2,8 @@
 title: Glossary
 order: 6
 summary: The words the simulator uses.
+seo_title: Glossary of residency Match and simulation terms
+description: The words the Match simulator uses, from blocking pair, deferred acceptance and fidelity to rank order list, signal, stable match and yield protection.
 ---
 
 Agreement ($\rho$)
