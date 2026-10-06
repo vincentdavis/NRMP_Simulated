@@ -16,7 +16,7 @@ from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST, require_safe
 from django_htmx.http import trigger_client_event
 from pydantic import ValidationError
 
@@ -55,7 +55,7 @@ def _toast(response: HttpResponse, level: str, text: str) -> HttpResponse:
 
 
 @login_not_required
-@require_GET
+@require_safe
 def healthz(request):
     """Health check for the platform: 200 when the database answers, 503 otherwise."""
     try:
@@ -131,7 +131,7 @@ def csp_report(request):
 
 
 @login_not_required
-@require_GET
+@require_safe
 def index(request):
     """Home page: what the simulator does, the stages of a run, Try a demo, and your recent simulations."""
     recent = _recent_simulations(request.user) if request.user.is_authenticated else []
@@ -171,7 +171,7 @@ ROBOTS_DISALLOW = (
 
 
 @login_not_required
-@require_GET
+@require_safe
 def robots_txt(request):
     """Tell search engines which parts of the site are not for them, and where the sitemap is."""
     lines = [
@@ -184,35 +184,35 @@ def robots_txt(request):
 
 
 @login_not_required
-@require_GET
+@require_safe
 def sitemap_xml(request):
     """The sitemap: the address of every page offered to search engines (nrmps.seo)."""
     return render(request, "nrmps/sitemap.xml", {"urls": sitemap_urls()}, content_type="application/xml")
 
 
 @login_not_required
-@require_GET
+@require_safe
 def favicon(request):
     """Browsers and crawlers that ask for /favicon.ico get the site's icon."""
     return redirect(static("img/icon-96.png"), permanent=True)
 
 
 @login_not_required
-@require_GET
+@require_safe
 def contact(request):
     """Contact information page."""
     return render(request, "nrmps/contact.html")
 
 
 @login_not_required
-@require_GET
+@require_safe
 def privacy(request):
     """Privacy policy page."""
     return render(request, "nrmps/privacy.html")
 
 
 @login_not_required
-@require_GET
+@require_safe
 def terms(request):
     """Terms of service page."""
     return render(request, "nrmps/terms.html")
@@ -401,14 +401,14 @@ DEMO_PRESETS = (
 
 
 @login_not_required
-@require_http_methods(["GET", "POST"])
+@require_http_methods(["GET", "HEAD", "POST"])
 def demo(request):
     """Try a demo: create a simulation from a preset, run it, and open its results (GET explains and asks).
 
     Anyone can see the markets (`?preset=` picks one); running one needs an account. A visitor who asks to run one is
     sent to log in, or with `account=new` to sign up, and then back to this page with the same market picked.
     """
-    if request.method == "GET":
+    if request.method != "POST":
         presets = [(key, PRESETS[key]) for key in DEMO_PRESETS]
         return render(request, "nrmps/demo.html", {"presets": presets, "chosen": _demo_preset(request.GET)})
     key = _demo_preset(request.POST)

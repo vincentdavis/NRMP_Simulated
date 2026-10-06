@@ -30,6 +30,53 @@ def test_every_page_carries_the_non_affiliation_disclaimer(client, name):
     assert "not predictions" in body
 
 
+# What visitors, link checkers and monitors may ask for with HEAD: the headers of a GET, without the page.
+HEAD = [
+    "/",
+    "/demo/",
+    "/examples/",
+    "/examples/small-classroom-market/",
+    "/examples/small-classroom-market/match/",
+    "/examples/small-classroom-market/applicants/1/",
+    "/help/",
+    "/help/model/",
+    "/help/search/?q=match",
+    "/contact/",
+    "/privacy/",
+    "/terms/",
+    "/login/",
+    "/signup/",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/healthz",
+]
+
+
+@pytest.mark.parametrize("path", HEAD)
+def test_public_pages_answer_head_requests(client, path):
+    get, head = client.get(path), client.head(path)
+    assert head.status_code == get.status_code == 200
+    assert head.content == b""
+    assert get.content
+    assert head["Content-Type"] == get["Content-Type"]
+
+
+def test_head_requests_follow_redirects_and_other_methods_stay_refused(client, django_user_model):
+    assert client.head("/favicon.ico").status_code == 301
+    assert client.head("/documentation/").status_code in {301, 302}
+    assert client.head("/simulations/").status_code == 302  # to the login page, as a GET
+    for path in ("/", "/examples/", "/examples/small-classroom-market/", "/help/", "/robots.txt"):
+        assert client.put(path).status_code == 405, path
+        assert client.delete(path).status_code == 405, path
+    assert client.post("/examples/").status_code == 405
+    # An example's files are computed when asked for, so only a GET gets them.
+    assert client.head("/examples/small-classroom-market/download/match.csv").status_code == 405
+    # A HEAD of the forms changes nothing: no simulation, no account.
+    assert client.head("/demo/?preset=classroom").status_code == 200
+    assert client.head("/signup/").status_code == 200
+    assert not django_user_model.objects.exists()
+
+
 def test_home_page_quick_start_matches_the_real_flow(client):
     body = client.get(reverse("nrmps:index")).content.decode()
     assert "via the Admin" not in body

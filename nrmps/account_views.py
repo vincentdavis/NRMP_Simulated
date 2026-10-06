@@ -20,7 +20,7 @@ RESEND_INTERVAL = 60
 
 
 @login_not_required
-@require_http_methods(["GET", "POST"])
+@require_http_methods(["GET", "HEAD", "POST"])
 @rate_limit("signup", by="ip")
 def signup(request):
     """Create an account, sign the user in and send the email confirmation link."""

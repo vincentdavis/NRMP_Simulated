@@ -10,7 +10,7 @@ from django.db import models as db_models
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_safe
 
 from . import models, params, pipeline, runs, validation
 from .engine import (
@@ -106,7 +106,7 @@ MAX_QUERY = 100  # characters of a search query
 
 
 @login_not_required
-@require_GET
+@require_safe
 def help_search(request):
     """Search the help (plan step 5.1): the guide, the glossary, the parameters, the charts, columns and buttons."""
     query = " ".join(request.GET.get("q", "").split())[:MAX_QUERY]
@@ -115,14 +115,14 @@ def help_search(request):
 
 
 @login_not_required
-@require_GET
+@require_safe
 def help_index(request):
     """The guide's home page: what the simulator does, a quick start, the guide's pages and the limitations."""
     return _guide_response(request, INDEX)
 
 
 @login_not_required
-@require_GET
+@require_safe
 def help_page(request, slug: str):
     """One page of the guide (nrmps/help_content/<slug>.md)."""
     if slug == INDEX:
@@ -131,7 +131,7 @@ def help_page(request, slug: str):
 
 
 @login_not_required
-@require_GET
+@require_safe
 def documentation_redirect(request):
     """The old /documentation/ page moved to the help guide."""
     return redirect("nrmps:help", permanent=True)

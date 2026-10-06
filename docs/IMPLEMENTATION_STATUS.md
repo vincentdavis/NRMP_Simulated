@@ -465,6 +465,13 @@ uniqueness, numbers), the sitemap, robots rules (with wildcards), structured dat
 path from the landing page through an example to the demo, every chart on every tab of both examples, sorting and
 downloading, axe in both themes and phone width. A user's own run pages are unchanged (the existing tests).
 
+**Public pages answer HEAD requests.** Every public page refused a HEAD request with 405 (`require_GET`), which is
+how link checkers, uptime monitors and some preview fetchers first ask for a page. The public pages (home, demo,
+examples, guide, contact, privacy, terms, the sign-up form, `robots.txt`, the sitemap, the icon and the health check)
+now answer it like a GET without the body (`require_safe`; gunicorn and the development server drop the body). An
+example's downloads stay GET only, since a file is computed when asked for, and so does the email confirmation link,
+which changes the account.
+
 **Worth a decision:** the NRMP-like market is the simulator's default, not a calibration: its match rate is 92.2%
 of applicants with a rank order list. If the public example should resemble the published figures of the Main
 Residency Match, a calibrated preset would come first (it was discussed and is not started).

@@ -9,7 +9,7 @@ account can appear on them (only the downloads touch it, to count the requests o
 from django.contrib.auth.decorators import login_not_required
 from django.http import Http404
 from django.shortcuts import render
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_safe
 
 from . import run_views
 from .examples import EXAMPLES, saved_run
@@ -26,7 +26,7 @@ def example_pages(slug: str) -> RunPages:
 
 
 @login_not_required
-@require_GET
+@require_safe
 def examples(request):
     """The saved example runs: what each market is, its key numbers and where to start reading."""
     items = []
@@ -37,63 +37,63 @@ def examples(request):
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_detail(request, slug: str):
     """An example's summary: key numbers, the applicants' flow, downloads, stages, checks and parameters."""
     return run_views.summary_page(request, example_pages(slug))
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_population(request, slug: str):
     """An example's population: the market as generated, with its distributions."""
     return run_views.population_page(request, example_pages(slug))
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_pre_interview(request, slug: str):
     """An example before interviews: agreement, fidelity, first choices and first-choice demand."""
     return run_views.pre_interview_page(request, example_pages(slug))
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_applications(request, slug: str):
     """An example's applications, invitations and interviews: the funnel, and every application with filters."""
     return run_views.applications_page(request, example_pages(slug))
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_match(request, slug: str):
     """An example's match: headline numbers, which choice applicants got, who matched where, and the checks."""
     return run_views.match_page(request, example_pages(slug))
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_applicants(request, slug: str):
     """An example's applicants with their attributes, weights and results."""
     return run_views.applicants_page(request, example_pages(slug))
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_applicant(request, slug: str, index: int):
     """One applicant of an example through the stages, and its view of every program before interviews."""
     return run_views.agent_page(request, example_pages(slug), index, applicant=True)
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_programs(request, slug: str):
     """An example's programs with their attributes, weights, positions and results."""
     return run_views.programs_page(request, example_pages(slug))
 
 
 @login_not_required
-@require_GET
+@require_safe
 def example_program(request, slug: str, index: int):
     """One program of an example with its applicants through the stages, and its view of every applicant."""
     return run_views.agent_page(request, example_pages(slug), index, applicant=False)
