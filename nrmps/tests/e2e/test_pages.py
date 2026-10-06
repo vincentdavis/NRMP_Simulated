@@ -21,6 +21,20 @@ PUBLIC = [
     "/help/search/?q=interview",
     "/account/password/reset/",
     "/account/password/reset/sent/",
+    # The saved example runs (nrmps.examples): every kind of page of the small one, and the larger one's fullest.
+    "/examples/",
+    "/examples/small-classroom-market/",
+    "/examples/small-classroom-market/population/",
+    "/examples/small-classroom-market/before-interviews/",
+    "/examples/small-classroom-market/applications/",
+    "/examples/small-classroom-market/match/",
+    "/examples/small-classroom-market/applicants/",
+    "/examples/small-classroom-market/programs/",
+    "/examples/small-classroom-market/applicants/1/",
+    "/examples/small-classroom-market/programs/1/?view=pre",
+    "/examples/nrmp-like-market/",
+    "/examples/nrmp-like-market/match/",
+    "/examples/nrmp-like-market/applicants/",
 ]
 PRIVATE = [
     "/simulations/",

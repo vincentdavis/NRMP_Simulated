@@ -118,11 +118,13 @@ placeholder host for that check). Check delivery with `python manage.py sendtest
 
 ## Search engines
 
-The app tells search engines what to index (`nrmps/seo.py`): the home page, the demo page, the guide and the
-contact, privacy and terms pages each have a title and description written for a search result, a canonical address,
-a link preview (`static/img/social-card.png`) and structured data. `/sitemap.xml` lists them and `/robots.txt` names
-the sitemap and keeps crawlers out of everything behind the login. Every other page carries `noindex`. Addresses
-are built from `SITE_URL` (Railway's public domain by default), so they name one host.
+The app tells search engines what to index (`nrmps/seo.py`): the home page, the demo page, the guide, the saved
+example runs (their index, and each example's summary and main tabs) and the contact, privacy and terms pages each
+have a title and description written for a search result, a canonical address, a link preview
+(`static/img/social-card.png`) and structured data. `/sitemap.xml` lists them and `/robots.txt` names the sitemap
+and keeps crawlers out of everything behind the login, and out of the examples' sorted and paged tables, agent pages
+and downloads. Every other page carries `noindex`. Addresses are built from `SITE_URL` (Railway's public domain by
+default), so they name one host.
 
 What the owner does once, after the first deploy with this:
 
@@ -140,6 +142,21 @@ notice); the app's rules follow it. To change what AI crawlers may do with the c
 To change the link preview image or the icons, edit `docs/assets/social-card.html` and run
 `uv run python docs/assets/render_images.py`. Check a page's preview with a link-preview tester and its structured
 data with Google's Rich Results Test.
+
+## Example runs
+
+The runs that everyone can see at `/examples/` are files in the repository (`nrmps/example_runs/`), not rows in the
+database: they deploy with the code, and nothing has to be run on the server. After a change of the engine, of an
+example's preset or of its seed, the tests fail until the examples are saved again:
+
+```bash
+uv run python manage.py nrmp_examples          # saves the examples that are missing or out of date; commit the files
+uv run python manage.py nrmp_examples --check  # writes nothing; fails if one is out of date
+```
+
+To add an example, add it to `EXAMPLES` in `nrmps/examples.py` (a preset that "Try a demo" offers, a seed, its
+texts) and run the command. The downloads of the examples are computed when asked for and limited per client address
+(`NRMP_RATE_EXAMPLE_DOWNLOAD`, default `600/h`).
 
 ## Background runs, clean-up and operations
 

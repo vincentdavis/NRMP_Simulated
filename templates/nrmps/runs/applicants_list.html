@@ -1,7 +1,7 @@
 {% extends "nrmps/runs/_layout.html" %}
-{% load list_tags humanize help_tags %}
+{% load list_tags humanize help_tags run_tags %}
 {% block run_actions %}
-  <a href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='applicants.csv' %}" class="btn btn-outline">Download CSV</a>
+  <a href="{% run_url 'download' name='applicants.csv' %}" class="btn btn-outline">Download CSV</a>
   {% help_icon "action" "download_csv" %}
 {% endblock %}
 {% block run_content %}
@@ -39,7 +39,7 @@
         {% for row in rows %}
           <tr>
             <td class="text-right tabular-nums">{{ row.number }}</td>
-            <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.number %}">{{ row.name }}</a></td>
+            <td class="whitespace-nowrap"><a class="link" href="{% run_url 'applicant' index=row.number %}">{{ row.name }}</a></td>
             <td>{{ row.group }}</td>
             <td class="text-right tabular-nums">{{ row.strength|floatformat:3 }}</td>
             <td class="text-right tabular-nums">{{ row.percentile|floatformat:0 }}</td>
@@ -48,7 +48,7 @@
               <td class="text-right tabular-nums">{{ row.interviews|intcomma }}</td>
               <td class="whitespace-nowrap">
                 {% if row.match %}
-                  <a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.match %}">{{ row.match_name }}</a>
+                  <a class="link" href="{% run_url 'program' index=row.match %}">{{ row.match_name }}</a>
                   <span class="text-base-content/70">({{ row.match_rank|ordinal }} choice)</span>
                 {% elif row.list_length %}
                   <span class="text-base-content/70">Unmatched</span>
@@ -59,7 +59,7 @@
             {% endif %}
             <td>{% include "nrmps/components/chips.html" with items=row.attributes places=2 %}</td>
             <td>{% include "nrmps/components/chips.html" with items=row.weights places=2 %}</td>
-            <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.first_choice %}">{{ row.first_choice_name }}</a></td>
+            <td class="whitespace-nowrap"><a class="link" href="{% run_url 'program' index=row.first_choice %}">{{ row.first_choice_name }}</a></td>
             <td class="text-right tabular-nums">{{ row.fidelity|floatformat:3 }}</td>
             <td class="text-right tabular-nums">{{ row.popularity|intcomma }}</td>
           </tr>

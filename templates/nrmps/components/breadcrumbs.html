@@ -1,9 +1,19 @@
 {% comment %}
   Breadcrumbs: Simulations › simulation › (run) › current page. Parameters: current (optional), run (optional; the
-  run page itself when current is empty).
+  run page itself when current is empty). On a saved example's pages (context: example): Examples › example ›
+  current page.
 {% endcomment %}
 <nav class="breadcrumbs text-sm mb-2" aria-label="Breadcrumbs">
   <ul>
+    {% if example %}
+      <li><a href="{% url 'nrmps:examples' %}">Examples</a></li>
+      {% if current %}
+        <li><a href="{% url 'nrmps:example_detail' slug=example.slug %}">{{ example.name }}</a></li>
+        <li><span aria-current="page">{{ current }}</span></li>
+      {% else %}
+        <li><span aria-current="page">{{ example.name }}</span></li>
+      {% endif %}
+    {% else %}
     <li><a href="{% url 'nrmps:simulation_list' %}">Simulations</a></li>
     {% if current or run %}
       <li><a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}">{{ simulation.name }}</a></li>
@@ -17,6 +27,7 @@
       {% endif %}
     {% else %}
       <li><span aria-current="page">{{ simulation.name }}</span></li>
+    {% endif %}
     {% endif %}
   </ul>
 </nav>

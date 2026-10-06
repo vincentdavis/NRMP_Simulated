@@ -4,7 +4,9 @@ Simulate the residency Match: build a market of applicants and residency program
 imperfect information, and follow them through applications, preference signals, interviews and rank order lists to
 the match. For students, program directors, educators and researchers.
 
-Live site: <https://nrmp-simulated.heteroskedastic.org>
+Live site: <https://nrmp-simulated.heteroskedastic.org>. To see results without an account, open its
+[example runs](https://nrmp-simulated.heteroskedastic.org/examples/): saved runs of an NRMP-like market and of a
+small market, with every chart, table and download.
 
 > An independent educational and research simulator. Not affiliated with, sponsored or endorsed by the National
 > Resident Matching Program® (NRMP®). Simulated outcomes are not predictions of any real applicant's or program's

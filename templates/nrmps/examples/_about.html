@@ -1,0 +1,23 @@
+{% comment %}
+  What a saved example run is and where to start reading (nrmps.examples), at the top of its summary.
+  Context: example, run, highlights (run_views.highlights).
+{% endcomment %}
+<section class="card bg-base-200 mb-6" aria-labelledby="about-title">
+  <div class="card-body">
+    <h2 id="about-title" class="card-title">About this example</h2>
+    <p>{{ example.lead }}</p>
+    <h3 class="font-semibold mt-2">What to look at</h3>
+    <ul class="list-disc ms-6 space-y-1">
+      {% for item in highlights %}
+        <li><a class="link" href="{{ item.url }}">{{ item.label }}</a>: {{ item.text }}</li>
+      {% endfor %}
+    </ul>
+    <p class="text-sm mt-2">
+      This is one run of the market, with seed {{ run.seed }} and model {{ run.model_version }}. Another seed draws
+      other applicants and programs, so the numbers differ from run to run: run the market yourself to see by how
+      much, or to change its parameters. The run's
+      <a class="link" href="{{ PROJECT_URL }}/tree/main/nrmps/example_runs/{{ example.slug }}">files</a> are kept
+      with the project's source code.
+    </p>
+  </div>
+</section>

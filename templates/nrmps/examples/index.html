@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load humanize format_tags %}
+{% comment %}
+  The saved example runs (nrmps.examples): open to everyone and offered to search engines. Context: items, one per
+  example, with pages (run_views.RunPages), run and highlights.
+{% endcomment %}
+{% block title %}{{ seo.title }}{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto py-4">
+  <h1 class="text-3xl font-bold mb-2">Example runs</h1>
+  <p class="text-base-content/80 mb-6 max-w-3xl">
+    Finished runs of the simulator that anyone can open, without an account. Each is one simulated residency Match,
+    saved with its parameters and seed, so everyone sees the same market: every chart and table of the run, each
+    applicant's and program's path through the stages, and the data to download.
+  </p>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {% for item in items %}
+      {% with run=item.run example=item.pages.example match=item.run.metrics.outcomes.match funnel=item.run.metrics.outcomes.funnel %}
+        <article class="card bg-base-100 shadow-xl" aria-labelledby="example-{{ example.slug }}">
+          <div class="card-body">
+            <h2 id="example-{{ example.slug }}" class="card-title text-2xl">
+              <a class="link link-hover" href="{% url 'nrmps:example_detail' slug=example.slug %}">{{ example.name }}</a>
+            </h2>
+            <p class="grow-0">{{ example.lead }}</p>
+            <dl class="grid grid-cols-2 sm:grid-cols-3 gap-3 my-2">
+              <div>
+                <dt class="text-xs text-base-content/70">Applicants</dt>
+                <dd class="text-xl font-semibold tabular-nums">{{ run.n_applicants|intcomma }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-base-content/70">Programs</dt>
+                <dd class="text-xl font-semibold tabular-nums">{{ run.n_programs|intcomma }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-base-content/70">Positions</dt>
+                <dd class="text-xl font-semibold tabular-nums">{{ run.n_positions|intcomma }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-base-content/70">Match rate</dt>
+                <dd class="text-xl font-semibold tabular-nums">{{ match.match_rate|percent }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-base-content/70">Positions filled</dt>
+                <dd class="text-xl font-semibold tabular-nums">{{ match.fill_rate|percent }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs text-base-content/70">Interviews per applicant</dt>
+                <dd class="text-xl font-semibold tabular-nums">{{ funnel.interviews_per_applicant|floatformat:1 }}</dd>
+              </div>
+            </dl>
+            <h3 class="font-semibold">What to look at</h3>
+            <ul class="list-disc ms-6 space-y-1 text-sm">
+              {% for highlight in item.highlights %}
+                <li><a class="link" href="{{ highlight.url }}">{{ highlight.label }}</a>: {{ highlight.text }}</li>
+              {% endfor %}
+            </ul>
+            <div class="card-actions justify-end mt-auto pt-2">
+              <a class="btn btn-primary" href="{% url 'nrmps:example_detail' slug=example.slug %}">Open {{ example.phrase }}</a>
+            </div>
+          </div>
+        </article>
+      {% endwith %}
+    {% endfor %}
+  </div>
+
+  <section class="card bg-base-200 mt-8" aria-labelledby="own-title">
+    <div class="card-body">
+      <h2 id="own-title" class="card-title">Run your own</h2>
+      <p>
+        These runs are fixed. To change a market's parameters, draw it again with another seed or build your own
+        market, try a demo: it creates a simulation that you can edit and run again. Running one needs a free account.
+      </p>
+      <div class="card-actions">
+        <a class="btn btn-primary" href="{% url 'nrmps:demo' %}">Try a demo</a>
+        <a class="btn btn-outline" href="{% url 'nrmps:help' %}">Read the guide</a>
+      </div>
+    </div>
+  </section>
+  <p class="text-sm text-base-content/70 mt-4">
+    Simulated from the assumptions in each run's parameters; not predictions of any real applicant's or program's
+    match.
+  </p>
+</div>
+{% endblock %}

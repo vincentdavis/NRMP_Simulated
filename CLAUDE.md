@@ -74,6 +74,10 @@ uv run pytest -m e2e
 
 # Validation report: the match engine against theory and an independent solver on random markets
 uv run python manage.py nrmp_validate --markets 500 --misreport-markets 100
+
+# Save the public example runs again (nrmps/example_runs/) after a change of the engine, a preset or a seed; the
+# tests fail until they are saved and committed (--check writes nothing)
+uv run python manage.py nrmp_examples
 ```
 
 ### Docker Development
@@ -138,7 +142,12 @@ nrmps/
 ├── population_csv.py     # CSV format for population upload/download (one module for both directions)
 ├── views.py              # public pages, simulation list, the simulation page, runs and uploads (HTMX)
 ├── run_views.py          # a run's tabs (summary, population, before interviews, applications with filters, match),
-│                         #   the applicant and program lists, one agent's stages, downloads; the comparison page
+│                         #   the applicant and program lists, one agent's stages, downloads; the comparison page.
+│                         #   RunPages is the run a page shows: a user's run, or a saved example (page functions)
+├── examples.py           # saved example runs, public at /examples/: the registry (preset, seed, texts), saving
+│                         #   them as files, loading them without the database, whether they are out of date
+├── example_runs/         # the saved runs' files (the format of `nrmp_run --out`), written by `nrmp_examples`
+├── example_views.py      # the examples' pages for everyone: a run's pages, read-only, with a download limit
 ├── charts.py             # chart payloads: the run tabs' charts, one agent's network (static/js/nrmp-charts.js)
 ├── compare.py            # two runs side by side (/compare/): what they share (stage fingerprints), key numbers with
 │                         #   differences, the parameters that differ, charts with both runs
@@ -161,9 +170,10 @@ nrmps/
 ├── security.py           # proxy-aware client IP (django-axes)
 ├── admin.py              # admin registrations (runs and artifacts read-only)
 ├── management/commands/  # nrmp_run (the engine headless), nrmp_validate (validation report), seed_demo,
-│                         #   nrmp_worker (queued runs), nrmp_cleanup
+│                         #   nrmp_worker (queued runs), nrmp_cleanup, nrmp_examples (save the example runs)
 └── templatetags/         # form_tags (field_row, cell), list_tags (sort_th), nav_tags (nav_link), format_tags
-                          #   (percent), help_tags (help_icon, page_help), chart_tags (chart_figure)
+                          #   (percent), help_tags (help_icon, page_help), chart_tags (chart_figure), run_tags
+                          #   (run_url), seo_tags (jsonld)
 templates/nrmps/          # pages; partials/ (pipeline, run panel, population), components/, runs/ (the run's tabs
                           #   extend runs/_layout.html), help/
 theme/                    # base template and the Tailwind/daisyUI build (theme/static_src)
@@ -199,10 +209,15 @@ docs/                     # review, plan, status, deployment, model spec
   chart needs a summary sentence (and a table where the numbers matter). Build tooltips with `tip()` (it escapes
   every value; names come from uploaded files) and numbers with `format.*`; take colours from the tokens
   (`--viz-*` in styles.css), never hard-coded.
-- Search engines: only the pages in `nrmps/seo.py` (`PAGES`, and the guide's pages through `seo_title` and
-  `description` in their front matter) are indexed; every other page gets `noindex`. A new page that visitors can
-  open needs an entry there, or a place in the not-indexed list of `nrmps/tests/test_seo.py`, and its template takes
-  its title from `{{ seo.title }}`.
+- Search engines: only the pages in `nrmps/seo.py` (`PAGES`, the guide's pages through `seo_title` and
+  `description` in their front matter, and the examples' main pages in `EXAMPLE_PAGES`) are indexed; every other
+  page gets `noindex`. A new page that visitors can open needs an entry there, or a place in the not-indexed list of
+  `nrmps/tests/test_seo.py`, and its template takes its title from `{{ seo.title }}`.
+- A run's pages also show the saved example runs to everyone (`run_views.RunPages`): in their templates, link to
+  the run's other pages with `{% load run_tags %}{% run_url "match" %}` (never `{% url 'nrmps:run_...' %}`), and
+  put anything that changes the run or leads into the user's simulations inside `{% if not example %}`. A new run
+  page needs its `example_...` address and view (`nrmps/example_views.py`), or must not be linked from the shared
+  templates.
 - Scripts are static files: no inline `<script>` (except with `nonce="{{ csp_nonce }}"`) and no inline event
   handlers (`onchange=`); the Content Security Policy (report-only, enforced from step 5.5) would block them, and
   every browser test fails on a violation.
@@ -222,10 +237,12 @@ docs/                     # review, plan, status, deployment, model spec
   `runs.start_run` + `runs.dispatch_run` so both work; `run_now` always executes in-process (commands, tests). On
   SQLite the server and the worker share the file: settings make every SQLite transaction IMMEDIATE (waiting up to
   20 s for the write lock) so they queue instead of failing with "database is locked".
-- Changing a formula, stream ID or draw recipe changes results: it needs a new `MODEL_VERSION` (model_spec.md §12).
+- Changing a formula, stream ID or draw recipe changes results: it needs a new `MODEL_VERSION` (model_spec.md §12),
+  and the public example runs must be saved again (`manage.py nrmp_examples`; a test fails until they are).
 
 **Security**:
 - Every page requires login unless marked `@login_not_required`; load simulations with `get_owned_simulation()`.
+  The public example pages never read the database (a test asserts no query), so they cannot show an account's data.
 - Never mark user content safe in templates (a test bans `|safe`); pass data to JavaScript with `json_script`.
 - Engine and log messages identify records by id, never by participant names.
 

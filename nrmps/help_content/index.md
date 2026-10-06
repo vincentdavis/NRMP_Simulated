@@ -14,6 +14,9 @@ Matching Program, and its results are not predictions of any real applicant's or
 
 ## Quick start
 
+To see results before creating an account, open the [example runs](/examples/): finished runs of the NRMP-like
+market and of a small market, saved so that everyone sees the same numbers.
+
 1. Create an account and open **Simulations**, then **New simulation**. Pick a preset to start from; the default is
    an NRMP-like market of {{default_applicants}} applicants for {{default_positions}} positions in
    {{default_programs}} programs. Every simulation gets its own random seed.

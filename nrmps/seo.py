@@ -1,8 +1,9 @@
 """Search engines and link previews: the public pages' titles and descriptions, the sitemap and structured data.
 
-Only the pages of PAGES and of the guide are offered to search engines: they get a title and description written
-for a search result, a canonical address, a link preview (Open Graph) and structured data, and they are the
-sitemap. Every other page carries "noindex": everything behind the login, the login and sign-up forms, searches.
+Only the pages of PAGES, of the guide and of the saved example runs (EXAMPLE_PAGES: an example's summary and its
+main tabs) are offered to search engines: they get a title and description written for a search result, a canonical
+address, a link preview (Open Graph) and structured data, and they are the sitemap. Every other page carries
+"noindex": everything behind the login, the login and sign-up forms, searches, and an example's lists and agents.
 Addresses are built from `settings.SITE_URL`, so they name one host however a request arrived.
 
 A new public page needs an entry in PAGES (or, for a guide page, `seo_title` and `description` in its front matter);
@@ -17,6 +18,7 @@ from django.http import HttpRequest
 from django.templatetags.static import static
 from django.urls import reverse
 
+from .examples import EXAMPLES, PAGE_LABELS, SavedRun, page_description, page_title, saved_run
 from .guide import INDEX, GuidePage, apply_values, guide_pages
 from .versions import app_version
 
@@ -53,6 +55,11 @@ PAGES: dict[str, PageMeta] = {
         "Ready-made markets to run and compare: an NRMP-like market, perfect and noisy information on either side, "
         "and preference signals. See who matches, and where.",
     ),
+    "nrmps:examples": PageMeta(
+        "Example runs of a simulated residency Match",
+        "Saved runs of a simulated residency Match to explore without an account: an NRMP-like market and a small "
+        "classroom market, with every chart, table and download.",
+    ),
     "nrmps:contact": PageMeta(
         "Contact",
         "How to reach the maintainer of NRMP Simulations, the open-source simulator of the residency Match, with "
@@ -71,6 +78,40 @@ PAGES: dict[str, PageMeta] = {
 }
 
 
+# The pages of a saved example run (nrmps.examples) that are offered to search engines: URL name -> the page's key.
+EXAMPLE_PAGES = {
+    "nrmps:example_detail": "summary",
+    "nrmps:example_population": "population",
+    "nrmps:example_pre_interview": "pre_interview",
+    "nrmps:example_applications": "applications",
+    "nrmps:example_match": "match",
+}
+# The files of an example that its summary describes as downloads of a dataset: name, title and media type.
+EXAMPLE_FILES = (
+    ("applicants.csv", "The applicants", "text/csv"),
+    ("programs.csv", "The programs", "text/csv"),
+    ("match.csv", "The match: every applicant's result", "text/csv"),
+    ("program_results.csv", "Every program's results", "text/csv"),
+    ("applications.csv", "Every application, from signal to match", "text/csv"),
+    ("params.json", "The parameters with the seed", "application/json"),
+    ("metrics.json", "The diagnostics and the version stamps", "application/json"),
+)
+
+
+def example_meta(slug: str, page: str) -> PageMeta | None:
+    """Return the title and description of page `page` of example `slug`, with the saved run's numbers."""
+    if slug not in EXAMPLES:
+        return None
+    saved = saved_run(slug)
+    return PageMeta(page_title(saved.example, page), page_description(saved, page))
+
+
+def example_path(slug: str, page: str) -> str:
+    """Return the path of page `page` (a value of EXAMPLE_PAGES) of example `slug`."""
+    name = next(name for name, key in EXAMPLE_PAGES.items() if key == page)
+    return reverse(name, kwargs={"slug": slug})
+
+
 def guide_meta(page: GuidePage) -> PageMeta:
     """Return a guide page's title and description for search engines, from its front matter."""
     return PageMeta(page.seo_title or page.title, apply_values(page.description or page.summary), "article")
@@ -85,6 +126,8 @@ def page_meta(request: HttpRequest) -> PageMeta | None:
     match = request.resolver_match
     if match is None:
         return None
+    if match.view_name in EXAMPLE_PAGES:
+        return example_meta(match.kwargs.get("slug", ""), EXAMPLE_PAGES[match.view_name])
     if match.view_name == "nrmps:help":
         page = _guide_page(INDEX)
     elif match.view_name == "nrmps:help_page":
@@ -105,8 +148,10 @@ def guide_path(page: GuidePage) -> str:
 
 
 def sitemap_urls() -> list[str]:
-    """Return the address of every page offered to search engines: PAGES, then the guide in reading order."""
-    paths = [reverse(name) for name in PAGES] + [guide_path(page) for page in guide_pages()]
+    """Return the address of every page offered to search engines: PAGES, the examples, the guide in reading order."""
+    paths = [reverse(name) for name in PAGES]
+    paths += [example_path(slug, page) for slug in EXAMPLES for page in EXAMPLE_PAGES.values()]
+    paths += [guide_path(page) for page in guide_pages()]
     return [absolute(path) for path in paths]
 
 
@@ -114,16 +159,75 @@ def _site() -> dict[str, Any]:
     return {"@type": "WebSite", "@id": absolute("/#website"), "url": absolute("/"), "name": SITE_NAME}
 
 
+def _breadcrumbs(crumbs: list[tuple[str, str]]) -> dict[str, Any]:
+    """Return a page's place in the site: (name, address) from the home page down to the page itself."""
+    return {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": position, "name": crumb, "item": address}
+            for position, (crumb, address) in enumerate(crumbs, start=1)
+        ],
+    }
+
+
+def _dataset(saved: SavedRun, url: str, meta: PageMeta) -> dict[str, Any]:
+    """Return a saved example run as a dataset: what it is, its licence and the files to download."""
+    run, slug = saved.run, saved.example.slug
+    return {
+        "@type": "Dataset",
+        "@id": f"{url}#dataset",
+        "name": meta.title,
+        "description": (
+            f"{meta.description} Synthetic data from {SITE_NAME}, model {run.model_version}: simulated applicants "
+            "and programs, not real applicants, real programs or NRMP data."
+        ),
+        "url": url,
+        "isAccessibleForFree": True,
+        "license": LICENCE_URL,
+        "creator": {"@type": "Person", "name": AUTHOR},
+        "version": str(run.model_version),
+        "dateModified": run.created_at.date().isoformat(),
+        "keywords": ["residency match", "simulation", "synthetic data", "matching markets", "deferred acceptance"],
+        "isPartOf": {"@id": absolute("/#website")},
+        "distribution": [
+            {
+                "@type": "DataDownload",
+                "name": title,
+                "encodingFormat": media_type,
+                "contentUrl": absolute(reverse("nrmps:example_download", kwargs={"slug": slug, "name": name})),
+            }
+            for name, title, media_type in EXAMPLE_FILES
+        ],
+    }
+
+
+def _example_data(name: str, slug: str, url: str, meta: PageMeta) -> dict[str, Any]:
+    """Return the structured data of the examples' index (no `slug`) or of one of an example's indexed pages."""
+    crumbs = [("Home", absolute("/")), ("Examples", absolute(reverse("nrmps:examples")))]
+    graph: list[dict[str, Any]] = [_site()]
+    if name in EXAMPLE_PAGES:
+        saved, page = saved_run(slug), EXAMPLE_PAGES[name]
+        crumbs.append((saved.example.name, absolute(example_path(slug, "summary"))))
+        if page == "summary":
+            graph.append(_dataset(saved, url, meta))
+        else:
+            crumbs.append((PAGE_LABELS[page], url))
+    return {"@context": "https://schema.org", "@graph": [*graph, _breadcrumbs(crumbs)]}
+
+
 def structured_data(request: HttpRequest, meta: PageMeta) -> dict[str, Any] | None:
     """Return the page's schema.org description (JSON-LD), or None for a page that needs none.
 
     The home page describes the site and the simulator as a free web application; a page of the guide is an article
-    of the site, with its place in it (breadcrumbs).
+    of the site, with its place in it (breadcrumbs); a saved example run is a dataset with its downloads, and its
+    pages have their place in the site.
     """
     match = request.resolver_match
     name = match.view_name if match is not None else ""
     url = absolute(request.path)
     author = {"@type": "Person", "name": AUTHOR}
+    if match is not None and (name == "nrmps:examples" or name in EXAMPLE_PAGES):
+        return _example_data(name, match.kwargs.get("slug", ""), url, meta)
     if name == "nrmps:index":
         application = {
             "@type": "WebApplication",
@@ -156,14 +260,7 @@ def structured_data(request: HttpRequest, meta: PageMeta) -> dict[str, Any] | No
             "isPartOf": {"@id": absolute("/#website")},
             "author": author,
         }
-        breadcrumbs = {
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-                {"@type": "ListItem", "position": position, "name": crumb, "item": address}
-                for position, (crumb, address) in enumerate(crumbs, start=1)
-            ],
-        }
-        return {"@context": "https://schema.org", "@graph": [_site(), article, breadcrumbs]}
+        return {"@context": "https://schema.org", "@graph": [_site(), article, _breadcrumbs(crumbs)]}
     return None
 
 

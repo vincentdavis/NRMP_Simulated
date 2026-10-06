@@ -333,6 +333,22 @@ PAGES: dict[str, PageHelp] = {
         actions=("delete_run",),
         more="results",
     ),
+    "example_summary": PageHelp(
+        _("A saved example run"),
+        _(
+            "One run of the simulator, saved with its parameters and seed, so that everyone sees the same market: "
+            "its key numbers, who got an interview and a match by applicant strength, its checks, downloads, stages, "
+            "version stamps and parameters."
+        ),
+        (
+            _RUN_TABS,
+            _(
+                "Run this market yourself to change its parameters, or to draw it again with another seed; that "
+                "needs a free account."
+            ),
+        ),
+        more="results",
+    ),
     "run_population": PageHelp(
         _("The population"),
         _(

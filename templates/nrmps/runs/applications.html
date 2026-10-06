@@ -1,5 +1,5 @@
 {% extends "nrmps/runs/_layout.html" %}
-{% load humanize list_tags help_tags %}
+{% load humanize list_tags help_tags run_tags %}
 {% block run_content %}
   {% include "nrmps/runs/_stats.html" with items=stats %}
   {% include "nrmps/runs/_funnel.html" %}
@@ -40,7 +40,7 @@
         </fieldset>
         <div class="flex gap-2 pb-1">
           <button type="submit" class="btn btn-sm btn-primary">Filter</button>
-          {% if filtered %}<a class="btn btn-sm btn-outline" href="{% url 'nrmps:run_applications' pk=simulation.pk number=run.number %}#applications-title">Clear</a>{% endif %}
+          {% if filtered %}<a class="btn btn-sm btn-outline" href="{% run_url 'applications' %}#applications-title">Clear</a>{% endif %}
         </div>
       </form>
       {% include "nrmps/components/page_size.html" %}
@@ -62,8 +62,8 @@
           <tbody>
             {% for row in rows %}
               <tr{% if row.matched %} class="font-semibold"{% endif %}>
-                <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.applicant %}">{{ row.applicant_name }}</a></td>
-                <td class="whitespace-nowrap"><a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.program %}">{{ row.program_name }}</a></td>
+                <td class="whitespace-nowrap"><a class="link" href="{% run_url 'applicant' index=row.applicant %}">{{ row.applicant_name }}</a></td>
+                <td class="whitespace-nowrap"><a class="link" href="{% run_url 'program' index=row.program %}">{{ row.program_name }}</a></td>
                 <td class="text-right tabular-nums">{{ row.pre_rank|intcomma }}</td>
                 <td>{{ row.signal }}</td>
                 <td class="whitespace-nowrap">{% if row.wave %}Wave {{ row.wave }}{% else %}<span class="text-base-content/70">No</span>{% endif %}</td>

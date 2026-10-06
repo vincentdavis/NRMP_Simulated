@@ -425,6 +425,50 @@ and request indexing; the same for Bing. Next steps discussed and not started: p
 strategy questions with worked examples, a citable artifact (DOI, methods preprint, public validation page), and
 links from academic sites.
 
+**Saved example runs, for everyone (owner request).** Seeing any result needed an account, and search engines had
+nothing of the simulator's output to index. Two runs are now saved and public at `/examples/`: the **NRMP-like
+market** (the defaults: 1,000 applicants, 142 programs, 926 positions) and the **small classroom market** (60
+applicants, 8 programs), each with seed 2026.
+- **Saved as files, not in the database.** `nrmps/example_runs/<slug>/` holds each run in the format of
+  `manage.py nrmp_run --out` (parameters, population, per-agent results, stage decisions, diagnostics with version
+  stamps and each stage's time and counts; about 265 KB in all). `manage.py nrmp_examples` writes them. So the pages
+  are the same on every machine, deploy with the code that renders them, need no deploy step, no system account and
+  no migration, and cannot show anything of an account: a test asserts that every example page makes no database
+  query.
+- **The same pages as a user's run.** `run_views.RunPages` is the run a page shows and where its pages are: a user's
+  run from the database, or an example from its files (a `SimulationRun` that is never stored). Each view is now a
+  page function of it (`summary_page`, `match_page` ...), and the templates build their links with `{% run_url %}`.
+  An example's pages are read-only: the summary with an "About this example" card (what the market is, what to look
+  at, the seed and model, a link to the files), population, before interviews, applications and interviews (the
+  table with its filters), match, the applicants and programs lists, every applicant's and program's own page, and
+  the downloads. "Run this market yourself" opens the demo with the preset picked.
+- **For search engines** (`nrmps/seo.py`): the index and each example's summary and four main tabs (11 pages) have
+  titles and descriptions with the run's own numbers ("886 of 961 applicants with a rank order list matched
+  (92.2%)"), canonical addresses, breadcrumbs, and are in the sitemap; a summary is also described as a dataset with
+  its downloads (schema.org `Dataset`, for Google Dataset Search). The lists and the agents' pages carry `noindex`.
+  `robots.txt` keeps crawlers out of the tables' sorted, filtered and paged views, the 1,210 agent pages and the
+  downloads: tens of thousands of addresses that say nothing more, each computed when asked for.
+- **Light for a public page.** An example's charts are computed once per process; its tables offer at most 100 rows
+  a page (a user's own run: 500); the pairs file is offered for the small market only; downloads are limited per
+  client address (`NRMP_RATE_EXAMPLE_DOWNLOAD`, 600 an hour).
+- **Kept true.** `examples.stale` compares the saved files with what the code gives now (decisions and counts
+  equal, numbers equal within rounding, since another make of processor may round a last bit differently), and the
+  tests fail until `manage.py nrmp_examples` has saved them again: after a change of the engine, a preset or a seed.
+  Another test runs each preset with the example's seed through the run service and gets the saved run.
+- **Ways in:** "Examples" in the menu, "See an example run" on the landing page for visitors, a line on the demo
+  page and in the guide's quick start.
+
+Tested: the files (complete, checks passed, fresh, reproduced by a user's run), the command (`--check`, `--force`,
+missing and changed files), every page for a visitor and a signed-in user (200, no database query, nothing to post,
+no link into anybody's simulations), the 404s, the downloads and their limit, titles and descriptions (length,
+uniqueness, numbers), the sitemap, robots rules (with wildcards), structured data, and in the browser a visitor's
+path from the landing page through an example to the demo, every chart on every tab of both examples, sorting and
+downloading, axe in both themes and phone width. A user's own run pages are unchanged (the existing tests).
+
+**Worth a decision:** the NRMP-like market is the simulator's default, not a calibration: its match rate is 92.2%
+of applicants with a rank order list. If the public example should resemble the published figures of the Main
+Residency Match, a calibrated preset would come first (it was discussed and is not started).
+
 ## Phases 6–8
 
 Not started.

@@ -4,24 +4,35 @@
   The pages of one run (plan step 4.1): header, status and the tabs (Summary, Population, Before interviews,
   Applications and interviews, Match, Applicants, Programs). Pages fill run_content, and run_actions for buttons.
   Context from run_views._run_context: simulation, run, tab, tabs, tab_label, metrics, outcomes; charts if any.
+  The same pages show a saved example run to everyone (context: example; nrmps.examples): read-only, with the
+  example's name for the run's, and no buttons that change anything.
 {% endcomment %}
-{% block title %}{% if tab_label %}{{ tab_label }} - {% endif %}Run {{ run.number }} - {{ simulation.name }}{% endblock %}
+{% block title %}{% if seo.index %}{{ seo.title }}{% elif example %}{{ tab_label }} - {{ example.name }} - NRMP Simulations{% else %}{% if tab_label %}{{ tab_label }} - {% endif %}Run {{ run.number }} - {{ simulation.name }}{% endif %}{% endblock %}
 {% block content %}
 <div class="mt-4">
   {% include "nrmps/components/breadcrumbs.html" with current=tab_label %}
   <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
     <h1 class="text-2xl font-bold min-w-0 break-words">
-      Run {{ run.number }}{% if tab_label %}: {{ tab_label|lower }}{% endif %}
-      {% include "nrmps/components/run_status.html" with status=run.status %}
+      {% if example %}
+        {{ example.name }}: {% if tab_label %}{{ tab_label|lower }}{% else %}a saved run{% endif %}
+      {% else %}
+        Run {{ run.number }}{% if tab_label %}: {{ tab_label|lower }}{% endif %}
+        {% include "nrmps/components/run_status.html" with status=run.status %}
+      {% endif %}
     </h1>
     <div class="flex flex-wrap gap-2">
       {% page_help help_page %}
       {% block run_actions %}{% endblock %}
-      {% if outcomes %}<a href="{% url 'nrmps:compare' %}?a={{ simulation.pk }}-{{ run.number }}" class="btn btn-outline">Compare</a>{% endif %}
-      <a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}" class="btn btn-outline">Back to simulation</a>
+      {% if example %}
+        <a href="{% url 'nrmps:demo' %}?preset={{ example.preset }}" class="btn btn-primary">Run this market yourself</a>
+      {% else %}
+        {% if outcomes %}<a href="{% url 'nrmps:compare' %}?a={{ simulation.pk }}-{{ run.number }}" class="btn btn-outline">Compare</a>{% endif %}
+        <a href="{% url 'nrmps:simulation_manage' pk=simulation.pk %}" class="btn btn-outline">Back to simulation</a>
+      {% endif %}
     </div>
   </div>
   <p class="text-sm text-base-content/70 mb-4">
+    {% if example %}A saved run of the simulator: everyone who opens it sees this same market.{% endif %}
     Simulated from the assumptions in the parameters; not a prediction of any real applicant's or program's match.
   </p>
 
@@ -37,7 +48,7 @@
       takes its background from --tab-bg, which daisyUI sets on each tab). The primary is darkened a fifth: the dark
       theme's own primary is too light for its text (under 4.5:1).
     {% endcomment %}
-    <nav class="mb-6 overflow-x-auto" aria-label="Pages of run {{ run.number }}">
+    <nav class="mb-6 overflow-x-auto" aria-label="Pages of {% if example %}this example{% else %}run {{ run.number }}{% endif %}">
       <div class="tabs tabs-box flex-nowrap w-max">
         {% for item in tabs %}
           <a class="tab whitespace-nowrap{% if item.key == tab %} tab-active [--tab-bg:color-mix(in_oklab,var(--color-primary)_80%,black)] text-primary-content{% else %} text-base-content{% endif %}" href="{{ item.url }}"{% if item.key == tab %} aria-current="page"{% endif %}>{{ item.label }}</a>

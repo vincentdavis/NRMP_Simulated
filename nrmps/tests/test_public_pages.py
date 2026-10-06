@@ -6,7 +6,15 @@ from django.urls import reverse
 
 pytestmark = pytest.mark.django_db
 
-PUBLIC = ["nrmps:index", "nrmps:contact", "nrmps:privacy", "nrmps:terms", "nrmps:login", "nrmps:signup"]
+PUBLIC = [
+    "nrmps:index",
+    "nrmps:contact",
+    "nrmps:privacy",
+    "nrmps:terms",
+    "nrmps:login",
+    "nrmps:signup",
+    "nrmps:examples",
+]
 
 
 def _text(response) -> str:

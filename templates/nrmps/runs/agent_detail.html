@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% load static list_tags humanize help_tags chart_tags %}
-{% block title %}{{ name }} - run {{ run.number }} - {{ simulation.name }}{% endblock %}
+{% load static list_tags humanize help_tags chart_tags run_tags %}
+{% block title %}{% if example %}{{ name }} - {{ example.name }} - NRMP Simulations{% else %}{{ name }} - run {{ run.number }} - {{ simulation.name }}{% endif %}{% endblock %}
 {% block content %}
 <div class="mt-4">
   {% include "nrmps/components/breadcrumbs.html" with current=name %}
   <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold min-w-0 break-words">{{ name }} – run {{ run.number }}</h1>
+    <h1 class="text-2xl font-bold min-w-0 break-words">{{ name }} – {% if example %}{{ example.name }}{% else %}run {{ run.number }}{% endif %}</h1>
     <div class="flex flex-wrap gap-2">
       {% page_help "run_agent" %}
-      <a href="{% if applicant %}{% url 'nrmps:run_applicants' pk=simulation.pk number=run.number %}{% else %}{% url 'nrmps:run_programs' pk=simulation.pk number=run.number %}{% endif %}" class="btn btn-outline">
+      <a href="{% if applicant %}{% run_url 'applicants' %}{% else %}{% run_url 'programs' %}{% endif %}" class="btn btn-outline">
         All {% if applicant %}applicants{% else %}programs{% endif %}
       </a>
     </div>
@@ -27,7 +27,7 @@
           </p>
           <p class="font-medium">
             {% for match in journey.matched %}
-              Matched to <a class="link" href="{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=match.number %}">{{ match.name }}</a>,
+              Matched to <a class="link" href="{% run_url 'program' index=match.number %}">{{ match.name }}</a>,
               the applicant's {{ match.list_rank|ordinal }} choice (the program ranked them {{ match.their_list_rank|ordinal }}).
             {% empty %}
               {% if journey.ranked %}Not matched.{% else %}Not in the match: without an interview there is no rank order list.{% endif %}
@@ -49,7 +49,7 @@
               <ul class="collapse-content list-disc ms-6 sm:columns-2 xl:columns-3">
                 {% for match in journey.matched %}
                   <li>
-                    <a class="link" href="{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=match.number %}">{{ match.name }}</a>:
+                    <a class="link" href="{% run_url 'applicant' index=match.number %}">{{ match.name }}</a>:
                     {{ match.list_rank|ordinal }}; ranked the program {{ match.their_list_rank|ordinal }}
                   </li>
                 {% endfor %}
@@ -122,7 +122,7 @@
           {% for row in rows %}
             <tr{% if row.matched %} class="font-semibold"{% endif %}>
               <td class="text-right tabular-nums">{{ row.number }}</td>
-              <td class="whitespace-nowrap"><a class="link" href="{% if applicant %}{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.number %}{% else %}{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.number %}{% endif %}">{{ row.name }}</a></td>
+              <td class="whitespace-nowrap"><a class="link" href="{% if applicant %}{% run_url 'program' index=row.number %}{% else %}{% run_url 'applicant' index=row.number %}{% endif %}">{{ row.name }}</a></td>
               <td class="text-right tabular-nums">{{ row.pre_rank|intcomma }}</td>
               <td>{{ row.signal }}</td>
               <td class="whitespace-nowrap">{% if row.wave %}Wave {{ row.wave }}{% else %}<span class="text-base-content/70">No</span>{% endif %}</td>
@@ -172,7 +172,7 @@
           {% for row in rows %}
             <tr>
               <td class="text-right tabular-nums">{{ row.number }}</td>
-              <td class="whitespace-nowrap"><a class="link" href="{% if applicant %}{% url 'nrmps:run_program' pk=simulation.pk number=run.number index=row.number %}{% else %}{% url 'nrmps:run_applicant' pk=simulation.pk number=run.number index=row.number %}{% endif %}">{{ row.name }}</a></td>
+              <td class="whitespace-nowrap"><a class="link" href="{% if applicant %}{% run_url 'program' index=row.number %}{% else %}{% run_url 'applicant' index=row.number %}{% endif %}">{{ row.name }}</a></td>
               <td class="text-right tabular-nums">{{ row.true|floatformat:3 }}</td>
               <td class="text-right tabular-nums">{{ row.observed|floatformat:3 }}</td>
               <td class="text-right tabular-nums">{{ row.true_rank }}</td>

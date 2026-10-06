@@ -160,6 +160,13 @@ ROBOTS_DISALLOW = (
     "/help/developer/",
     "/csp-report/",
     "/healthz",
+    # Of the saved example runs (nrmps.examples), only the main pages are for search engines. Their tables' sorted,
+    # filtered and paged views, every agent's page and the downloads are tens of thousands of addresses that say
+    # nothing more, and each one is computed when asked for. "*" stands for any characters.
+    "/examples/*?",
+    "/examples/*/applicants/*/",
+    "/examples/*/programs/*/",
+    "/examples/*/download/",
 )
 
 

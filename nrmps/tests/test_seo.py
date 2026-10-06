@@ -12,14 +12,19 @@ from django.template import Context, Template
 from django.urls import reverse
 
 from nrmps import urls
+from nrmps.examples import EXAMPLES, saved_run
 from nrmps.guide import guide_pages
 from nrmps.seo import (
     DESCRIPTION_LENGTH,
+    EXAMPLE_FILES,
+    EXAMPLE_PAGES,
     PAGES,
     SITE_NAME,
     SOCIAL_CARD,
     SOCIAL_CARD_SIZE,
     TITLE_LENGTH,
+    example_meta,
+    example_path,
     guide_meta,
     guide_path,
     sitemap_urls,
@@ -29,13 +34,22 @@ from nrmps.views import ROBOTS_DISALLOW
 pytestmark = pytest.mark.django_db
 
 SITE = "https://nrmp-simulated.heteroskedastic.org"
-# Every page offered to search engines: (path, what a search result shows).
-INDEXED = [(reverse(name), meta) for name, meta in PAGES.items()] + [
-    (guide_path(page), guide_meta(page)) for page in guide_pages()
+# Every page offered to search engines: (path, what a search result shows). The saved example runs come with their
+# summary and main tabs.
+EXAMPLES_INDEXED = [
+    (example_path(slug, page), example_meta(slug, page)) for slug in EXAMPLES for page in EXAMPLE_PAGES.values()
 ]
+INDEXED = (
+    [(reverse(name), meta) for name, meta in PAGES.items()]
+    + EXAMPLES_INDEXED
+    + [(guide_path(page), guide_meta(page)) for page in guide_pages()]
+)
 # Public pages that are not for search results (forms and searches), and public endpoints that are not pages.
 NOT_INDEXED = {"login", "signup", "help_search", "password_reset", "password_reset_done", "password_reset_complete"}
-NOT_PAGES = {"healthz", "csp_report", "robots_txt", "sitemap", "favicon", "documentation", "logout"}
+NOT_PAGES = {"healthz", "csp_report", "robots_txt", "sitemap", "favicon", "documentation", "logout", "example_download"}
+# An example's lists and its agents' pages are for visitors, not for search results.
+EXAMPLE_NOT_INDEXED = {"example_applicants", "example_programs", "example_applicant", "example_program"}
+SMALL = "small-classroom-market"
 
 
 def _head(body: str) -> str:
@@ -137,14 +151,43 @@ def test_pages_behind_the_login_are_not_indexed(auth_client, finished_run):
 
 def test_every_public_page_is_either_indexed_or_deliberately_not():
     """A new page that visitors can open must be given a title and description in nrmps.seo, or be listed here."""
-    indexed = {name.removeprefix("nrmps:") for name in PAGES} | {"help", "help_page"}
+    indexed = {name.removeprefix("nrmps:") for name in [*PAGES, *EXAMPLE_PAGES]} | {"help", "help_page"}
     public = {
         pattern.name
         for pattern in urls.urlpatterns
         if getattr(pattern.callback, "login_required", True) is False and "token" not in str(pattern.pattern)
     }
-    assert public - NOT_PAGES - NOT_INDEXED - {"password_reset_confirm"} == indexed
+    assert public - NOT_PAGES - NOT_INDEXED - EXAMPLE_NOT_INDEXED - {"password_reset_confirm"} == indexed
     assert indexed <= public
+    assert public >= EXAMPLE_NOT_INDEXED
+
+
+def test_an_examples_lists_and_agents_are_not_indexed(client):
+    for name, kwargs in (
+        ("example_applicants", {}),
+        ("example_programs", {}),
+        ("example_applicant", {"index": 1}),
+        ("example_program", {"index": 1}),
+    ):
+        response = client.get(reverse(f"nrmps:{name}", kwargs={"slug": SMALL, **kwargs}))
+        assert response.status_code == 200
+        head = _head(response.content.decode())
+        assert _meta(head, "robots") == "noindex", name
+        assert "canonical" not in head, name
+        assert _meta(head, "description") is None, name
+        assert "application/ld+json" not in head, name
+
+
+def test_an_example_that_does_not_exist_has_nothing_to_index(client):
+    assert client.get("/examples/no-such-market/match/").status_code == 404
+    assert example_meta("no-such-market", "match") is None
+
+
+def test_a_sorted_or_paged_view_of_an_example_names_the_page_itself_as_canonical(client):
+    path = example_path("nrmp-like-market", "applications")
+    head = _head(client.get(path, {"sort": "program", "order": "desc", "page": 3}).content.decode())
+    assert f'<link rel="canonical" href="{SITE}{path}">' in head
+    assert _meta(head, "og:url") == f"{SITE}{path}"
 
 
 # --- The sitemap and robots.txt ---------------------------------------------------------------------------------------
@@ -161,7 +204,12 @@ def test_the_sitemap_lists_every_indexed_page_and_nothing_else(client):
     assert len(set(listed)) == len(listed)
     assert f"{SITE}/" in listed
     assert f"{SITE}/help/model/" in listed
+    assert f"{SITE}/examples/" in listed
+    assert f"{SITE}/examples/nrmp-like-market/" in listed
+    assert f"{SITE}/examples/small-classroom-market/match/" in listed
+    assert len([url for url in listed if "/examples/" in url]) == 1 + len(EXAMPLES) * len(EXAMPLE_PAGES)
     assert not any("login" in url or "signup" in url or "search" in url for url in listed)
+    assert not any("/applicants/" in url or "/programs/" in url or "/download/" in url for url in listed)
 
 
 def test_robots_txt_keeps_crawlers_out_of_private_pages_and_names_the_sitemap(client):
@@ -173,11 +221,47 @@ def test_robots_txt_keeps_crawlers_out_of_private_pages_and_names_the_sitemap(cl
     assert f"Sitemap: {SITE}/sitemap.xml" in lines
     for path in ("/admin/", "/simulations/", "/compare/", "/account/", "/ops/", "/help/search/"):
         assert f"Disallow: {path}" in lines
+    assert [line.removeprefix("Disallow: ") for line in lines if line.startswith("Disallow: ")] == list(ROBOTS_DISALLOW)
     # Nothing in the sitemap is disallowed, and the forms stay crawlable so that their "noindex" can be read.
     for path, _meta in INDEXED:
-        assert not any(path.startswith(blocked) for blocked in ROBOTS_DISALLOW), path
+        assert not _disallowed(path), path
     for name in ("login", "signup"):
-        assert not any(reverse(f"nrmps:{name}").startswith(blocked) for blocked in ROBOTS_DISALLOW)
+        assert not _disallowed(reverse(f"nrmps:{name}"))
+
+
+def _disallowed(address: str) -> bool:
+    """Return True if robots.txt keeps crawlers from `address` (a path, with its query string if any).
+
+    A rule matches from the start of the address, and "*" in it stands for any characters, as the large search engines
+    read robots.txt.
+    """
+    rules = [re.escape(rule).replace(r"\*", ".*") for rule in ROBOTS_DISALLOW]
+    return any(re.match(rule, address) for rule in rules)
+
+
+def test_robots_txt_keeps_crawlers_to_the_main_pages_of_the_examples():
+    """An example's sorted, filtered and paged tables, its agents' pages and its downloads are not for crawlers."""
+    assert _disallowed("/simulations/3/runs/1/")
+    for slug in EXAMPLES:
+        run = saved_run(slug).run
+        base = f"/examples/{slug}/"
+        for blocked in (
+            f"{base}applications/?page=2",
+            f"{base}applications/?sort=program&order=desc",
+            f"{base}applicants/?sort=strength",
+            f"{base}?utm_source=x",
+            f"{base}applicants/1/",
+            f"{base}applicants/{run.n_applicants}/?view=pre",
+            f"{base}programs/{run.n_programs}/",
+            f"{base}download/match.csv",
+            f"{base}download/pairs.csv",
+        ):
+            assert _disallowed(blocked), blocked
+        # The lists stay crawlable, so that their "noindex" can be read.
+        for allowed in (base, f"{base}match/", f"{base}applicants/", f"{base}programs/"):
+            assert not _disallowed(allowed), allowed
+    assert not _disallowed("/examples/")
+    assert not _disallowed("/demo/?preset=classroom")
 
 
 def test_visitors_can_fetch_the_sitemap_robots_and_the_icon(client):
@@ -232,6 +316,71 @@ def test_a_guide_page_is_an_article_of_the_site_with_breadcrumbs(client):
     index = _structured(_head(client.get("/help/").content.decode()))
     assert [item["name"] for item in index["@graph"][2]["itemListElement"]] == ["Home", "Help"]
     assert _structured(_head(client.get("/demo/").content.decode())) is None  # a title and description are enough
+
+
+def test_an_examples_summary_is_a_dataset_with_its_downloads(client):
+    for slug in EXAMPLES:
+        saved = saved_run(slug)
+        path = example_path(slug, "summary")
+        data = _structured(_head(client.get(path).content.decode()))
+        site, dataset, breadcrumbs = data["@graph"]
+        assert site["@id"] == f"{SITE}/#website"
+        assert dataset["@type"] == "Dataset"
+        assert dataset["url"] == f"{SITE}{path}"
+        assert dataset["name"] == example_meta(slug, "summary").title
+        assert dataset["description"].startswith(example_meta(slug, "summary").description)
+        assert "not real applicants" in dataset["description"]
+        assert 50 <= len(dataset["description"]) <= 5000
+        assert dataset["isAccessibleForFree"] is True
+        assert dataset["license"] == "https://opensource.org/licenses/MIT"
+        assert dataset["creator"] == {"@type": "Person", "name": "Vincent Davis"}
+        assert dataset["version"] == saved.run.model_version
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", dataset["dateModified"])
+        files = dataset["distribution"]
+        assert [file["contentUrl"] for file in files] == [
+            f"{SITE}/examples/{slug}/download/{name}" for name, _title, _media_type in EXAMPLE_FILES
+        ]
+        assert {file["encodingFormat"] for file in files} == {"text/csv", "application/json"}
+        for file in files:  # every file the dataset names can be downloaded
+            assert client.get(file["contentUrl"].removeprefix(SITE)).status_code == 200, file["contentUrl"]
+        assert [item["name"] for item in breadcrumbs["itemListElement"]] == ["Home", "Examples", saved.example.name]
+        assert breadcrumbs["itemListElement"][-1]["item"] == f"{SITE}{path}"
+
+
+def test_an_examples_tabs_and_the_index_have_their_place_in_the_site(client):
+    path = example_path(SMALL, "match")
+    site, breadcrumbs = _structured(_head(client.get(path).content.decode()))["@graph"]
+    assert site["@type"] == "WebSite"
+    assert [item["name"] for item in breadcrumbs["itemListElement"]] == [
+        "Home",
+        "Examples",
+        "Small classroom market",
+        "Match",
+    ]
+    assert [item["item"] for item in breadcrumbs["itemListElement"]] == [
+        f"{SITE}/",
+        f"{SITE}/examples/",
+        f"{SITE}/examples/{SMALL}/",
+        f"{SITE}{path}",
+    ]
+    index = _structured(_head(client.get("/examples/").content.decode()))
+    assert [item["name"] for item in index["@graph"][-1]["itemListElement"]] == ["Home", "Examples"]
+
+
+def test_an_examples_search_descriptions_carry_the_runs_numbers():
+    run = saved_run(SMALL).run
+    match = run.metrics["outcomes"]["match"]
+    summary, matched = example_meta(SMALL, "summary"), example_meta(SMALL, "match")
+    assert summary.title == "Small classroom market: a saved run of a simulated Match"
+    assert f"{run.n_applicants} applicants, {run.n_programs} programs and {run.n_positions} positions" in (
+        summary.description
+    )
+    assert f"{match['matched']} of {match['certified']} applicants with a rank order list matched" in (
+        matched.description
+    )
+    assert f"({match['match_rate']:.1%})" in matched.description
+    assert "every position filled" in matched.description  # the small market fills all its positions
+    assert "% of positions filled" in example_meta("nrmp-like-market", "match").description
 
 
 def test_structured_data_cannot_break_out_of_its_script_element():

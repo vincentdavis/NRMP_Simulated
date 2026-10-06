@@ -1,7 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path, reverse_lazy
 
-from . import account_views, help_views, ops_views, run_views, views
+from . import account_views, example_views, help_views, ops_views, run_views, views
 
 app_name = "nrmps"
 
@@ -74,6 +74,18 @@ urlpatterns = [
     path("help/<slug:slug>/", help_views.help_page, name="help_page"),
     path("ops/", ops_views.ops, name="ops"),
     path("documentation/", help_views.documentation_redirect, name="documentation"),
+    # Saved example runs, for everyone (nrmps.examples)
+    path("examples/", example_views.examples, name="examples"),
+    path("examples/<slug:slug>/", example_views.example_detail, name="example_detail"),
+    path("examples/<slug:slug>/population/", example_views.example_population, name="example_population"),
+    path("examples/<slug:slug>/before-interviews/", example_views.example_pre_interview, name="example_pre_interview"),
+    path("examples/<slug:slug>/applications/", example_views.example_applications, name="example_applications"),
+    path("examples/<slug:slug>/match/", example_views.example_match, name="example_match"),
+    path("examples/<slug:slug>/applicants/", example_views.example_applicants, name="example_applicants"),
+    path("examples/<slug:slug>/applicants/<int:index>/", example_views.example_applicant, name="example_applicant"),
+    path("examples/<slug:slug>/programs/", example_views.example_programs, name="example_programs"),
+    path("examples/<slug:slug>/programs/<int:index>/", example_views.example_program, name="example_program"),
+    path("examples/<slug:slug>/download/<str:name>", example_views.example_download, name="example_download"),
     # Two runs side by side
     path("compare/", run_views.compare, name="compare"),
     path("compare/wait/", run_views.compare_wait, name="compare_wait"),

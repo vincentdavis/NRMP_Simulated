@@ -1,7 +1,7 @@
 {% extends "nrmps/runs/_layout.html" %}
-{% load humanize help_tags chart_tags %}
+{% load humanize help_tags chart_tags run_tags %}
 {% block run_actions %}
-  {% if not run.is_active %}
+  {% if not example and not run.is_active %}
     <form method="post" action="{% url 'nrmps:run_delete' pk=simulation.pk number=run.number %}"
           data-confirm="Delete run {{ run.number }} and its results? The parameters and seed are shown on this page if you want to repeat it later.">
       {% csrf_token %}
@@ -11,6 +11,7 @@
   {% endif %}
 {% endblock %}
 {% block run_content %}
+  {% if example %}{% include "nrmps/examples/_about.html" %}{% endif %}
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
     <section class="card bg-base-100 shadow-xl lg:col-span-2" aria-labelledby="summary-title">
       <div class="card-body">
@@ -20,7 +21,11 @@
           {% if run.status != "succeeded" or run.seed_was_drawn %}
             <div><dt class="font-medium">Seed</dt><dd class="tabular-nums break-all">{{ run.seed }}{% if run.seed_was_drawn %} (drawn for this run){% endif %}</dd></div>
           {% endif %}
-          <div><dt class="font-medium">Started</dt><dd>{{ run.created_at|date:"Y-m-d H:i:s" }}{% if run.created_by %} by {{ run.created_by }}{% endif %}</dd></div>
+          {% if example %}
+            <div><dt class="font-medium">Saved</dt><dd>{{ run.created_at|date:"Y-m-d" }}</dd></div>
+          {% else %}
+            <div><dt class="font-medium">Started</dt><dd>{{ run.created_at|date:"Y-m-d H:i:s" }}{% if run.created_by %} by {{ run.created_by }}{% endif %}</dd></div>
+          {% endif %}
           <div><dt class="font-medium">Applicants</dt><dd>{{ run.n_applicants|intcomma }} ({{ run.population_source.applicants }})</dd></div>
           <div><dt class="font-medium">Programs</dt><dd>{{ run.n_programs|intcomma }} with {{ run.n_positions|intcomma }} positions ({{ run.population_source.programs }})</dd></div>
         </dl>
@@ -32,7 +37,7 @@
             {% else %}
               <span class="badge badge-error">Checks failed</span> See the checks below; please report this run.
             {% endif %}
-            <a class="link" href="{% url 'nrmps:run_match' pk=simulation.pk number=run.number %}">See the match</a>.
+            <a class="link" href="{% run_url 'match' %}">See the match</a>.
           </p>
         {% endif %}
         {% if charts.applicant_flow %}
@@ -47,19 +52,19 @@
         <h2 id="downloads-title" class="card-title">Downloads</h2>
         <ul class="space-y-1">
           {% if run.status == "succeeded" %}
-            <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='applicants.csv' %}">Applicants (CSV)</a> – uploads back unchanged</li>
-            <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='programs.csv' %}">Programs (CSV)</a> – uploads back unchanged</li>
+            <li><a class="link" href="{% run_url 'download' name='applicants.csv' %}">Applicants (CSV)</a> – uploads back unchanged</li>
+            <li><a class="link" href="{% run_url 'download' name='programs.csv' %}">Programs (CSV)</a> – uploads back unchanged</li>
             {% if stage_downloads %}
-              <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='match.csv' %}">The match: every applicant's result (CSV)</a></li>
-              <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='program_results.csv' %}">Every program's results (CSV)</a></li>
-              <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='applications.csv' %}">Every application, from signal to match (CSV)</a></li>
+              <li><a class="link" href="{% run_url 'download' name='match.csv' %}">The match: every applicant's result (CSV)</a></li>
+              <li><a class="link" href="{% run_url 'download' name='program_results.csv' %}">Every program's results (CSV)</a></li>
+              <li><a class="link" href="{% run_url 'download' name='applications.csv' %}">Every application, from signal to match (CSV)</a></li>
             {% endif %}
             {% if pairs_download %}
-              <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='pairs.csv' %}">Every applicant–program pair (CSV)</a></li>
+              <li><a class="link" href="{% run_url 'download' name='pairs.csv' %}">Every applicant–program pair (CSV)</a></li>
             {% endif %}
           {% endif %}
-          <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='metrics.json' %}">Diagnostics and versions (JSON)</a></li>
-          <li><a class="link" href="{% url 'nrmps:run_download' pk=simulation.pk number=run.number name='params.json' %}">Parameters with the seed (JSON)</a></li>
+          <li><a class="link" href="{% run_url 'download' name='metrics.json' %}">Diagnostics and versions (JSON)</a></li>
+          <li><a class="link" href="{% run_url 'download' name='params.json' %}">Parameters with the seed (JSON)</a></li>
         </ul>
         <p class="text-xs text-base-content/70 mt-2">
           Model {{ run.model_version }}, engine {{ run.engine_version }}, app {{ run.app_version }}{% if run.git_sha %}

@@ -22,12 +22,13 @@
             <a class="btn btn-outline" href="{% url 'nrmps:simulation_create' %}">New simulation</a>
           {% else %}
             <a class="btn btn-primary" href="{% url 'nrmps:demo' %}">Try a demo</a>
+            <a class="btn btn-outline" href="{% url 'nrmps:examples' %}">See an example run</a>
             <a class="btn btn-outline" href="{% url 'nrmps:login' %}">Log in</a>
           {% endif %}
           <a class="btn btn-outline" href="{% url 'nrmps:help' %}">Read the guide</a>
         </div>
         {% if not request.user.is_authenticated %}
-          <p class="text-sm text-base-content/70 mt-3">Look through the demo markets without an account; running one needs a free account, which keeps your simulations.</p>
+          <p class="text-sm text-base-content/70 mt-3">The example runs and the demo markets are open without an account; running a market needs a free account, which keeps your simulations.</p>
         {% endif %}
       </div>
 

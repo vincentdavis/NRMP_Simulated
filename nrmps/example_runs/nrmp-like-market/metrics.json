@@ -1,0 +1,693 @@
+{
+  "duration_ms": 74,
+  "fingerprints": {
+    "applications": "544a119b902c8d28f8f2e1ffa34056f46da946627729bcbc6f88041c110cb04f",
+    "interviews": "90805c5c72a3e330810ed2de4d65130073fc50b696627c2e32d6518d8a45a26a",
+    "invitations": "5baaf736b365c3cb6ea1011d0e32cfc8855ca6ca7b38619a3b712c4a45f10f00",
+    "match": "300813f9e00548618aa93436f79d4b1226ace6da77efab6b3f233ab7003d58a0",
+    "population": "bc7806ec79b62589656d369b6b603cc859b9ef2ba13333b3c5c9f04cf92c85af",
+    "pre_interview": "9568bda4c8cb23a57997a4ea29fd1e9196280d6c66a6b19c5b5e39e3432a83fb",
+    "rank_lists": "32ef8b33f8189410be108d7a0ce9899885927a22be86dcdf65557335ac74764a",
+    "signals": "7905f30d316dfad2dfb3789476c706cabf1df49bea6d7294a45550ef0c8852f3"
+  },
+  "metrics": {
+    "applicants": {
+      "agents_with_taste": 1000,
+      "consensus": {
+        "observed_utility_correlation": 0.48380209893468273,
+        "true_rank_correlation": 0.5783669681362232,
+        "true_utility_correlation": 0.6045793874684011
+      },
+      "fidelity": {
+        "expected_correlation": 0.8944271909999159,
+        "noise_sd": 0.5,
+        "pooled_correlation": 0.8945025213893223,
+        "reliability": 0.8,
+        "spearman_deciles": [
+          0.858068,
+          0.86722,
+          0.873659,
+          0.879035,
+          0.883474,
+          0.887812,
+          0.893096,
+          0.898692,
+          0.905668
+        ],
+        "spearman_mean": 0.8826259087032235
+      },
+      "first_choices": {
+        "distinct": 58,
+        "most_popular_share": 0.268,
+        "top_10_share": 0.791
+      }
+    },
+    "generation": {
+      "applicant_attributes": {
+        "board_scores": {
+          "correlation_with_strength": 0.8006243592107503,
+          "mean_weight": 0.500058713827648,
+          "requested_correlation": 0.8,
+          "requested_mean_weight": 0.5
+        },
+        "honors": {
+          "correlation_with_strength": 0.60469012692852,
+          "mean_weight": 0.19018759939481075,
+          "requested_correlation": 0.6,
+          "requested_mean_weight": 0.2
+        },
+        "research": {
+          "correlation_with_strength": 0.48400150606920866,
+          "mean_weight": 0.3097536867775411,
+          "requested_correlation": 0.5,
+          "requested_mean_weight": 0.3
+        }
+      },
+      "attribute_share_of_common": {
+        "applicants": 0.02034452096680972,
+        "programs": 0.021154735318936302
+      },
+      "groups": {
+        "non_us_img": {
+          "requested_share": 0.25,
+          "requested_strength_mean": -1.3,
+          "requested_strength_sd": 1.0,
+          "share": 0.25,
+          "strength_mean": -1.3068371664471972,
+          "strength_sd": 0.9746502398160224
+        },
+        "other": {
+          "requested_share": 0.04,
+          "requested_strength_mean": -0.5,
+          "requested_strength_sd": 1.0,
+          "share": 0.04,
+          "strength_mean": -0.8673468261004705,
+          "strength_sd": 0.8116346184794128
+        },
+        "us_do": {
+          "requested_share": 0.18,
+          "requested_strength_mean": 0.35,
+          "requested_strength_sd": 1.0,
+          "share": 0.18,
+          "strength_mean": 0.4179527428420327,
+          "strength_sd": 0.9741847155391112
+        },
+        "us_img": {
+          "requested_share": 0.09,
+          "requested_strength_mean": -1.0,
+          "requested_strength_sd": 1.0,
+          "share": 0.09,
+          "strength_mean": -1.0518140965378096,
+          "strength_sd": 0.9083671419839403
+        },
+        "us_md": {
+          "requested_share": 0.44,
+          "requested_strength_mean": 0.5,
+          "requested_strength_sd": 1.0,
+          "share": 0.44,
+          "strength_mean": 0.4874420638879665,
+          "strength_sd": 0.9440117690378442
+        }
+      },
+      "program_attributes": {
+        "location": {
+          "correlation_with_quality": -0.1615867344405287,
+          "mean_weight": 0.3033830628668525,
+          "requested_correlation": 0.0,
+          "requested_mean_weight": 0.3
+        },
+        "program_size": {
+          "correlation_with_quality": 0.028189341097246683,
+          "mean_weight": 0.19325770043136437,
+          "requested_correlation": null,
+          "requested_mean_weight": 0.2
+        },
+        "reputation": {
+          "correlation_with_quality": 0.8955467965579962,
+          "mean_weight": 0.5033592367017831,
+          "requested_correlation": 0.9,
+          "requested_mean_weight": 0.5
+        }
+      },
+      "tiers": {
+        "all": {
+          "quality_mean": -0.15019093916544385,
+          "requested_quality_mean": 0.0,
+          "requested_share": 1.0,
+          "share": 1.0
+        }
+      }
+    },
+    "histograms": {
+      "applicant_fidelity": {
+        "counts": [
+          1,
+          2,
+          5,
+          4,
+          14,
+          14,
+          41,
+          63,
+          74,
+          104,
+          133,
+          145,
+          123,
+          107,
+          84,
+          47,
+          28,
+          10,
+          0,
+          1
+        ],
+        "edges": [
+          0.811681,
+          0.818024,
+          0.824367,
+          0.83071,
+          0.837053,
+          0.843396,
+          0.849739,
+          0.856082,
+          0.862425,
+          0.868768,
+          0.875111,
+          0.881454,
+          0.887797,
+          0.89414,
+          0.900483,
+          0.906826,
+          0.913169,
+          0.919511,
+          0.925854,
+          0.932197,
+          0.93854
+        ]
+      },
+      "capacity": {
+        "counts": [
+          13,
+          23,
+          35,
+          21,
+          8,
+          17,
+          7,
+          5,
+          2,
+          4,
+          1,
+          0,
+          1,
+          2,
+          1,
+          1,
+          0,
+          0,
+          0,
+          1
+        ],
+        "edges": [
+          1.0,
+          2.4,
+          3.8,
+          5.2,
+          6.6,
+          8.0,
+          9.4,
+          10.8,
+          12.2,
+          13.6,
+          15.0,
+          16.4,
+          17.8,
+          19.2,
+          20.6,
+          22.0,
+          23.4,
+          24.8,
+          26.2,
+          27.6,
+          29.0
+        ]
+      },
+      "program_fidelity": {
+        "counts": [
+          1,
+          0,
+          0,
+          2,
+          2,
+          3,
+          8,
+          12,
+          5,
+          19,
+          15,
+          18,
+          13,
+          10,
+          8,
+          11,
+          8,
+          3,
+          2,
+          2
+        ],
+        "edges": [
+          0.866155,
+          0.867887,
+          0.869619,
+          0.871351,
+          0.873082,
+          0.874814,
+          0.876546,
+          0.878278,
+          0.88001,
+          0.881742,
+          0.883474,
+          0.885206,
+          0.886938,
+          0.88867,
+          0.890402,
+          0.892134,
+          0.893866,
+          0.895598,
+          0.89733,
+          0.899061,
+          0.900793
+        ]
+      },
+      "quality": {
+        "counts": [
+          2,
+          0,
+          1,
+          1,
+          7,
+          10,
+          11,
+          13,
+          9,
+          23,
+          15,
+          14,
+          13,
+          11,
+          6,
+          1,
+          2,
+          1,
+          0,
+          2
+        ],
+        "edges": [
+          -2.981681,
+          -2.691166,
+          -2.40065,
+          -2.110134,
+          -1.819619,
+          -1.529103,
+          -1.238588,
+          -0.948072,
+          -0.657557,
+          -0.367041,
+          -0.076525,
+          0.21399,
+          0.504506,
+          0.795021,
+          1.085537,
+          1.376053,
+          1.666568,
+          1.957084,
+          2.247599,
+          2.538115,
+          2.828631
+        ]
+      },
+      "strength": {
+        "counts": [
+          1,
+          0,
+          2,
+          2,
+          17,
+          35,
+          38,
+          75,
+          95,
+          124,
+          130,
+          133,
+          139,
+          90,
+          62,
+          43,
+          10,
+          2,
+          1,
+          1
+        ],
+        "edges": [
+          -4.992254,
+          -4.542185,
+          -4.092116,
+          -3.642047,
+          -3.191978,
+          -2.741909,
+          -2.29184,
+          -1.841771,
+          -1.391702,
+          -0.941633,
+          -0.491565,
+          -0.041496,
+          0.408573,
+          0.858642,
+          1.308711,
+          1.75878,
+          2.208849,
+          2.658918,
+          3.108987,
+          3.559056,
+          4.009125
+        ]
+      }
+    },
+    "market": {
+      "applicants_per_position": 1.079913606911447,
+      "capacity": {
+        "max": 29,
+        "mean": 6.52112676056338,
+        "median": 5.5,
+        "min": 1
+      },
+      "n_applicants": 1000,
+      "n_pairs": 142000,
+      "n_positions": 926,
+      "n_programs": 142,
+      "requested_applicants_per_position": 1.08
+    },
+    "outcomes": {
+      "by_group": [
+        {
+          "applicants": 440,
+          "certified": 430,
+          "interviews_mean": 9.075,
+          "match_rate": 0.9627906976744186,
+          "mean_matched_rank": 2.036231884057971,
+          "name": "us_md"
+        },
+        {
+          "applicants": 180,
+          "certified": 176,
+          "interviews_mean": 9.55,
+          "match_rate": 0.9715909090909091,
+          "mean_matched_rank": 2.064327485380117,
+          "name": "us_do"
+        },
+        {
+          "applicants": 90,
+          "certified": 87,
+          "interviews_mean": 6.7,
+          "match_rate": 0.8505747126436781,
+          "mean_matched_rank": 2.472972972972973,
+          "name": "us_img"
+        },
+        {
+          "applicants": 250,
+          "certified": 230,
+          "interviews_mean": 6.264,
+          "match_rate": 0.8347826086956521,
+          "mean_matched_rank": 2.3229166666666665,
+          "name": "non_us_img"
+        },
+        {
+          "applicants": 40,
+          "certified": 38,
+          "interviews_mean": 8.05,
+          "match_rate": 0.9210526315789473,
+          "mean_matched_rank": 2.2857142857142856,
+          "name": "other"
+        }
+      ],
+      "by_strength_decile": [
+        {
+          "applicants": 100,
+          "certified": 84,
+          "interviews_mean": 3.77,
+          "match_rate": 0.6666666666666666,
+          "mean_matched_rank": 2.8035714285714284,
+          "name": "1"
+        },
+        {
+          "applicants": 100,
+          "certified": 93,
+          "interviews_mean": 6.34,
+          "match_rate": 0.8602150537634409,
+          "mean_matched_rank": 2.3875,
+          "name": "2"
+        },
+        {
+          "applicants": 100,
+          "certified": 98,
+          "interviews_mean": 7.23,
+          "match_rate": 0.9081632653061225,
+          "mean_matched_rank": 2.4157303370786516,
+          "name": "3"
+        },
+        {
+          "applicants": 100,
+          "certified": 99,
+          "interviews_mean": 8.37,
+          "match_rate": 0.9595959595959596,
+          "mean_matched_rank": 2.1473684210526316,
+          "name": "4"
+        },
+        {
+          "applicants": 100,
+          "certified": 96,
+          "interviews_mean": 8.57,
+          "match_rate": 0.9166666666666666,
+          "mean_matched_rank": 2.0681818181818183,
+          "name": "5"
+        },
+        {
+          "applicants": 100,
+          "certified": 99,
+          "interviews_mean": 9.14,
+          "match_rate": 0.9595959595959596,
+          "mean_matched_rank": 2.1789473684210527,
+          "name": "6"
+        },
+        {
+          "applicants": 100,
+          "certified": 99,
+          "interviews_mean": 9.46,
+          "match_rate": 0.9696969696969697,
+          "mean_matched_rank": 2.1770833333333335,
+          "name": "7"
+        },
+        {
+          "applicants": 100,
+          "certified": 97,
+          "interviews_mean": 9.24,
+          "match_rate": 0.979381443298969,
+          "mean_matched_rank": 1.8842105263157896,
+          "name": "8"
+        },
+        {
+          "applicants": 100,
+          "certified": 98,
+          "interviews_mean": 9.68,
+          "match_rate": 0.9897959183673469,
+          "mean_matched_rank": 1.9896907216494846,
+          "name": "9"
+        },
+        {
+          "applicants": 100,
+          "certified": 98,
+          "interviews_mean": 10.23,
+          "match_rate": 0.9693877551020408,
+          "mean_matched_rank": 1.768421052631579,
+          "name": "10"
+        }
+      ],
+      "checks": {
+        "applicant_optimal": null,
+        "blocking_pairs": 0,
+        "lists_not_strict": 0,
+        "lists_too_long": 0,
+        "over_capacity": 0,
+        "passed": true,
+        "ranked_without_interview": 0,
+        "rural_hospitals": null,
+        "unranked_matches": 0
+      },
+      "funnel": {
+        "applicants_without_interview": 39,
+        "applications_per_applicant": 31.447,
+        "declined_invitations": 5766,
+        "interview_slots": 9260,
+        "interviews_per_applicant": 8.203,
+        "interviews_per_position": 8.8585313174946,
+        "invitations_per_applicant": 13.969,
+        "list_entries_per_applicant": 8.203,
+        "signals_per_applicant": 0.0
+      },
+      "match": {
+        "algorithm": "applicant_proposing",
+        "blocking_pairs": 0,
+        "certified": 961,
+        "comparison": null,
+        "fill_rate": 0.9568034557235421,
+        "first_choice_share": 0.4142212189616253,
+        "list_length_matched": 9.065462753950339,
+        "list_length_unmatched": 2.28,
+        "match_rate": 0.9219562955254943,
+        "matched": 886,
+        "programs_unfilled": 21,
+        "rank_distribution": {
+          "1": 367,
+          "10": 0,
+          "11+": 0,
+          "2": 259,
+          "3": 127,
+          "4": 67,
+          "5": 38,
+          "6": 17,
+          "7": 9,
+          "8": 2,
+          "9": 0
+        },
+        "top3_share": 0.8498871331828443,
+        "unfilled_positions": 40
+      },
+      "programs": {
+        "n": 142,
+        "positions": 926
+      },
+      "signals": {
+        "interview_rate_other": 0.26085159156676313,
+        "interview_rate_signalled": null,
+        "match_rate_signalled": null,
+        "programs_using_signals": 142,
+        "sent": 0
+      },
+      "welfare": {
+        "applicant_post_fidelity": 0.9808577089563073,
+        "program_post_fidelity": 0.9788471008280869,
+        "regret_mean": 0.5671456756981839,
+        "true_rank_mean": 2.3882618510158014
+      }
+    },
+    "programs": {
+      "agents_with_taste": 142,
+      "consensus": {
+        "observed_utility_correlation": 0.5612676272076483,
+        "true_rank_correlation": 0.6887663690372708,
+        "true_utility_correlation": 0.7007690491116448
+      },
+      "fidelity": {
+        "expected_correlation": 0.8944271909999159,
+        "noise_sd": 0.5,
+        "pooled_correlation": 0.8944440475803004,
+        "reliability": 0.8,
+        "spearman_deciles": [
+          0.877775,
+          0.880232,
+          0.882949,
+          0.884048,
+          0.885693,
+          0.886948,
+          0.888941,
+          0.891459,
+          0.894293
+        ],
+        "spearman_mean": 0.8857507400605993
+      },
+      "first_choices": {
+        "distinct": 54,
+        "most_popular_share": 0.19718309859154928,
+        "top_10_share": 0.6549295774647887
+      }
+    }
+  },
+  "params_hash": "4f847eb3ee9d235859d6ff027cd22c2aa95b28702d8c30c9f34202227f3db10f",
+  "population_digest": "f44d6508d12cb5d3341f7660c022025e7e0e50a8a7fde4c75844450d8abc8759",
+  "saved_at": "2026-10-06T03:17:24+00:00",
+  "seed": 2026,
+  "stages": [
+    {
+      "counts": {
+        "applicants": 1000,
+        "positions": 926,
+        "programs": 142
+      },
+      "duration_ms": 1,
+      "stage": "population"
+    },
+    {
+      "counts": {
+        "pairs": 142000
+      },
+      "duration_ms": 45,
+      "stage": "pre_interview"
+    },
+    {
+      "counts": {
+        "applications": 31447
+      },
+      "duration_ms": 2,
+      "stage": "applications"
+    },
+    {
+      "counts": {
+        "signals": 0
+      },
+      "duration_ms": 0,
+      "stage": "signals"
+    },
+    {
+      "counts": {
+        "interviews": 8203,
+        "invitations": 13969
+      },
+      "duration_ms": 12,
+      "stage": "invitations"
+    },
+    {
+      "counts": {
+        "interviews": 8203
+      },
+      "duration_ms": 3,
+      "stage": "interviews"
+    },
+    {
+      "counts": {
+        "applicant_entries": 8203,
+        "program_entries": 7451
+      },
+      "duration_ms": 3,
+      "stage": "rank_lists"
+    },
+    {
+      "counts": {
+        "blocking_pairs": 0,
+        "matched": 886
+      },
+      "duration_ms": 7,
+      "stage": "match"
+    }
+  ],
+  "stamps": {
+    "app_version": "0.1.0",
+    "engine_version": "2.1.0",
+    "git_sha": "",
+    "model_version": "2.1",
+    "numpy_version": "2.5.3",
+    "python_version": "3.14.2",
+    "schema_version": 1
+  }
+}

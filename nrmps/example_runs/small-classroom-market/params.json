@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "run": {
+    "seed": 2026,
+    "replicates": 1,
+    "resample_population": false,
+    "ci_level": 0.95
+  },
+  "market": {
+    "n_applicants": 60,
+    "applicants_per_position": 1.2,
+    "n_programs": 8,
+    "program_size_dist": "lognormal",
+    "program_size_mean": 6.5,
+    "program_size_dispersion": 0.8
+  },
+  "applicants": {
+    "groups": [
+      {
+        "name": "us_md",
+        "share": 0.44,
+        "strength_mean": 0.5,
+        "strength_sd": 1.0,
+        "applications_mean": null,
+        "n_signals": null
+      },
+      {
+        "name": "us_do",
+        "share": 0.18,
+        "strength_mean": 0.35,
+        "strength_sd": 1.0,
+        "applications_mean": null,
+        "n_signals": null
+      },
+      {
+        "name": "us_img",
+        "share": 0.09,
+        "strength_mean": -1.0,
+        "strength_sd": 1.0,
+        "applications_mean": null,
+        "n_signals": null
+      },
+      {
+        "name": "non_us_img",
+        "share": 0.25,
+        "strength_mean": -1.3,
+        "strength_sd": 1.0,
+        "applications_mean": null,
+        "n_signals": null
+      },
+      {
+        "name": "other",
+        "share": 0.04,
+        "strength_mean": -0.5,
+        "strength_sd": 1.0,
+        "applications_mean": null,
+        "n_signals": null
+      }
+    ],
+    "attributes": [
+      {
+        "key": "board_scores",
+        "corr_with_strength": 0.8,
+        "program_weight_prior": 0.5
+      },
+      {
+        "key": "research",
+        "corr_with_strength": 0.5,
+        "program_weight_prior": 0.3
+      },
+      {
+        "key": "honors",
+        "corr_with_strength": 0.6,
+        "program_weight_prior": 0.2
+      }
+    ]
+  },
+  "programs": {
+    "quality_sd": 1.0,
+    "tiers": [],
+    "attributes": [
+      {
+        "key": "reputation",
+        "corr_with_quality": 0.9,
+        "applicant_weight_prior": 0.5
+      },
+      {
+        "key": "program_size",
+        "corr_with_quality": 0.0,
+        "applicant_weight_prior": 0.2
+      },
+      {
+        "key": "location",
+        "corr_with_quality": 0.0,
+        "applicant_weight_prior": 0.3
+      }
+    ]
+  },
+  "prefs": {
+    "applicant_pref_correlation": 0.6,
+    "program_pref_correlation": 0.7,
+    "attribute_weight_share": 0.3,
+    "taste_share": 0.5,
+    "weight_concentration": 10.0
+  },
+  "info": {
+    "applicant_pre_noise_sd": 0.5,
+    "program_pre_noise_sd": 0.5,
+    "interview_informativeness": 0.6,
+    "fit_shock_sd": 0.3,
+    "visibility_heteroskedasticity": 0.0,
+    "halo_share": 0.0
+  },
+  "apps": {
+    "count_dist": "negbin",
+    "mean": 30.0,
+    "dispersion": 0.5,
+    "strategy": "portfolio",
+    "portfolio_shares": {
+      "reach": 0.25,
+      "target": 0.5,
+      "safety": 0.25
+    },
+    "target_band": 0.15,
+    "self_assessment_noise_sd": 0.5
+  },
+  "signals": {
+    "tiers": [],
+    "allocation": "realistic",
+    "program_use_share": 1.0,
+    "use_in_ranking": false
+  },
+  "invites": {
+    "interviews_per_position": 10.0,
+    "strategy": "top_score",
+    "screen_attribute": null,
+    "screen_min_percentile": 0.0,
+    "yield_protection": 0.0,
+    "rounds": 3
+  },
+  "interview": {
+    "applicant_cap": 12,
+    "acceptance_order": "first_come",
+    "n_dates": 0,
+    "dates_per_program": 3
+  },
+  "rol": {
+    "applicant_policy": "all_interviewed",
+    "applicant_top_k": 20,
+    "reservation_utility": -1.0,
+    "program_policy": "dnr_quantile",
+    "program_dnr_quantile": 0.1
+  },
+  "match": {
+    "algorithm": "applicant_proposing",
+    "compare_both": false
+  }
+}

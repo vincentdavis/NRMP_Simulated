@@ -298,12 +298,14 @@ NRMP_MAX_SIMULATIONS = int(os.environ.get("NRMP_MAX_SIMULATIONS", "50"))
 NRMP_MAX_PRESETS = int(os.environ.get("NRMP_MAX_PRESETS", "50"))
 NRMP_RUNS_PER_DAY = int(os.environ.get("NRMP_RUNS_PER_DAY", "200"))
 NRMP_PAIRS_PER_DAY = int(os.environ.get("NRMP_PAIRS_PER_DAY", "200000000"))
-# Rate limits ("count/period" with period s, m, h or d), counted in the database: sign-ups per client address, and
-# runs and uploads per account.
+# Rate limits ("count/period" with period s, m, h or d), counted in the database: sign-ups per client address, runs
+# and uploads per account, and downloads of the public example runs per client address (the files are computed when
+# asked for; the limit is generous, for a class behind one address).
 NRMP_RATE_LIMITS = {
     "signup": os.environ.get("NRMP_RATE_SIGNUP", "10/h"),
     "run": os.environ.get("NRMP_RATE_RUN", "60/h"),
     "upload": os.environ.get("NRMP_RATE_UPLOAD", "60/h"),
+    "example_download": os.environ.get("NRMP_RATE_EXAMPLE_DOWNLOAD", "600/h"),
 }
 # Housekeeping (`manage.py nrmp_cleanup`): runs kept per simulation, and how long a run may stay queued or running
 # before it counts as interrupted.

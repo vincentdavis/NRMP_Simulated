@@ -5,7 +5,9 @@ A run's pages: summary, outcomes and diagnostics, applicants, programs, one agen
 
 import json
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
+from functools import cached_property
 from typing import Any
 from urllib.parse import urlencode
 
@@ -28,8 +30,9 @@ from .engine.numeric import quantiles
 from .engine.persistence import StageRecord
 from .engine.pipeline import SideResult
 from .engine.validate import COUNT_CHECKS, FLAG_CHECKS
+from .examples import Example, SavedRun
 from .exceptions import SimulationError
-from .models import IMPLEMENTED_STAGES, RunArtifact, SimulationRun
+from .models import IMPLEMENTED_STAGES, RunArtifact, SimulationRun, StageRun
 from .params_forms import ParamsForm
 from .population_csv import plain_csv_lines, population_csv_lines
 from .ratelimit import rate_limit
@@ -48,6 +51,7 @@ from .runs import (
 from .views import get_owned_simulation
 
 PAGE_SIZES = [25, 50, 100, 200, 500]
+PUBLIC_PAGE_SIZES = [25, 50, 100]  # of a saved example's tables: anyone can ask for them, so pages stay light
 
 
 def get_run(request: HttpRequest, pk: int, number: int) -> SimulationRun:
@@ -56,34 +60,87 @@ def get_run(request: HttpRequest, pk: int, number: int) -> SimulationRun:
     return get_object_or_404(sim.runs.select_related("simulation"), number=number)
 
 
-def _finished_data(run: SimulationRun) -> tuple[RunData, SideResult, SideResult]:
-    """Return a successful run's data and its applicant and program results, or raise Http404."""
-    if run.status != SimulationRun.Status.SUCCEEDED:
-        raise Http404("The run has no results")
-    data = RunData(run)
-    if data.applicant_results is None or data.program_results is None:
-        raise Http404("The run has no results")
-    return data, data.applicant_results, data.program_results
+@dataclass
+class RunPages:
+    """The run that a page shows and where its pages are: a user's run, or a saved example run (nrmps.examples).
+
+    The page functions below (summary_page, population_page ...) render either one with the same templates: a user's
+    run from the database, with the buttons that change it, or an example from its files, read-only and for everyone.
+    """
+
+    run: SimulationRun
+    saved: SavedRun | None = None
+
+    @property
+    def example(self) -> Example | None:
+        """Return the example the pages belong to, or None for a user's run."""
+        return self.saved.example if self.saved is not None else None
+
+    @cached_property
+    def data(self) -> RunData:
+        """Return the run's data, loaded once for the page."""
+        return self.saved.data if self.saved is not None else RunData(self.run)
+
+    def finished(self) -> tuple[RunData, SideResult, SideResult]:
+        """Return a successful run's data and its applicant and program results, or raise Http404."""
+        if self.run.status != SimulationRun.Status.SUCCEEDED:
+            raise Http404("The run has no results")
+        data = self.data
+        if data.applicant_results is None or data.program_results is None:
+            raise Http404("The run has no results")
+        return data, data.applicant_results, data.program_results
+
+    def charts(self, names: tuple[str, ...]) -> dict[str, Any]:
+        """Return the charts `names` of the run (an example keeps them: its run never changes)."""
+        return self.saved.charts(names) if self.saved is not None else run_charts(self.data, names)
+
+    def url(self, page: str, /, **kwargs: Any) -> str:
+        """Return the address of the run's page `page`: "detail", "match", "applicant" (with index=) ..."""
+        if self.saved is not None:
+            return reverse(f"nrmps:example_{page}", kwargs={"slug": self.saved.example.slug, **kwargs})
+        return reverse(f"nrmps:run_{page}", kwargs={"pk": self.run.simulation_id, "number": self.run.number, **kwargs})
+
+    def stage_records(self) -> Iterable[StageRun]:
+        """Return the records of the stages that ran."""
+        return self.saved.stages if self.saved is not None else self.run.stages.all()
+
+    def has_stage_results(self) -> bool:
+        """Return True if the run stored the decisions from applications to the match."""
+        if self.saved is not None:
+            return self.saved.data.stages is not None
+        return self.run.artifacts.filter(kind=RunArtifact.Kind.STAGES).exists()
+
+    @property
+    def pairs_download(self) -> bool:
+        """Return True if the pairs file (a row per applicant and program) is offered: not for a large market."""
+        small = self.run.n_pairs <= settings.NRMP_DRILLDOWN_MAX_PAIRS
+        return small and (self.saved is None or self.saved.pairs_download)
+
+    @property
+    def page_sizes(self) -> list[int]:
+        """Return the rows per page that the run's tables offer."""
+        return PAGE_SIZES if self.saved is None else PUBLIC_PAGE_SIZES
 
 
-def _page_size(request: HttpRequest) -> int:
-    """Return the requested page size if it is one of the offered sizes, else 100."""
+def _page_size(request: HttpRequest, sizes: list[int]) -> int:
+    """Return the requested page size if it is one of the offered `sizes`, else 100."""
     try:
         size = int(request.GET.get("page_size", 100))
     except TypeError, ValueError:
         return 100
-    return size if size in PAGE_SIZES else 100
+    return size if size in sizes else 100
 
 
-def _paginate(request: HttpRequest, items: list[Any] | np.ndarray, page_size: int) -> dict[str, Any]:
-    """Return the page_obj and the elided page_range for a list page."""
+def _paginate(request: HttpRequest, items: list[Any] | np.ndarray, sizes: list[int]) -> dict[str, Any]:
+    """Return the page_obj and the elided page_range for a list page, with the rows per page out of `sizes`."""
+    page_size = _page_size(request, sizes)
     paginator = Paginator(items, page_size)
     page_obj = paginator.get_page(request.GET.get("page"))
     return {
         "page_obj": page_obj,
         "page_range": list(paginator.get_elided_page_range(page_obj.number, on_each_side=2, on_ends=1)),
         "page_size": page_size,
-        "page_sizes": PAGE_SIZES,
+        "page_sizes": sizes,
     }
 
 
@@ -137,13 +194,14 @@ COUNT_LABELS = {
 }
 
 
-def _stage_rows(run: SimulationRun) -> list[dict[str, Any]]:
+def _stage_rows(run: SimulationRun, records: Iterable[StageRun] | None = None) -> list[dict[str, Any]]:
     """Return every stage of the run in order: its status, time and counts in words.
 
     A stage without a record is waiting while the run is queued or running (the first one of a running run is in
-    progress), and was not run if the run failed before it (or is from before the stage existed).
+    progress), and was not run if the run failed before it (or is from before the stage existed). `records` are the
+    stage records to use instead of the run's own in the database (a saved example's).
     """
-    recorded = {stage.stage: stage for stage in run.stages.all()}
+    recorded = {stage.stage: stage for stage in (run.stages.all() if records is None else records)}
     in_progress = run.status == SimulationRun.Status.RUNNING
     rows = []
     for stage in IMPLEMENTED_STAGES:
@@ -196,38 +254,40 @@ def _source(label: str | None) -> str:
     return "generated" if label in {None, "generated"} else f"uploaded ({label})"
 
 
-# The tabs of a run's pages: key, label and URL name.
+# The tabs of a run's pages: key, label and the page's name (RunPages.url).
 RUN_TABS = [
-    ("summary", "Summary", "nrmps:run_detail"),
-    ("population", "Population", "nrmps:run_population"),
-    ("pre_interview", "Before interviews", "nrmps:run_pre_interview"),
-    ("applications", "Applications and interviews", "nrmps:run_applications"),
-    ("match", "Match", "nrmps:run_match"),
-    ("applicants", "Applicants", "nrmps:run_applicants"),
-    ("programs", "Programs", "nrmps:run_programs"),
+    ("summary", "Summary", "detail"),
+    ("population", "Population", "population"),
+    ("pre_interview", "Before interviews", "pre_interview"),
+    ("applications", "Applications and interviews", "applications"),
+    ("match", "Match", "match"),
+    ("applicants", "Applicants", "applicants"),
+    ("programs", "Programs", "programs"),
 ]
 OUTCOME_TABS = {"applications", "match"}  # only for runs that went on to the match
 
 
-def _run_context(run: SimulationRun, tab: str, **extra: Any) -> dict[str, Any]:
+def _run_context(pages: RunPages, tab: str, **extra: Any) -> dict[str, Any]:
     """Return the context every page of a run shares: the run, its diagnostics and the tabs."""
+    run = pages.run
     metrics = run.metrics or {}
     outcomes = metrics.get("outcomes")
-    kwargs = {"pk": run.simulation_id, "number": run.number}
     labels = {key: label for key, label, _name in RUN_TABS}
     tabs = []
     if run.status == SimulationRun.Status.SUCCEEDED:
         tabs = [
-            {"key": key, "label": label, "url": reverse(name, kwargs=kwargs)}
+            {"key": key, "label": label, "url": pages.url(name)}
             for key, label, name in RUN_TABS
             if outcomes or key not in OUTCOME_TABS
         ]
     return {
         "simulation": run.simulation,
         "run": run,
+        "pages": pages,
+        "example": pages.example,
         "tab": tab,
         "tab_label": "" if tab == "summary" else labels[tab],
-        "help_page": f"run_{tab}",
+        "help_page": "example_summary" if pages.saved is not None and tab == "summary" else f"run_{tab}",
         "tabs": tabs,
         "metrics": metrics,
         "outcomes": outcomes,
@@ -236,23 +296,39 @@ def _run_context(run: SimulationRun, tab: str, **extra: Any) -> dict[str, Any]:
     }
 
 
+def highlights(pages: RunPages) -> list[dict[str, str]]:
+    """Return what to look at in a saved example: the pages it points to, with their labels and addresses."""
+    example = pages.example
+    if example is None:
+        return []
+    tabs = {key: (label, name) for key, label, name in RUN_TABS}
+    return [{"label": tabs[key][0], "url": pages.url(tabs[key][1]), "text": text} for key, text in example.highlights]
+
+
 @require_GET
 def run_detail(request, pk: int, number: int):
     """A run's summary: status, key numbers, the applicants' flow, downloads, stages, checks and parameters."""
-    run = get_run(request, pk, number)
+    return summary_page(request, RunPages(get_run(request, pk, number)))
+
+
+def summary_page(request: HttpRequest, pages: RunPages) -> HttpResponse:
+    """Render the summary of a user's run, or of a saved example."""
+    run = pages.run
+    stage_results = pages.has_stage_results()
     # Who gets an interview and a match (the Applications and interviews tab's flow), split by strength from the start.
     charts = {}
-    if run.status == SimulationRun.Status.SUCCEEDED and run.artifacts.filter(kind=RunArtifact.Kind.STAGES).exists():
-        charts = run_charts(RunData(run), ("applicant_flow",))
+    if run.status == SimulationRun.Status.SUCCEEDED and stage_results:
+        charts = pages.charts(("applicant_flow",))
     context = _run_context(
-        run,
+        pages,
         "summary",
         charts={name: chart for name, chart in charts.items() if chart},
-        stage_rows=_stage_rows(run),
+        stage_rows=_stage_rows(run, pages.stage_records()),
         outcome_views=_outcomes(run.metrics or {}),
         param_groups=_param_groups(run),
-        pairs_download=run.n_pairs <= settings.NRMP_DRILLDOWN_MAX_PAIRS,
-        stage_downloads=run.artifacts.filter(kind=RunArtifact.Kind.STAGES).exists(),
+        pairs_download=pages.pairs_download,
+        stage_downloads=stage_results,
+        highlights=highlights(pages),
     )
     return render(request, "nrmps/runs/run_detail.html", context)
 
@@ -260,8 +336,13 @@ def run_detail(request, pk: int, number: int):
 @require_GET
 def run_population(request, pk: int, number: int):
     """The population of a run: the market as generated against the request, with its distributions."""
-    run = get_run(request, pk, number)
-    data, _applicants, _programs = _finished_data(run)
+    return population_page(request, RunPages(get_run(request, pk, number)))
+
+
+def population_page(request: HttpRequest, pages: RunPages) -> HttpResponse:
+    """Render the population of a user's run, or of a saved example."""
+    run = pages.run
+    pages.finished()
     market = (run.metrics or {}).get("market") or {}
     capacity = market.get("capacity") or {}
     sources = run.population_source
@@ -279,15 +360,20 @@ def run_population(request, pk: int, number: int):
             f"median; {capacity.get('min', '-')} to {capacity.get('max', '-')}",
         ),
     ]
-    context = _run_context(run, "population", stats=stats, charts=run_charts(data, TAB_CHARTS["population"]))
+    context = _run_context(pages, "population", stats=stats, charts=pages.charts(TAB_CHARTS["population"]))
     return render(request, "nrmps/runs/population.html", context)
 
 
 @require_GET
 def run_pre_interview(request, pk: int, number: int):
     """Before interviews: agreement, fidelity, first choices, true against observed, first-choice demand."""
-    run = get_run(request, pk, number)
-    data, _applicants, _programs = _finished_data(run)
+    return pre_interview_page(request, RunPages(get_run(request, pk, number)))
+
+
+def pre_interview_page(request: HttpRequest, pages: RunPages) -> HttpResponse:
+    """Render the views before interviews of a user's run, or of a saved example."""
+    run = pages.run
+    pages.finished()
     metrics = run.metrics or {}
     applicants, programs = metrics.get("applicants") or {}, metrics.get("programs") or {}
     stats = [
@@ -312,15 +398,20 @@ def run_pre_interview(request, pk: int, number: int):
             "true against pre-interview view",
         ),
     ]
-    context = _run_context(run, "pre_interview", stats=stats, charts=run_charts(data, TAB_CHARTS["pre_interview"]))
+    context = _run_context(pages, "pre_interview", stats=stats, charts=pages.charts(TAB_CHARTS["pre_interview"]))
     return render(request, "nrmps/runs/pre_interview.html", context)
 
 
 @require_GET
 def run_applications(request, pk: int, number: int):
     """Applications, signals, invitations and interviews: the funnel, and every application with filters."""
-    run = get_run(request, pk, number)
-    data, _applicants, _programs = _finished_data(run)
+    return applications_page(request, RunPages(get_run(request, pk, number)))
+
+
+def applications_page(request: HttpRequest, pages: RunPages) -> HttpResponse:
+    """Render the applications and interviews of a user's run, or of a saved example."""
+    run = pages.run
+    data, _applicants, _programs = pages.finished()
     record = data.stages
     if record is None or not (run.metrics or {}).get("outcomes"):
         raise Http404("This run stopped before applications")
@@ -336,11 +427,11 @@ def run_applications(request, pk: int, number: int):
         ("No interview", intcomma(funnel.get("applicants_without_interview", 0)), "applicants"),
     ]
     context = _run_context(
-        run,
+        pages,
         "applications",
         stats=stats,
-        charts=run_charts(data, TAB_CHARTS["applications"]),
-        **_application_table(request, data, record),
+        charts=pages.charts(TAB_CHARTS["applications"]),
+        **_application_table(request, data, record, pages.page_sizes),
     )
     return render(request, "nrmps/runs/applications.html", context)
 
@@ -348,13 +439,18 @@ def run_applications(request, pk: int, number: int):
 @require_GET
 def run_match(request, pk: int, number: int):
     """The match: headline numbers, which choice applicants got, who matched where, the checks and who matched."""
-    run = get_run(request, pk, number)
+    return match_page(request, RunPages(get_run(request, pk, number)))
+
+
+def match_page(request: HttpRequest, pages: RunPages) -> HttpResponse:
+    """Render the match of a user's run, or of a saved example."""
+    run = pages.run
     metrics = run.metrics or {}
     if run.status != SimulationRun.Status.SUCCEEDED or not metrics.get("outcomes"):
         raise Http404("This run has no match")
-    charts = run_charts(RunData(run), TAB_CHARTS["match"])
+    charts = pages.charts(TAB_CHARTS["match"])
     context = _run_context(
-        run,
+        pages,
         "match",
         outcome_views=_outcomes(metrics),
         charts={name: chart for name, chart in charts.items() if chart},
@@ -382,7 +478,7 @@ def _name_matches(side: Any, text: str) -> np.ndarray:
     return found
 
 
-def _application_table(request: HttpRequest, data: RunData, record: StageRecord) -> dict[str, Any]:
+def _application_table(request: HttpRequest, data: RunData, record: StageRecord, sizes: list[int]) -> dict[str, Any]:
     """Return the filtered, sorted and paginated applications of a run (its stage `record`), with the filters."""
     applicants, programs = data.population.applicants, data.population.programs
     matched = record.match_program[record.i] == record.j
@@ -427,7 +523,7 @@ def _application_table(request: HttpRequest, data: RunData, record: StageRecord)
         "filters": {"status": status, "signal": signal, "applicant": applicant_text, "program": program_text},
         "statuses": APPLICATION_STATUSES,
         "filtered": bool(status or signal in {"yes", "no"} or applicant_text or program_text),
-        **_paginate(request, rows, _page_size(request)),
+        **_paginate(request, rows, sizes),
     }
     tiers = [tier.name for tier in data.params.signals.tiers]
     table = []
@@ -488,8 +584,12 @@ def run_delete(request, pk: int, number: int):
 @require_GET
 def run_applicants(request, pk: int, number: int):
     """The run's applicants with their attributes, weights and pre-interview results."""
-    run = get_run(request, pk, number)
-    data, results, programs = _finished_data(run)
+    return applicants_page(request, RunPages(get_run(request, pk, number)))
+
+
+def applicants_page(request: HttpRequest, pages: RunPages) -> HttpResponse:
+    """Render the applicants of a user's run, or of a saved example."""
+    data, results, programs = pages.finished()
     a, p = data.population.applicants, data.population.programs
     percentile = quantiles(a.strength) * 100
     totals = data.applicant_totals()
@@ -507,12 +607,12 @@ def run_applicants(request, pk: int, number: int):
         keys["match"] = np.where(totals["match_rank"] > 0, totals["match_rank"], UNRANKED).tolist()
     indices, sort, order = _order(request, keys, "index")
     context = _run_context(
-        run,
+        pages,
         "applicants",
         sort=sort,
         order=order,
         has_stages=totals is not None,
-        **_paginate(request, indices, _page_size(request)),
+        **_paginate(request, indices, pages.page_sizes),
     )
     rows = []
     for i in context["page_obj"].object_list:
@@ -547,8 +647,12 @@ def run_applicants(request, pk: int, number: int):
 @require_GET
 def run_programs(request, pk: int, number: int):
     """The run's programs with their attributes, weights, capacity and pre-interview results."""
-    run = get_run(request, pk, number)
-    data, applicants, results = _finished_data(run)
+    return programs_page(request, RunPages(get_run(request, pk, number)))
+
+
+def programs_page(request: HttpRequest, pages: RunPages) -> HttpResponse:
+    """Render the programs of a user's run, or of a saved example."""
+    data, applicants, results = pages.finished()
     a, p = data.population.applicants, data.population.programs
     percentile = quantiles(p.quality) * 100
     totals = data.program_totals()
@@ -567,12 +671,12 @@ def run_programs(request, pk: int, number: int):
         keys["fill"] = (totals["filled"] / np.maximum(p.capacity, 1)).tolist()
     indices, sort, order = _order(request, keys, "index")
     context = _run_context(
-        run,
+        pages,
         "programs",
         sort=sort,
         order=order,
         has_stages=totals is not None,
-        **_paginate(request, indices, _page_size(request)),
+        **_paginate(request, indices, pages.page_sizes),
     )
     rows = []
     for j in context["page_obj"].object_list:
@@ -615,7 +719,7 @@ def _journey(stages: StageRows) -> dict[str, Any]:
 
 
 def _stage_table(
-    request: HttpRequest, data: RunData, rows: PairRows, stages: StageRows, names: list[str]
+    request: HttpRequest, data: RunData, rows: PairRows, stages: StageRows, names: list[str], sizes: list[int]
 ) -> dict[str, Any]:
     """Return the sorted, paginated stage table of one agent: every target it applied to (or that applied to it)."""
     targets = np.flatnonzero(stages.applied)
@@ -630,7 +734,7 @@ def _stage_table(
         "index": targets.tolist(),
     }
     positions, sort, order = _order(request, keys, "list_rank")
-    context = {"sort": sort, "order": order, **_paginate(request, positions, _page_size(request))}
+    context = {"sort": sort, "order": order, **_paginate(request, positions, sizes)}
     tiers = [tier.name for tier in data.params.signals.tiers]
     table = []
     for position in context["page_obj"].object_list:
@@ -655,7 +759,7 @@ def _stage_table(
     return context
 
 
-def _pre_table(request: HttpRequest, rows: PairRows, names: list[str]) -> dict[str, Any]:
+def _pre_table(request: HttpRequest, rows: PairRows, names: list[str], sizes: list[int]) -> dict[str, Any]:
     """Return the sorted, paginated pre-interview table of one agent: every target, both sides' views."""
     keys: dict[str, np.ndarray | list[Any]] = {
         "pre_rank": rows.observed_rank.tolist(),
@@ -667,7 +771,7 @@ def _pre_table(request: HttpRequest, rows: PairRows, names: list[str]) -> dict[s
         keys["their_pre_rank"] = rows.other_observed_rank.tolist()
         keys["their_true_rank"] = rows.other_true_rank.tolist()
     indices, sort, order = _order(request, keys, "pre_rank")
-    context = {"sort": sort, "order": order, **_paginate(request, indices, _page_size(request))}
+    context = {"sort": sort, "order": order, **_paginate(request, indices, sizes)}
     context["rows"] = [
         {
             "number": t + 1,
@@ -686,9 +790,10 @@ def _pre_table(request: HttpRequest, rows: PairRows, names: list[str]) -> dict[s
     return context
 
 
-def _agent_page(request: HttpRequest, pk: int, number: int, index: int, *, applicant: bool) -> HttpResponse:
-    run = get_run(request, pk, number)
-    data, _applicants, _programs = _finished_data(run)
+def agent_page(request: HttpRequest, pages: RunPages, index: int, *, applicant: bool) -> HttpResponse:
+    """Render one applicant's or program's page of a user's run, or of a saved example."""
+    run = pages.run
+    data, _applicants, _programs = pages.finished()
     population = data.population
     me_side = population.applicants if applicant else population.programs
     other_side = population.programs if applicant else population.applicants
@@ -702,6 +807,8 @@ def _agent_page(request: HttpRequest, pk: int, number: int, index: int, *, appli
     context: dict[str, Any] = {
         "simulation": run.simulation,
         "run": run,
+        "pages": pages,
+        "example": pages.example,
         "applicant": applicant,
         "index": index,
         "name": me_side.name(agent),
@@ -729,22 +836,22 @@ def _agent_page(request: HttpRequest, pk: int, number: int, index: int, *, appli
         strength = None if applicant else np.asarray(population.applicants.strength, dtype=np.float64)
         context["funnel"] = agent_funnel(stages, me_side.name(agent), applicant=applicant, strength=strength)
     if view == "stages" and stages is not None:
-        context |= _stage_table(request, data, rows, stages, names)
+        context |= _stage_table(request, data, rows, stages, names, pages.page_sizes)
     else:
-        context |= _pre_table(request, rows, names)
+        context |= _pre_table(request, rows, names, pages.page_sizes)
     return render(request, "nrmps/runs/agent_detail.html", context)
 
 
 @require_GET
 def run_applicant(request, pk: int, number: int, index: int):
     """One applicant's path through the stages, and its view of every program before interviews (view=pre)."""
-    return _agent_page(request, pk, number, index, applicant=True)
+    return agent_page(request, RunPages(get_run(request, pk, number)), index, applicant=True)
 
 
 @require_GET
 def run_program(request, pk: int, number: int, index: int):
     """One program's applicants through the stages, and its view of every applicant before interviews (view=pre)."""
-    return _agent_page(request, pk, number, index, applicant=False)
+    return agent_page(request, RunPages(get_run(request, pk, number)), index, applicant=False)
 
 
 # --- Downloads --------------------------------------------------------------------------------------------------------
@@ -770,8 +877,14 @@ STAGE_DOWNLOADS = {
 @require_GET
 def run_download(request, pk: int, number: int, name: str):
     """Download a run's applicants or programs (the upload format), results, pairs, metrics or parameters."""
-    run = get_run(request, pk, number)
-    prefix = f"{slugify(run.simulation.name) or 'simulation'}-run-{run.number}"
+    return download(request, RunPages(get_run(request, pk, number)), name)
+
+
+def download(request: HttpRequest, pages: RunPages, name: str) -> HttpResponse | StreamingHttpResponse:
+    """Return a file of a user's run, or of a saved example."""
+    run = pages.run
+    example = pages.example
+    prefix = example.slug if example else f"{slugify(run.simulation.name) or 'simulation'}-run-{run.number}"
     if name == "params.json":
         response = HttpResponse(_json_bytes(run.params), content_type="application/json")
         return _attachment(response, f"{prefix}-params.json")
@@ -789,14 +902,14 @@ def run_download(request, pk: int, number: int, name: str):
             "metrics": run.metrics,
         }
         return _attachment(HttpResponse(_json_bytes(record), content_type="application/json"), f"{prefix}-metrics.json")
-    data, _applicants, _programs = _finished_data(run)
+    data, _applicants, _programs = pages.finished()
     lines: Iterator[str]
     if name == "applicants.csv":
         lines = population_csv_lines(data.population.applicants)
     elif name == "programs.csv":
         lines = population_csv_lines(data.population.programs)
     elif name == "pairs.csv":
-        if not data.drilldown_ranks:
+        if not pages.pairs_download:
             raise Http404("This run is too large for the pairs file")
         lines = plain_csv_lines(PAIR_COLUMNS, data.pair_rows())
     elif name in STAGE_DOWNLOADS:

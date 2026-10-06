@@ -11,7 +11,7 @@ import hashlib
 import logging
 import secrets
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import cached_property
@@ -480,21 +480,26 @@ class StageRows:
 
 
 class RunData:
-    """A finished run's population, per-agent results and market model, loaded from its artifacts."""
+    """A finished run's population, per-agent results and market model, loaded from its artifacts.
 
-    def __init__(self, run: SimulationRun):
+    The artifacts are the run's own, read from the database, unless `artifacts` gives them (by RunArtifact.Kind): a
+    saved example run (nrmps.examples) is not in the database and brings the contents of its files.
+    """
+
+    def __init__(self, run: SimulationRun, artifacts: Mapping[str, bytes] | None = None):
         self.run = run
         self.params = run.get_params()
-        population_data = run.artifact(RunArtifact.Kind.POPULATION)
+        artifact = run.artifact if artifacts is None else artifacts.get
+        population_data = artifact(RunArtifact.Kind.POPULATION)
         if population_data is None:
             raise PopulationError("The run has no stored population.")
         self.population = population_from_npz(population_data)
-        results = run.artifact(RunArtifact.Kind.PRE_INTERVIEW)
+        results = artifact(RunArtifact.Kind.PRE_INTERVIEW)
         self.applicant_results: SideResult | None = None
         self.program_results: SideResult | None = None
         if results is not None:
             self.applicant_results, self.program_results = results_from_npz(results)
-        stages = run.artifact(RunArtifact.Kind.STAGES)
+        stages = artifact(RunArtifact.Kind.STAGES)
         self.stages: StageRecord | None = stages_from_npz(stages) if stages is not None else None
 
     def applicant_totals(self) -> dict[str, NDArray[Any]] | None:
