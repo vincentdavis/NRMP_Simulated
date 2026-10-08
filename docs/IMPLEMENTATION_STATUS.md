@@ -472,6 +472,16 @@ now answer it like a GET without the body (`require_safe`; gunicorn and the deve
 example's downloads stay GET only, since a file is computed when asked for, and so does the email confirmation link,
 which changes the account.
 
+**2026-10-08: dependencies updated (`uvx uv-bump`).** Django 6.1.1 to 6.1.2, a security release: of its four fixes,
+the denial of service in header parsing (CVE-2026-84429) and the one in language codes (CVE-2026-77050) concern
+this site; the app uses no model formsets with editable keys and no GeoDjango. pydantic 2.13.5 to 2.14.0
+(pydantic-core 2.50.0), mypy 2.4.0, django-stubs 6.1.2, ruff 0.16.10 (the pre-commit hook follows), hypothesis, ty
+and a dozen indirect packages; numpy and scipy are unchanged, so results are too. `uv-bump` raises the minimum
+versions in `pyproject.toml` after locking, which leaves the lock file's record of them stale: run `uv lock`
+afterwards, or `uv sync --locked` fails in CI and in the Docker build. Checked: every test, the browser tests, the
+deploy checks, the example runs (`nrmp_examples --check`), and that parameters stored under the old pydantic still
+validate with the same hash and stage fingerprints.
+
 **Worth a decision:** the NRMP-like market is the simulator's default, not a calibration: its match rate is 92.2%
 of applicants with a rank order list. If the public example should resemble the published figures of the Main
 Residency Match, a calibrated preset would come first (it was discussed and is not started).
